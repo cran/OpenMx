@@ -1,0 +1,162 @@
+#!/bin/bash
+
+set -o errexit
+
+isdef() {
+    tmp1=/tmp/openmx.$$.cpp
+    tmp2=/tmp/openmx.$$.out
+    trap 'rm -f $tmp1 $tmp2' EXIT
+    cat >$tmp1 <<EOF
+int main()
+{
+#ifndef $1
+crash me
+#endif
+	; return 0;
+}
+EOF
+    $CXX -c $tmp1 -o $tmp2 > /dev/null 2>&1
+}
+
+compareVersions() {
+  typeset    IFS='.'
+  typeset -a v1=( $1 )
+  typeset -a v2=( $2 )
+  typeset    n diff
+
+  for (( n=0; n<4; n+=1 )); do
+    diff=$((v1[n]-v2[n]))
+    if [ $diff -ne 0 ] ; then
+      [ $diff -le 0 ] && echo '-1' || echo '1'
+      return
+    fi
+  done
+  echo  '0'
+}
+
+: ${R_HOME:=`R RHOME`}
+if test -z "${R_HOME}"; then 
+   echo "could not determine R_HOME" 
+   exit 1 
+fi 
+
+REXEC=${R_HOME}/bin/R
+
+echo 'Change default C/C++ compiler and default compile flags by editing ~/.R/Makevars'
+
+CXX=$($REXEC CMD config CXX)
+
+if isdef __clang__; then
+    cxx_type=clang
+elif isdef __llvm__; then
+    cxx_type=llvm
+elif isdef __GNUC__; then
+    cxx_type=gcc
+else
+    echo "Compiler '$CXX' unrecognized; using defaults"
+fi
+
+if [ "$cxx_type" = gcc ]; then
+    cxx_version=$($CXX -dumpversion | awk -F '.' '{print $1 "." $2}')
+    COMPILER_CXXFLAGS="-Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter -Wvla -Wno-unused-local-typedefs"
+    if [ $(compareVersions $cxx_version 4.9) -gt -1 ]; then
+	COMPILER_CXXFLAGS="$COMPILER_CXXFLAGS -fdiagnostics-color=auto"
+	COMPILER_LDFLAGS="$COMPILER_LDFLAGS"
+	xcheck_CXXFLAGS="-fsanitize=undefined"
+	xcheck_LDFLAGS="-fsanitize=undefined"
+    fi
+    if [ "${OPENMP-yes}" = yes ]; then
+	OPENMP_CXXFLAGS="-fopenmp"
+	OPENMP_LDFLAGS="-fopenmp"
+    fi
+fi
+
+if [ -r inst/npsol/checksum ]; then
+    host_cpu=$(uname -p)
+    if [ "x$host_cpu" = xunknown ]; then
+	# tanglu 1 has the machine architecture here
+	host_cpu=$(uname -m)
+    fi
+    case "$host_cpu" in
+	*86_64) omx_arch=x86_64 ;;
+	*86) omx_arch=x86 ;;
+	*)
+	    echo "Host arch is not recognized: ${host_cpu}"
+	    exit 1
+	    ;;
+    esac
+
+    os=$(uname -s)
+    case "$os" in
+	*Linux)
+	    omx_os=linux
+	    pick="linux/${omx_arch}/gcc${cxx_version}"
+	    npsol_url="http://openmx.psyc.virginia.edu/packages/npsol/$pick/libnpsol.a"
+	    if [ ! -f src/libnpsol.a ]; then
+		curl -s -o src/libnpsol.a "$npsol_url"
+	    fi
+	    want=$(grep "$pick" inst/npsol/checksum | cut -f1 -d' ')
+	    got=$(sha1sum src/libnpsol.a | cut -f1 -d' ')
+	    if [ "x$got" != "x$want" ]; then
+		rm -f src/libnpsol.a
+		echo "WARNING: Failed to download libnpsol.a from $npsol_url"
+	    else
+		npsol_library="src"
+	    fi
+	    ;;
+	*Darwin)
+	    omx_os=osx
+	    arch_LDFLAGS="-mmacosx-version-min=10.4"
+	    arch_CXXFLAGS="-mmacosx-version-min=10.4"
+	    npsol_library="inst/npsol/osx"
+	    ;;
+	*)
+	    echo "Host os is not recognized: $os"
+	    exit 1
+	    ;;
+    esac
+fi
+
+echo "### Generated $(date)" > src/Makevars
+echo >> src/Makevars
+
+if [ ! -e inst/no-npsol -a -n "${npsol_library+1}" ]; then
+    npsol_file="${npsol_library}/libnpsol.a"
+    if [ ! -f "$npsol_file" ]; then
+	echo "$npsol_file not found"
+	exit 1
+    else
+	echo "NPSOL_LDFLAGS=-L../${npsol_library} -lnpsol" >> src/Makevars
+    fi
+fi
+
+# if [ $($REXEC --slave --vanilla -e 'cat(suppressWarnings(require("nloptr", quietly=TRUE)) && packageVersion("nloptr") >= "1.0.5")') = TRUE ]; then
+#   echo "
+# NLOPT_CXXFLAGS=$($REXEC --slave --vanilla -e 'suppressPackageStartupMessages(require(nloptr)); cat("-DHAS_NLOPT", nloptr:::CFlags())')
+# NLOPT_LDFLAGS=$($REXEC  --slave --vanilla -e 'suppressPackageStartupMessages(require(nloptr)); cat(nloptr:::LdFlags())')
+# " >> src/Makevars
+# fi
+
+echo "ARCH_SPECIFIC_LINKER_FLAGS=$arch_LDFLAGS" >> src/Makevars
+echo "ARCH_SPECIFIC_COMPILER_FLAGS=$arch_CXXFLAGS" >> src/Makevars
+echo "COMPILER_CXXFLAGS=$COMPILER_CXXFLAGS" >> src/Makevars
+echo "COMPILER_LDFLAGS=$COMPILER_LDFLAGS" >> src/Makevars
+echo "OPENMP_CXXFLAGS=$OPENMP_CXXFLAGS" >> src/Makevars
+echo "OPENMP_LDFLAGS=$OPENMP_LDFLAGS" >> src/Makevars
+echo "xcheck_CXXFLAGS=$xcheck_CXXFLAGS" >> src/Makevars
+echo "xcheck_LDFLAGS=$xcheck_LDFLAGS" >> src/Makevars
+
+# check for special environment variables
+if [ "x$IMX_SAFE" = x1 ]; then
+    echo 'DEBUG_CXXFLAGS=$(xcheck_CXXFLAGS) -UNDEBUG -DOMX_BOUNDS_CHECK -D_GLIBCXX_DEBUG' >> src/Makevars
+    echo 'DEBUG_LDFLAGS=$(xcheck_LDFLAGS)' >> src/Makevars
+elif [ "x$IMX_GCOV" = x1 ]; then
+    # To collect gcov statistics (gcc only)
+    echo 'DEBUG_CXXFLAGS=--coverage' >> src/Makevars
+    echo 'DEBUG_LDFLAGS=--coverage' >> src/Makevars
+fi
+
+echo >> src/Makevars
+echo "# ---- appending Makevars.in ----" >> src/Makevars
+echo >> src/Makevars
+cat src/Makevars.in >> src/Makevars

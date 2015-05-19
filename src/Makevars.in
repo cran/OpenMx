@@ -1,0 +1,29 @@
+# R's default compiler flags are hidden in Makeconf. To find your Makeconf,
+#
+# eval $(grep R_HOME_DIR $(which R) | head -1)
+# cd $R_HOME_DIR/etc
+# find . |grep Makeconf
+#
+# Now edit to Makeconf to adjust the default compiler flags.
+
+NO_INLINE=-fno-inline -fno-inline-small-functions -fno-default-inline
+
+# Uncomment the following lines to turn on debugging output in the backend
+# DEBUG_CXXFLAGS+=-DDEBUGMX                     # DEBUGMX gives Setup, cleanup, and per-iteration details
+# DEBUG_CXXFLAGS+=-DDEBUGMX_ALGEBRA             # DEBUGMX_ALGEBRA gives per-compute calculation output (be careful with FIML)
+# DEBUG_CXXFLAGS+=-DDEBUGMX_MATRIX              # turn on matrix debugging
+# DEBUG_CXXFLAGS+=-DDEBUGMX_ROWS                # DEBUGMX_ROWS gives per-row output for selected FIML rows
+# DEBUG_CXXFLAGS+=-DOMX_BOUNDS_CHECK -D_GLIBCXX_DEBUG -g3 $(NO_INLINE) -O0 -fmax-errors=1  # basic debugging without extra logging
+# DEBUG_CXXFLAGS+=-fno-omit-frame-pointer $(NO_INLINE)  # oprofile
+# DEBUG_CXXFLAGS+=-UNDEBUG                      # always uncomment this when you debug
+
+PKG_CXXFLAGS=$(OPENMP_CXXFLAGS) $(COMPILER_CXXFLAGS) $(ARCH_SPECIFIC_COMPILER_FLAGS) $(DEBUG_CXXFLAGS) $(NLOPT_CXXFLAGS)
+PKG_LIBS=$(OPENMP_LDFLAGS) $(COMPILER_LDFLAGS) $(FLIBS) $(BLAS_LIBS) $(LAPACK_LIBS) $(NPSOL_LDFLAGS) $(NLOPT_LDFLAGS) $(ARCH_SPECIFIC_LINKER_FLAGS) $(DEBUG_LDFLAGS)
+
+all: $(SHLIB) save-gcno
+
+save-gcno: $(SHLIB)
+	mkdir -p ../inst/debug
+	-cp *.gcno ../inst/debug/
+
+-include autodep

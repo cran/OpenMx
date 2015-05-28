@@ -6,7 +6,8 @@
 \usage{
 mxComputeNumericDeriv(freeSet = NA_character_, ...,
   fitfunction = "fitfunction", parallel = TRUE, stepSize = 1e-04,
-  iterations = 4L, verbose = 0L, knownHessian = NULL)
+  iterations = 4L, verbose = 0L, knownHessian = NULL,
+  checkGradient = TRUE)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}
@@ -24,13 +25,27 @@ mxComputeNumericDeriv(freeSet = NA_character_, ...,
 \item{verbose}{Level of debugging output.}
 
 \item{knownHessian}{an optional matrix of known Hessian entries}
+
+\item{checkGradient}{whether to check the first order convergence criterion (gradient is near zero)}
 }
 \description{
 For N free parameters, Richardson extrapolation requires
 (iterations * (N^2 + N)) function evaluations.
+The implementation is closely based on the numDeriv R package.
 }
 \details{
-The implementation is closely based on the numDeriv R package.
+In addition to an estimate of the Hessian, forward, central, and
+backward estimates of the gradient are made available in this
+compute plan's output slot.
+
+When \code{checkGradient=TRUE}, the central difference estimate of
+the gradient is used to determine whether the first order
+convergence criterion is met. In addition, the forward and
+backward difference estimates of the gradient are compared for
+symmetry. When sufficient asymmetry is detected, the standard
+error is flagged. In the case, profile likelihood confidence
+intervals should be used for inference instead of standard errors
+(see \code{mxComputeConfidenceInterval}).
 }
 \examples{
 library(OpenMx)

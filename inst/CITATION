@@ -33,14 +33,17 @@ citEntry(entry="article",
 	     person(c("Michael", "D."), "Hunter"),
 	     person(c("Steven", "M."), "Boker")),
 	 journal = "Educational and Psychological Measurement",
-	 year = "in press",
+	 year = "2015",
+	 volume= "75",
+	 number="3",
+	 pages = "458-474",
 	 textVersion = paste("Pritikin, J. N., Hunter, M. D., & Boker, S. M.",
-	     "(in press). Modular open-source software for Item Factor Analysis.",
-	     "Educational and Psychological Measurement"))
+	     "(2015). Modular open-source software for Item Factor Analysis.",
+	     "Educational and Psychological Measurement, 75(3), 458-474"))
 
 year <- 2015
-revision <- "2.2.2"
-authors <-  c(person(c("Steven", "M."), "Boker", role="aut"), person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."), "Maes", role="aut"), person(c("Michael", "J."), "Wilde", role="ctb"), person("Michael", "Spiegel", role="aut"), person(c("Timothy", "R."), "Brick", role="aut"), person("Ryne", "Estabrook", role="aut"), person(c("Timothy", "C."), "Bates", role="aut"), person("Paras", "Mehta", role="ctb"), person("Timo", c("von", "Oertzen"), role="ctb"), person(c("Ross", "J."), "Gore", role="aut"), person(c("Michael", "D."), "Hunter", role="aut"), person(c("Daniel", "C."), "Hackett", role="ctb"), person("Julian", "Karch", role="ctb"), person(c("Andreas", "M."), "Brandmaier", role="ctb"), person(c("Joshua", "N."), "Pritikin", email="jpritikin@pobox.com", role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"), person(c("Robert", "M."), "Kirkpatrick", role="aut"))
+revision <- "2.2.4"
+authors <-  c(person(c("Steven", "M."), "Boker", role="aut"), person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."), "Maes", role="aut"), person(c("Michael", "J."), "Wilde", role="ctb"), person("Michael", "Spiegel", role="aut"), person(c("Timothy", "R."), "Brick", role="aut"), person("Ryne", "Estabrook", role="aut"), person(c("Timothy", "C."), "Bates", role="aut"), person("Paras", "Mehta", role="ctb"), person("Timo", c("von", "Oertzen"), role="ctb"), person(c("Ross", "J."), "Gore", role="aut"), person(c("Michael", "D."), "Hunter", role="aut"), person(c("Daniel", "C."), "Hackett", role="ctb"), person("Julian", "Karch", role="ctb"), person(c("Andreas", "M."), "Brandmaier", role="ctb"), person(c("Joshua", "N."), "Pritikin", email="jpritikin@pobox.com", role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"), person(c("Robert", "M."), "Kirkpatrick", role="aut"), person(c("Yang"), "Wang", role="ctb"))
      
 citEntry(entry="manual",
 	title = paste("OpenMx", revision, "User Guide"),

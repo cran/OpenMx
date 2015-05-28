@@ -8,7 +8,8 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
   fitfunction = "fitfunction", verbose = 0L, tolerance = NA_real_,
   useGradient = NULL, warmStart = NULL, nudgeZeroStarts = TRUE,
   maxMajorIter = NULL, gradientAlgo = mxOption(NULL, "Gradient algorithm"),
-  gradientIterations = 2, gradientStepSize = 1e-05)
+  gradientIterations = mxOption(NULL, "Gradient iterations"),
+  gradientStepSize = 1e-05)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}

@@ -698,6 +698,8 @@ void FitContext::allocStderrs()
 	for (size_t px=0; px < numParam; ++px) {
 		stderrs[px] = NA_REAL;
 	}
+
+	seSuspect.assign(numParam, false);
 }
 
 FitContext::FitContext(omxState *_state, std::vector<double> &startingValues)
@@ -774,6 +776,7 @@ void FitContext::updateParent()
 			parent->allocStderrs();
 			for (size_t s1=0; s1 < src->vars.size(); ++s1) {
 				parent->stderrs[mapToParent[s1]] = stderrs[s1];
+				parent->seSuspect[mapToParent[s1]] = seSuspect[s1];
 			}
 		}
 	}
@@ -957,7 +960,7 @@ void FitContext::copyParamToModelClean()
 			omxSetMatrixElement(matrix, row, col, at[k]);
 			if (OMX_DEBUG_MATRIX) {
 				mxLog("free var %d, matrix %s[%d, %d] = %f",
-				      (int) k, matrix->name, row, col, at[k]);
+				      (int) k, matrix->name(), row, col, at[k]);
 			}
 		}
 	}
@@ -1870,7 +1873,7 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 			if (strEQ(key, "fitfunction")) {
 				for (int fx=0; fx < Rf_length(slotValue); ++fx) {
 					omxMatrix *ff = globalState->algebraList[INTEGER(slotValue)[fx]];
-					if (!ff->fitFunction) Rf_error("infoArgs$fitfunction is %s, not a fitfunction", ff->name);
+					if (!ff->fitFunction) Rf_error("infoArgs$fitfunction is %s, not a fitfunction", ff->name());
 					infoFitFunction.push_back(ff);
 				}
 			} else if (strEQ(key, "inputInfo")) {
@@ -1908,7 +1911,7 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 			if (strEQ(key, "fitfunction")) {
 				for (int fx=0; fx < Rf_length(slotValue); ++fx) {
 					omxMatrix *ff = globalState->algebraList[INTEGER(slotValue)[fx]];
-					if (!ff->fitFunction) Rf_error("infoArgs$fitfunction is %s, not a fitfunction", ff->name);
+					if (!ff->fitFunction) Rf_error("infoArgs$fitfunction is %s, not a fitfunction", ff->name());
 					infoFitFunction.push_back(ff);
 				}
 			} else if (strEQ(key, "inputInfo")) {

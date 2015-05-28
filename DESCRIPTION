@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2015-05-18
+Date: 2015-05-26
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -11,7 +11,9 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "D."), "Hunter", role="aut"), person(c("Daniel", "C."), "Hackett", role="ctb"),
     person("Julian", "Karch", role="ctb"), person(c("Andreas", "M."), "Brandmaier", role="ctb"),
     person(c("Joshua", "N."), "Pritikin", email="jpritikin@pobox.com",
-    role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"), person(c("Robert", "M."), "Kirkpatrick", role="aut"))
+    role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"),
+    person(c("Robert", "M."), "Kirkpatrick", role="aut"),
+    person(c("Yang"), "Wang", role="ctb"))
 URL: http://openmx.psyc.virginia.edu
 BugReports: http://openmx.psyc.virginia.edu/forums
 Description: Facilitates treatment of statistical model specifications
@@ -62,8 +64,8 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxFitFunctionR.R' 'MxRObjective.R' 'MxExpectationStateSpace.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
         'MxExpectationGREML.R' 'MxMI.R' 'zzz.R'
-Version: 2.2.2
-Packaged: 2015-05-18 12:16:23 UTC; joshua
+Version: 2.2.4
+Packaged: 2015-05-26 11:07:59 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -81,8 +83,9 @@ Author: Steven M. Boker [aut],
   Andreas M. Brandmaier [ctb],
   Joshua N. Pritikin [aut, cre],
   Mahsa Zahery [aut],
-  Robert M. Kirkpatrick [aut]
+  Robert M. Kirkpatrick [aut],
+  Yang Wang [ctb]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 NeedsCompilation: yes
 Repository: CRAN
-Date/Publication: 2015-05-19 08:53:08
+Date/Publication: 2015-05-28 12:02:44

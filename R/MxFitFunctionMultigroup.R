@@ -35,7 +35,7 @@ setMethod("qualifyNames", signature("MxFitFunctionMultigroup"),
 
 # "model.algebra" or "model" for "model.fitfunction"
 setMethod("genericFitFunConvert", "MxFitFunctionMultigroup", 
-	function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+	function(.Object, flatModel, model, labelsData, dependencies) {
 		name <- .Object@name
 		if (length(.Object@groups)) {
 			origGroups <- .Object@groups
@@ -91,5 +91,5 @@ mxFitFunctionMultigroup <- function(groups, ..., verbose=0L) {
 
 	if (length(groups) == 0) stop("mxFitFunctionMultigroup: at least 1 fitfunction must be provided")
 
-	return(new("MxFitFunctionMultigroup", groups, verbose))
+	return(new("MxFitFunctionMultigroup", groups, as.integer(verbose)))
 }

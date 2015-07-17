@@ -64,7 +64,7 @@ setGeneric("genericExpRename",
 })
 
 setGeneric("genericExpFunConvert", 
-	function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+	function(.Object, flatModel, model, labelsData, dependencies) {
 	return(standardGeneric("genericExpFunConvert"))	
 })
 
@@ -139,11 +139,11 @@ setReplaceMethod("$", "MxBaseExpectation",
 
 setMethod("names", "MxBaseExpectation", slotNames)
 
-convertExpectationFunctions <- function(flatModel, model, labelsData, defVars, dependencies) {
+convertExpectationFunctions <- function(flatModel, model, labelsData, dependencies) {
 	retval <- lapply(flatModel@expectations, function(ex) {
 		ex@container <- imxLocateIndex(flatModel, ex@container, ex@name)
 		ex@submodels <- imxLocateIndex(flatModel, ex@submodels, ex@name)
-		genericExpFunConvert(ex, flatModel, model, labelsData, defVars, dependencies)
+		genericExpFunConvert(ex, flatModel, model, labelsData, dependencies)
 	})
 	return(retval)
 }

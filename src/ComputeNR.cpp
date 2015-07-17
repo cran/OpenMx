@@ -27,6 +27,8 @@ static const char engineName[] = "NnRn";
 class ComputeNR : public omxCompute {
 	typedef omxCompute super;
 	omxMatrix *fitMatrix;
+	Eigen::VectorXd lbound;
+	Eigen::VectorXd ubound;
 
 	int maxIter;
 	double tolerance;
@@ -37,6 +39,7 @@ class ComputeNR : public omxCompute {
 
 	void lineSearch(FitContext *fc, int iter, double *maxAdj, double *maxAdjSigned,
 			int *maxAdjParam, double *improvement);
+	double relImprovement(double im) { return im / (1 + fabs(refFit)); }
 
 public:
 	virtual void initFromFrontend(omxState *state, SEXP rObj);
@@ -196,6 +199,13 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 		// the steepness really provides no information due to unknown curvature
 		searchDir = fc->grad / fc->grad.norm();
 		if (!std::isfinite(searchDir.norm())) {
+			if (verbose >= 2) {
+				for (int px=0; px < fc->grad.size(); ++px) {
+					if (std::isfinite(fc->grad[px])) continue;
+					omxFreeVar *fv = fc->varGroup->vars[px];
+					mxLog("%s=%f is infeasible; try adding bounds", fv->name, fc->est[px]);
+				}
+			}
 			fc->inform = INFORM_BAD_DERIVATIVES;
 			return;
 		}
@@ -215,11 +225,11 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 
 	while (++probeCount < 16) {
 		const double scaledTarget = speed * targetImprovement;
-		if (!steepestDescent && scaledTarget / fabs(refFit) < tolerance) {
+		if (!steepestDescent && relImprovement(scaledTarget) < tolerance) {
 			trial = prevEst;
 			return;
 		}
-		trial = prevEst - speed * searchDir;
+		trial = (prevEst - speed * searchDir).cwiseMax(lbound).cwiseMin(ubound);
 		++minorIter;
 		fc->copyParamToModel();
 		ComputeFit(engineName, fitMatrix, FF_COMPUTE_FIT, fc);
@@ -263,7 +273,7 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 		while (--retries > 0) {
 			speed *= 1.5;
 			++probeCount;
-			trial = prevEst - speed * searchDir;
+			trial = (prevEst - speed * searchDir).cwiseMax(lbound).cwiseMin(ubound);
 			++minorIter;
 			fc->copyParamToModel();
 			ComputeFit(engineName, fitMatrix, FF_COMPUTE_FIT, fc);
@@ -278,7 +288,7 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 			bestFit = fc->fit;
 			bestImproved = improved;
 			bestSpeed = speed;
-			if (improvementOverBest / fabs(refFit) < tolerance) break;
+			if (relImprovement(improvementOverBest) < tolerance) break;
 		}
 	}
 
@@ -286,7 +296,7 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 				name, steepestDescent, probeCount, bestSpeed, bestImproved);
 	priorSpeed = bestSpeed;
 
-	trial = prevEst - bestSpeed * searchDir;
+	trial = (prevEst - bestSpeed * searchDir).cwiseMax(lbound).cwiseMin(ubound);
 
 	*maxAdj = 0;
 	for (size_t px=0; px < numParam; ++px) {
@@ -325,6 +335,14 @@ void ComputeNR::computeImpl(FitContext *fc)
 
 	omxFitFunctionPreoptimize(fitMatrix->fitFunction, fc);
 
+	// omxFitFunctionPreoptimize can change bounds
+	lbound.resize(numParam);
+	ubound.resize(numParam);
+	for(int px = 0; px < int(numParam); px++) {
+		lbound[px] = varGroup->vars[px]->lbound;
+		ubound[px] = varGroup->vars[px]->ubound;
+	}
+
 	priorSpeed = 1;
 	minorIter = 0;
 	int startIter = fc->iterations;
@@ -337,6 +355,10 @@ void ComputeNR::computeImpl(FitContext *fc)
 	if (verbose >= 2) {
 		mxLog("Welcome to Newton-Raphson (%d param, tolerance %.3g, max iter %d)",
 		      (int)numParam, tolerance, maxIter);
+		if (verbose >= 3) {
+			mxPrintMat("lbound", lbound);
+			mxPrintMat("ubound", ubound);
+		}
 	}
 	while (1) {
 		fc->iterations += 1;
@@ -365,7 +387,7 @@ void ComputeNR::computeImpl(FitContext *fc)
 			return;
 		}
 
-		converged = improvement / fabs(refFit) < tolerance;
+		converged = relImprovement(improvement) < tolerance;
 		if (maxAdjParam >= 0) maxAdjFlavor = fc->flavor[maxAdjParam];
 
 		fc->copyParamToModel();
@@ -374,11 +396,28 @@ void ComputeNR::computeImpl(FitContext *fc)
 	}
 
 	if (converged) {
-		fc->inform = INFORM_CONVERGED_OPTIMUM;
-		fc->wanted |= FF_COMPUTE_BESTFIT;
+		double gradThresh = Global->getGradientThreshold(fc->fit);
+		double feasibilityTolerance = Global->feasibilityTolerance;
+		bool localMin = true;
+		// factor out simliar code in omxHessianCalculation
+		for (int gx=0; gx < int(fc->numParam); ++gx) {
+			if (fabs(fc->grad[gx]) > gradThresh &&
+			    !((fc->grad[gx] > 0 && fabs(fc->est[gx] - lbound[gx]) < feasibilityTolerance) ||
+			      (fc->grad[gx] < 0 && fabs(fc->est[gx] - ubound[gx]) < feasibilityTolerance))) {
+				localMin = false;
+				break;
+			}
+		}
+		if (!localMin) {
+			fc->inform = INFORM_NOT_AT_OPTIMUM;
+		} else {
+			fc->inform = INFORM_CONVERGED_OPTIMUM;
+			fc->wanted |= FF_COMPUTE_BESTFIT;
+		}
 		if (verbose >= 1) {
 			int iter = fc->iterations - startIter;
-			mxLog("%s: converged in %d cycles (%d minor iterations)", name, iter, minorIter);
+			mxLog("%s: converged in %d cycles (%d minor iterations) inform=%d",
+			      name, iter, minorIter, fc->inform);
 		}
 	} else {
 		fc->inform = INFORM_ITERATION_LIMIT;

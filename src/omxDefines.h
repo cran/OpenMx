@@ -48,6 +48,7 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 
 #define EIGEN_NO_DEBUG 1
 #define EIGEN_DONT_PARALLELIZE
+#define  _OpenMx_Compilation_ 1  // work around bug in Eigen 3.2.5
 #define EIGEN_DEFAULT_DENSE_INDEX_TYPE int   // default is 8 but 4 bytes is plenty for us
 
 #ifdef DEBUGMX
@@ -106,8 +107,7 @@ enum omxFFCompute {
 	FF_COMPUTE_INFO         = 1<<8,   // Fisher information
 	FF_COMPUTE_BESTFIT      = 1<<9,
 	FF_COMPUTE_STARTING     = 1<<10,   // for special hacks, not for routine use
-	FF_COMPUTE_INITIAL_FIT  = 1<<11,   // omxInitialMatrixAlgebraCompute
-	FF_COMPUTE_DIMS         = 1<<12
+	FF_COMPUTE_INITIAL_FIT  = 1<<11    // omxInitialMatrixAlgebraCompute
 };
 
 typedef struct omxMatrix omxMatrix;

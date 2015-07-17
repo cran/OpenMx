@@ -204,6 +204,8 @@ omxGlobal::omxGlobal()
 	unpackedConfidenceIntervals = false;
 	fc = NULL;
 	intervals = true;
+	gradientTolerance = 1e-6;
+	boundsUpdated = false;
 
 	FreeVarGroup *fvg = new FreeVarGroup;
 	fvg->id.push_back(FREEVARGROUP_ALL);   // all variables
@@ -296,18 +298,29 @@ void omxState::init()
 	currentRow = -1;
 }
 
-void omxState::loadDefinitionVariables()
+void omxState::loadDefinitionVariables(bool start)
 {
-	for(int ex = 0; ex < int(expectationList.size()); ++ex) {
-		omxExpectation *e1 = expectationList[ex];
+	for(int ex = 0; ex < int(dataList.size()); ++ex) {
+		omxData *e1 = dataList[ex];
 		if (e1->defVars.size() == 0) continue;
-		if (e1->data->rows != 1) {
-			e1->loadFakeData(NA_REAL);
+		int row = 0;
+		if (start) {
+			if (e1->rows != 1) {
+				e1->loadFakeData(NA_REAL);
+				continue;
+			}
 		} else {
-			Eigen::VectorXd oldDefs(e1->defVars.size());
-			oldDefs.setConstant(NA_REAL);
-			e1->handleDefinitionVarList(this, 0, oldDefs.data());
+			int obs = omxDataNumObs(e1);
+			for (int dx=0; dx < obs; ++dx) {
+				if (omxDataIndex(e1, dx) == 0) {
+					row = dx;
+					break;
+				}
+			}
 		}
+		Eigen::VectorXd oldDefs(e1->defVars.size());
+		oldDefs.setConstant(NA_REAL);
+		e1->handleDefinitionVarList(this, row, oldDefs.data());
 	}
 }
 
@@ -585,8 +598,6 @@ UserConstraint::UserConstraint(FitContext *fc, const char *name, omxMatrix *arg1
 	omxState *state = fc->state;
 	omxMatrix *args[2] = {arg1, arg2};
 	pad = omxNewAlgebraFromOperatorAndArgs(10, args, 2, state); // 10 = binary subtract
-	state->setWantStage(FF_COMPUTE_DIMS);
-	refresh(fc);
 	state->setWantStage(FF_COMPUTE_INITIAL_FIT);
 	refresh(fc);
 	int nrows = pad->rows;

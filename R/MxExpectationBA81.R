@@ -62,7 +62,7 @@ setMethod("genericExpDependencies", signature("MxExpectationBA81"),
 	  })
 
 setMethod("genericExpFunConvert", signature("MxExpectationBA81"), 
-	  function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+	  function(.Object, flatModel, model, labelsData, dependencies) {
 		  modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
 		  if(is.na(.Object@data)) {
 			  msg <- paste(typeof(.Object),
@@ -172,7 +172,7 @@ setMethod("genericExpRename", signature("MxExpectationBA81"),
 ##' E-step. This option is mainly of use for debugging derivatives.
 ##' @param debugInternal when enabled, some of the internal tables are
 ##' returned in $debug. This is mainly of use to developers.
-##' @seealso \href{http://cran.r-project.org/web/packages/rpf/index.html}{RPF}
+##' @seealso \href{http://cran.r-project.org/package=rpf}{RPF}
 ##' @references
 ##' Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of item
 ##' parameters: Application of an EM algorithm. Psychometrika, 46, 443-459.
@@ -210,7 +210,7 @@ mxExpectationBA81 <- function(ItemSpec, item="item", ...,
 	if (is.na(weightColumn)) weightColumn <- as.integer(weightColumn)
 
 	return(new("MxExpectationBA81", ItemSpec, item, EstepItem,
-		   qpoints, qwidth, mean, cov, verbose, debugInternal,
+		   qpoints, qwidth, mean, cov, as.integer(verbose), debugInternal,
 		   minItemsPerScore, weightColumn))
 }
 

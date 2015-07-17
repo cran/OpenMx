@@ -184,147 +184,6 @@ static void omxExpectationProcessDataStructures(omxExpectation* ox, SEXP rObj)
 	}
 }
 
-static void omxExpectationProcessDefinitionVars(omxExpectation* ox, SEXP rObj)
-{
-	if(!R_has_slot(rObj, Rf_install("definitionVars"))) {
-		return;
-	}
-
-	if(OMX_DEBUG) {
-		mxLog("Accessing definition variables structure.");
-	}
-
-	SEXP nextMatrix;
-	ScopedProtect dv(nextMatrix, R_do_slot(rObj, Rf_install("definitionVars")));
-	int numDefs = Rf_length(nextMatrix);
-	if(OMX_DEBUG) {
-		mxLog("Number of definition variables is %d.", numDefs);
-	}
-	ox->defVars.reserve(numDefs);
-	for(int nextDef = 0; nextDef < numDefs; nextDef++) {
-		omxDefinitionVar dvar;
-		
-		SEXP dataSource, columnSource, depsSource; 
-		int nextDataSource, numDeps;
-
-		SEXP itemList;
-		ScopedProtect p1(itemList, VECTOR_ELT(nextMatrix, nextDef));
-		ScopedProtect p2(dataSource, VECTOR_ELT(itemList, 0));
-		nextDataSource = INTEGER(dataSource)[0];
-		if(OMX_DEBUG) {
-			mxLog("Data source number is %d.", nextDataSource);
-		}
-		dvar.data = nextDataSource;
-		dvar.source = ox->currentState->dataList[nextDataSource];
-		ScopedProtect p3(columnSource, VECTOR_ELT(itemList, 1));
-		if(OMX_DEBUG) {
-			mxLog("Data column number is %d.", INTEGER(columnSource)[0]);
-		}
-		dvar.column = INTEGER(columnSource)[0];
-		ScopedProtect p4(depsSource, VECTOR_ELT(itemList, 2));
-		numDeps = LENGTH(depsSource);
-		dvar.numDeps = numDeps;
-		dvar.deps = (int*) R_alloc(numDeps, sizeof(int));
-		for(int i = 0; i < numDeps; i++) {
-			dvar.deps[i] = INTEGER(depsSource)[i];
-		}
-
-		dvar.numLocations = Rf_length(itemList) - 3;
-		dvar.matrices = (int *) R_alloc(Rf_length(itemList) - 3, sizeof(int));
-		dvar.rows = (int *) R_alloc(Rf_length(itemList) - 3, sizeof(int));
-		dvar.cols = (int *) R_alloc(Rf_length(itemList) - 3, sizeof(int));
-		for(int index = 3; index < Rf_length(itemList); index++) {
-			SEXP nextItem;
-			ScopedProtect pi(nextItem, VECTOR_ELT(itemList, index));
-			dvar.matrices[index-3] = INTEGER(nextItem)[0];
-			dvar.rows[index-3] = INTEGER(nextItem)[1];
-			dvar.cols[index-3] = INTEGER(nextItem)[2];
-		}
-		ox->defVars.push_back(dvar);
-	}
-}
-
-static void markDefVarDependencies(omxState* os, omxDefinitionVar* defVar)
-{
-	int numDeps = defVar->numDeps;
-	int *deps = defVar->deps;
-
-	for (int i = 0; i < numDeps; i++) {
-		int value = deps[i];
-
-		if(value < 0) {
-			omxMarkDirty(os->matrixList[~value]);
-		} else {
-			omxMarkDirty(os->algebraList[value]);
-		}
-	}
-}
-
-void omxExpectation::verifyDefVarDataSources(omxData* data)
-{
-	for (int dx=0; dx < int(defVars.size()); ++dx) {
-		omxDefinitionVar &dv = defVars[dx];
-		if (dv.source == data) continue;
-		Rf_error("%s: definition variable '%s' must be drawn "
-			 "from the immediate model's data",
-			 name, omxDataColumnName(dv.source, dv.column));
-	}
-}
-
-int omxExpectation::handleDefinitionVarList(omxState *state, int row, double* oldDefs)
-{
-	if(OMX_DEBUG_ROWS(row)) { mxLog("Processing Definition Vars."); }
-	
-	int numVarsFilled = 0;
-
-	for (int k=0; k < int(defVars.size()); ++k) {
-		double newDefVar = omxDoubleDataElement(data, row, defVars[k].column);
-		if(ISNA(newDefVar)) {
-			Rf_error("Error: NA value for a definition variable is Not Yet Implemented.");
-		}
-		if(newDefVar == oldDefs[k]) {
-			continue;
-		}
-		oldDefs[k] = newDefVar;
-		numVarsFilled++;
-
-		for(int l = 0; l < defVars[k].numLocations; l++) {
-			if(OMX_DEBUG_ROWS(row)) {
-				mxLog("Populating column %d (value %3.2f) into matrix %d.", defVars[k].column, omxDoubleDataElement(defVars[k].source, row, defVars[k].column), defVars[k].matrices[l]);
-			}
-			int matrixNumber = defVars[k].matrices[l];
-			int matrow = defVars[k].rows[l];
-			int matcol = defVars[k].cols[l];
-			omxMatrix *matrix = state->matrixList[matrixNumber];
-			omxSetMatrixElement(matrix, matrow, matcol, newDefVar);
-		}
-		markDefVarDependencies(state, &(defVars[k]));
-	}
-	return numVarsFilled;
-}
-
-void omxExpectation::loadFakeData(double fake)
-{
-	for (int dx=0; dx < int(defVars.size()); ++dx) {
-		defVars[dx].loadFakeData(currentState, fake);
-	}
-}
-
-void omxDefinitionVar::loadFakeData(omxState *state, double fake)
-{
-	for(int l = 0; l < numLocations; l++) {
-		int matrixNumber = matrices[l];
-		int matrow = rows[l];
-		int matcol = cols[l];
-		omxMatrix *matrix = state->matrixList[matrixNumber];
-		if(OMX_DEBUG) {
-			mxLog("Populating fake data (value %3.2f) into matrix '%s' at [%d,%d]",
-			      fake, matrix->name(), 1+matrow, 1+matcol);
-		}
-		omxSetMatrixElement(matrix, matrow, matcol, fake);
-	}
-}
-
 omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os) {
 
 	SEXP ExpectationClass;
@@ -341,10 +200,6 @@ omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os)
 	SEXP nextMatrix;
 	{ScopedProtect p1(nextMatrix, R_do_slot(rObj, Rf_install("data")));
 	expect->data = omxDataLookupFromState(nextMatrix, os);
-	}
-
-	if (rObj) {
-		omxExpectationProcessDefinitionVars(expect, rObj);
 	}
 
 	return expect;
@@ -395,14 +250,14 @@ void omxCompleteExpectation(omxExpectation *ox) {
 	}
 
 	if (OMX_DEBUG) {
+		omxData *od = ox->data;
 		omxState *state = ox->currentState;
 		std::string msg = string_snprintf("Expectation '%s' of type '%s' has"
 						  " %d definition variables:\n", ox->name, ox->expType,
-						  int(ox->defVars.size()));
-		for (int dx=0; dx < int(ox->defVars.size()); ++dx) {
-			omxDefinitionVar &dv = ox->defVars[dx];
-			msg += string_snprintf("[%d] column '%s' ->", dx,
-					       omxDataColumnName(dv.source, dv.column));
+						  int(od->defVars.size()));
+		for (int dx=0; dx < int(od->defVars.size()); ++dx) {
+			omxDefinitionVar &dv = od->defVars[dx];
+			msg += string_snprintf("[%d] column '%s' ->", dx, omxDataColumnName(od, dv.column));
 			for (int lx=0; lx < dv.numLocations; ++lx) {
 				msg += string_snprintf(" %s[%d,%d]", state->matrixToName(~dv.matrices[lx]),
 						       dv.rows[lx], dv.cols[lx]);

@@ -125,45 +125,6 @@ static SEXP untitledNumber() {
 	return Rf_ScalarInteger(++untitledCounter);
 }
 
-static R_CallMethodDef callMethods[] = {
-	{"backend", (DL_FUNC) omxBackend, 10},
-	{"callAlgebra", (DL_FUNC) omxCallAlgebra, 3},
-	{"findIdenticalRowsData", (DL_FUNC) findIdenticalRowsData, 5},
-	{"Dmvnorm_wrapper", (DL_FUNC) dmvnorm_wrapper, 3},
-	{"hasNPSOL_wrapper", (DL_FUNC) has_NPSOL, 0},
-	{"sparseInvert_wrapper", (DL_FUNC) sparseInvert_wrapper, 1},
-	{"hasOpenMP_wrapper", (DL_FUNC) has_openmp, 0},
-	{"do_logm_eigen", (DL_FUNC) &do_logm_eigen, 1},
-	{"do_expm_eigen", (DL_FUNC) &do_expm_eigen, 1},
-	{"Log_wrapper", (DL_FUNC) &testMxLog, 1},
-	{"untitledNumberReset", (DL_FUNC) &untitledNumberReset, 0},
-	{"untitledNumber", (DL_FUNC) &untitledNumber, 0},
-	{NULL, NULL, 0}
-};
-
-#ifdef  __cplusplus
-extern "C" {
-#endif
-
-void R_init_OpenMx(DllInfo *info) {
-	R_registerRoutines(info, NULL, callMethods, NULL, NULL);
-
-	// There is no code that will change behavior whether openmp
-	// is set for nested or not. I'm just keeping this in case it
-	// makes a difference with older versions of openmp. 2012-12-24 JNP
-#if defined(_OPENMP) && _OPENMP <= 200505
-	omp_set_nested(0);
-#endif
-}
-
-void R_unload_OpenMx(DllInfo *) {
-	// keep this stub in case we need it
-}
-
-#ifdef  __cplusplus
-}
-#endif
-
 void string_to_try_Rf_error( const std::string& str )
 {
 	Rf_error("%s", str.c_str());
@@ -345,9 +306,16 @@ SEXP omxCallAlgebra(SEXP matList, SEXP algNum, SEXP options)
 	}
 }
 
+static double internalToUserBound(double val, double inf)
+{
+	if (val == inf) return NA_REAL;
+	return val;
+}
+
 SEXP omxBackend2(SEXP constraints, SEXP matList,
 		 SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
-		 SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options)
+		 SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
+		 SEXP defvars)
 {
 	SEXP nextLoc;
 
@@ -370,7 +338,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 #endif
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	globalState->omxProcessMxDataEntities(data);
+	globalState->omxProcessMxDataEntities(data, defvars);
     
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	globalState->omxProcessMxExpectationEntities(expectList);
@@ -383,6 +351,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	omxProcessFreeVarList(varList, &startingValues);
 	FitContext *fc = new FitContext(globalState, startingValues);
 	Global->fc = fc;
+	fc->copyParamToModelClean();
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	globalState->omxProcessMxAlgebraEntities(algList);
@@ -423,7 +392,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 		Rf_error(Global->getBads());
 	}
 
-	globalState->loadDefinitionVariables();
+	globalState->loadDefinitionVariables(true);
 
 	globalState->setWantStage(FF_COMPUTE_FIT);
 
@@ -492,26 +461,33 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 			result.add("minimum", Rf_ScalarReal(fc->fit));
 		}
 
-		size_t numFree = Global->findVarGroup(FREEVARGROUP_ALL)->vars.size();
+		FreeVarGroup *varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
+		int numFree = int(varGroup->vars.size());
 		if (numFree) {
-			// move other global reporting here TODO
-
 			SEXP estimate;
 			Rf_protect(estimate = Rf_allocVector(REALSXP, numFree));
 			memcpy(REAL(estimate), fc->est, sizeof(double)*numFree);
 			result.add("estimate", estimate);
 
+			if (Global->boundsUpdated) {
+				MxRList bret;
+				SEXP Rlb = Rf_allocVector(REALSXP, numFree);
+				bret.add("l", Rlb);
+				SEXP Rub = Rf_allocVector(REALSXP, numFree);
+				bret.add("u", Rub);
+				double *lb = REAL(Rlb);
+				double *ub = REAL(Rub);
+				for(int px = 0; px < numFree; px++) {
+					lb[px] = internalToUserBound(varGroup->vars[px]->lbound, NEG_INF);
+					ub[px] = internalToUserBound(varGroup->vars[px]->ubound, INF);
+				}
+				result.add("bounds", bret.asR());
+			}
 			if (fc->stderrs) {
 				SEXP stdErrors;
 				Rf_protect(stdErrors = Rf_allocMatrix(REALSXP, numFree, 1));
 				memcpy(REAL(stdErrors), fc->stderrs, sizeof(double) * numFree);
 				result.add("standardErrors", stdErrors);
-
-				Rf_protect(stdErrors = Rf_allocVector(LGLSXP, numFree));
-				for (int px=0; px < int(numFree); ++px) {
-					INTEGER(stdErrors)[px] = fc->seSuspect[px];
-				}
-				result.add("standardErrorsSuspect", stdErrors);
 			}
 			if (fc->wanted & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN)) {
 				result.add("infoDefinite", Rf_ScalarLogical(fc->infoDefinite));
@@ -550,18 +526,58 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	return result.asR();
 }
 
-SEXP omxBackend(SEXP constraints, SEXP matList,
+static SEXP omxBackend(SEXP constraints, SEXP matList,
 		SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
-		SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options)
+		SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
+		SEXP defvars)
 {
 	try {
 		return omxBackend2(constraints, matList,
 				   varList, algList, expectList, computeList,
-				   data, intervalList, checkpointList, options);
+				   data, intervalList, checkpointList, options, defvars);
 	} catch( std::exception& __ex__ ) {
 		exception_to_try_Rf_error( __ex__ );
 	} catch(...) {
 		string_to_try_Rf_error( "c++ exception (unknown reason)" );
 	}
 }
+
+static R_CallMethodDef callMethods[] = {
+	{"backend", (DL_FUNC) omxBackend, 11},
+	{"callAlgebra", (DL_FUNC) omxCallAlgebra, 3},
+	{"findIdenticalRowsData", (DL_FUNC) findIdenticalRowsData, 5},
+	{"Dmvnorm_wrapper", (DL_FUNC) dmvnorm_wrapper, 3},
+	{"hasNPSOL_wrapper", (DL_FUNC) has_NPSOL, 0},
+	{"sparseInvert_wrapper", (DL_FUNC) sparseInvert_wrapper, 1},
+	{"hasOpenMP_wrapper", (DL_FUNC) has_openmp, 0},
+	{"do_logm_eigen", (DL_FUNC) &do_logm_eigen, 1},
+	{"do_expm_eigen", (DL_FUNC) &do_expm_eigen, 1},
+	{"Log_wrapper", (DL_FUNC) &testMxLog, 1},
+	{"untitledNumberReset", (DL_FUNC) &untitledNumberReset, 0},
+	{"untitledNumber", (DL_FUNC) &untitledNumber, 0},
+	{NULL, NULL, 0}
+};
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+void R_init_OpenMx(DllInfo *info) {
+	R_registerRoutines(info, NULL, callMethods, NULL, NULL);
+
+	// There is no code that will change behavior whether openmp
+	// is set for nested or not. I'm just keeping this in case it
+	// makes a difference with older versions of openmp. 2012-12-24 JNP
+#if defined(_OPENMP) && _OPENMP <= 200505
+	omp_set_nested(0);
+#endif
+}
+
+void R_unload_OpenMx(DllInfo *) {
+	// keep this stub in case we need it
+}
+
+#ifdef  __cplusplus
+}
+#endif
 

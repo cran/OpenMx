@@ -128,6 +128,7 @@ static void buildLatentParamMap(omxFitFunction* oo, FitContext *fc)
 
 					if (a1 == a2 && fv->lbound == NEG_INF) {
 						fv->lbound = BA81_MIN_VARIANCE;  // variance must be positive
+						Global->boundsUpdated = true;
 						if (fc->est[px] < fv->lbound) {
 							Rf_error("Starting value for variance %s is not positive", fv->name);
 						}
@@ -206,6 +207,7 @@ static void buildItemParamMap(omxFitFunction* oo, FitContext *fc)
 			}
 			if (fv->lbound == NEG_INF && std::isfinite(lower)) {
 				fv->lbound = lower;
+				Global->boundsUpdated = true;
 				if (fc->est[px] < fv->lbound) {
 					Rf_error("Starting value %s %f less than lower bound %f",
 					      fv->name, fc->est[px], lower);
@@ -213,6 +215,7 @@ static void buildItemParamMap(omxFitFunction* oo, FitContext *fc)
 			}
 			if (fv->ubound == INF && std::isfinite(upper)) {
 				fv->ubound = upper;
+				Global->boundsUpdated = true;
 				if (fc->est[px] > fv->ubound) {
 					Rf_error("Starting value %s %f greater than upper bound %f",
 					      fv->name, fc->est[px], upper);
@@ -1156,7 +1159,12 @@ ba81ComputeFit(omxFitFunction* oo, int want, FitContext *fc)
 					if (patternLik[ux] == 0) continue;
 					got += rowWeight[ux] * (log(patternLik[ux]) - LogLargest);
 				}
-				double fit = Global->llScale * got;
+				double fit = nan("infeasible");
+				if (estate->grp.excludedPatterns < numUnique) {
+					fit = Global->llScale * got;
+					// add in some badness for excluded patterns
+					fit += fit * estate->grp.excludedPatterns;
+				}
 				if (estate->verbose >= 1) mxLog("%s: observed fit %.4f (%d/%d excluded)",
 								oo->name(), fit, estate->grp.excludedPatterns, numUnique);
 				oo->matrix->data[0] = fit;

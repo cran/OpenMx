@@ -30,7 +30,6 @@ setClass(Class = "MxExpectationGREML",
            bcov="matrix",
            numFixEff = "integer",
            dims = "character",
-           definitionVars = "list",
            numStats = "numeric",
            dataColumns = "numeric",
            name = "character"),
@@ -42,7 +41,7 @@ setClass(Class = "MxExpectationGREML",
 setMethod("initialize", "MxExpectationGREML",
           function(.Object, V=character(0), yvars=character(0), Xvars=list(), addOnes=TRUE, 
                    blockByPheno=TRUE, staggerZeroes=TRUE, dataset.is.yX=FALSE, casesToDrop=integer(0),
-                   data = as.integer(NA), definitionVars = list(), name = 'expectation') {
+                   data = as.integer(NA), name = 'expectation') {
             .Object@name <- name
             .Object@V <- V
             .Object@yvars <- yvars
@@ -53,7 +52,6 @@ setMethod("initialize", "MxExpectationGREML",
             .Object@dataset.is.yX <- dataset.is.yX
             .Object@numFixEff <- integer(0)
             .Object@casesToDrop <- casesToDrop
-            .Object@definitionVars <- definitionVars
             .Object@data <- data
             .Object@X <- matrix(as.numeric(NA),1,1)
             .Object@dims <- "foo"
@@ -135,10 +133,9 @@ mxExpectationGREML <- function(V, yvars=character(0), Xvars=list(), addOnes=TRUE
 
 
 setMethod("genericExpFunConvert", "MxExpectationGREML", 
-          function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+          function(.Object, flatModel, model, labelsData, dependencies) {
             modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
             name <- .Object@name
-            if(length(defVars)){stop("definition variables are incompatible (and unnecessary) with GREML expectation",call.=F)}
             #There just needs to be something in the data slot, since the backend expects it:
             if(is.na(.Object@data)){
               msg <- paste("the GREML expectation function",
@@ -287,7 +284,7 @@ mxGREMLDataHandler <- function(data, yvars=character(0), Xvars=list(), addOnes=T
             )
           }
           if(length(yvars)==1){
-            if(addOnes){colnames(X) <- c("1",Xvars[[1]])}
+            if(addOnes){colnames(X) <- c("Intrcpt",Xvars[[1]])}
             else{colnames(X) <- Xvars[[1]]}
           }
           else{
@@ -306,7 +303,7 @@ mxGREMLDataHandler <- function(data, yvars=character(0), Xvars=list(), addOnes=T
           k <- i
           Xcurr <- matrix(0,nrow(data)*length(yvars),ncol=length(Xvars[[i]])+addOnes)
           if(length(yvars)==1){
-            if(addOnes){colnames(Xcurr) <- c("1",Xvars[[1]])}
+            if(addOnes){colnames(Xcurr) <- c("Intrcpt",Xvars[[1]])}
             else{colnames(Xcurr) <- Xvars[[1]]}
           }
           else{
@@ -328,7 +325,7 @@ mxGREMLDataHandler <- function(data, yvars=character(0), Xvars=list(), addOnes=T
           Xcurr <- as.matrix(data[ ,Xvars[[i]] ])
           if(addOnes){
             Xcurr <- cbind(1,Xcurr)
-            colnames(Xcurr) <- c("1",Xvars[[1]])
+            colnames(Xcurr) <- c("Intrcpt",Xvars[[1]])
           }
           else{colnames(Xcurr) <- Xvars[[1]]}
           if(i==1){X <- Xcurr}
@@ -343,7 +340,7 @@ mxGREMLDataHandler <- function(data, yvars=character(0), Xvars=list(), addOnes=T
           }
           if(addOnes){Xcurr <- cbind(1,Xcurr)}
           if(i==1){
-            if(addOnes){colnames(Xcurr) <- c("1",Xvars[[1]])}
+            if(addOnes){colnames(Xcurr) <- c("Intrcpt",Xvars[[1]])}
             else{colnames(Xcurr) <- Xvars[[1]]}
             X <- Xcurr
           }
@@ -377,11 +374,12 @@ GREMLFixEffList <- function(model) {
     names(ptable) <- c(model$name, names(model@submodels))
     ptable[2:length(ptable)] <- lapply(model@submodels,GREMLFixEffList)
     ptable[[1]] <- GREMLFixEffListHelper(model)
-    ptable <- ptable[sapply(ptable,function(x){!is.null(x)})]
+    ptable <- ptable[sapply(ptable,function(x){length(x)>0})]
   } 
   else{
     ptable <- GREMLFixEffListHelper(model)
   }
+  if(length(ptable)==0){ptable <- NULL}
   return(ptable)
 }
 

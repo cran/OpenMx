@@ -93,13 +93,21 @@ generateParameterList <- function(flatModel, dependencies, freeVarGroups) {
 		svalue <- NA
 		if (length(svalues) > 1) {
 			values <- sapply(svalues, generateValueHelper, mList)
-			if (!all(values == values[[1]])) {
-				warning(paste('Parameter',i,'has multiple start values.',
-					      'Selecting', values[[1]]))
+			values <- values[!is.na(values)]
+			if (length(values) == 0) {
+				svalue <- NA
+			} else {
+				if (!all(values == values[[1]])) {
+					warning(paste('Parameter',names(pList)[i],'has multiple start values.',
+						      'Selecting', values[[1]]))
+				}
+				svalue <- values[[1]]
 			}
-			svalue <- values[[1]]
 		} else {
 			svalue <- generateValueHelper(svalues[[1]], mList)
+		}
+		if (is.na(svalue)) {
+			stop(paste("Parameter '",names(pList)[i],"' has no starting value",sep=""))
 		}
 		pList[[i]] <- c(original, svalue)
 	}
@@ -107,7 +115,7 @@ generateParameterList <- function(flatModel, dependencies, freeVarGroups) {
 	flatModel
 }
 
-definitionDependencyList <- function(pList, flatModel, dependencies) {
+definitionDependencyList <- function(pList, defVarName, flatModel, dependencies) {
 	if (length(pList) == 2) {
 		retval <- list(pList[[1]], pList[[2]], integer())
 		return(retval)
@@ -116,6 +124,17 @@ definitionDependencyList <- function(pList, flatModel, dependencies) {
 	deps <- lapply(locations, findDependencies, flatModel, dependencies)
 	depnames <- Reduce(union, deps, character())
 	depnames <- Filter(Negate(isExpectation), depnames)
+	if (0) {
+		# too many false positives, leave disabled for now
+		dataModel <- strsplit(defVarName, imxSeparatorChar, fixed = TRUE)[[1]][1]
+		outsider <- !grepl(paste("^", dataModel, "\\.", sep=""), depnames, perl=TRUE)
+		if (any(outsider)) {
+			warning(paste(omxQuotes(depnames[outsider]),
+				      "depend on definition variable",
+				      omxQuotes(defVarName), "which is defined in a different model.",
+				      "This can result in undefined behavior."))
+		}
+	}
 	depnumbers <- sapply(depnames, doLocateIndex, flatModel, flatModel@name, USE.NAMES=FALSE)
 	depnumbers <- as.integer(depnumbers)
 	retval <- list(pList[[1]], pList[[2]], depnumbers)
@@ -130,7 +149,13 @@ generateDefinitionList <- function(flatModel, dependencies) {
 			flatModel@matrices[[i]], 
 			result, i - 1L)
 	}
-	result <- lapply(result, definitionDependencyList, flatModel, dependencies)
+	result <- mapply(definitionDependencyList, result, names(result),
+			 MoreArgs=list(flatModel, dependencies), SIMPLIFY=FALSE, USE.NAMES = TRUE)
+	# data number
+	# column number
+	# integer vector of dependencies (doLocateIndex coded)
+	# (matrix row col) triples
+	# ...
 	return(result)
 }
 
@@ -139,10 +164,6 @@ generateValueHelper <- function(triple, mList) {
 	row <- triple[2] + 1
 	col <- triple[3] + 1
 	val <- mList[[mat]]@values[row,col]
-	if (is.na(val)) {
-		stop(paste("Starting value in ",names(mList)[[mat]],
-			   "[",row,",",col,"] is missing", sep=""))
-	}
 	return(val)
 }
 

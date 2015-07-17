@@ -17,7 +17,6 @@ setClass(Class = "MxExpectationNormal",
 	representation = representation(
 		covariance = "MxCharOrNumber",
 		means = "MxCharOrNumber",
-		definitionVars = "list",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
 		dataColumns = "numeric",
@@ -31,12 +30,11 @@ setClass(Class = "MxExpectationNormal",
 
 setMethod("initialize", "MxExpectationNormal",
 	function(.Object, covariance, means, dims, thresholds, threshnames,
-		data = as.integer(NA), definitionVars = list(), name = 'expectation') {
+		data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@covariance <- covariance
 		.Object@means <- means
 		.Object@data <- data
-		.Object@definitionVars <- definitionVars
 		.Object@thresholds <- thresholds
 		.Object@dims <- dims
 		.Object@threshnames <- threshnames
@@ -165,6 +163,11 @@ mxGetExpected <- imxGetExpectationComponent
 sse <- function(x){sum(x^2)}
 
 mxCheckIdentification <- function(model, details=TRUE){
+	notAllowedFits <- c("MxFitFunctionAlgebra", "MxFitFunctionRow", "MxFitFunctionR")
+	if( class(model$fitfunction) %in% notAllowedFits ){
+		msg <- paste("Identification check is not possible for models with", omxQuotes(notAllowedFits), 'fit functions.\n', "If you have a multigroup model, use mxFitFunctionMultigroup.")
+		stop(msg, call.=FALSE)
+	}
 	eps <- 1e-17
 	theParams <- omxGetParameters(model)
 	jac <- numDeriv::jacobian(func=.mat2param, x=theParams, method.args=list(r=2), model=model)
@@ -285,7 +288,7 @@ verifyMeans <- function(meansName, mxDataObject, flatModel, modelname) {
 }
 
 setMethod("genericExpFunConvert", "MxExpectationNormal", 
-	function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+	function(.Object, flatModel, model, labelsData, dependencies) {
 		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
 		name <- .Object@name
 		if(is.na(.Object@data)) {
@@ -316,7 +319,6 @@ setMethod("genericExpFunConvert", "MxExpectationNormal",
 		checkNumericData(mxDataObject)
 		checkNumberOrdinalColumns(mxDataObject)
 		covNames <- colnames(covariance)
-		.Object@definitionVars <- imxFilterDefinitionVariables(defVars, dataName)
 		verifyMvnNames(covName, meansName, "expected", flatModel, modelname, class(.Object))
 		.Object@dataColumns <- generateDataColumns(flatModel, covNames, dataName)
 		verifyThresholds(flatModel, model, labelsData, dataName, covNames, threshName)

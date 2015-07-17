@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-gitVersion <- "v2.2.4"
+gitVersion <- "v2.2.6"
 
 mxVersion <- function (model=NULL, verbose=TRUE) {
     pvers <- try(packageVersion("OpenMx"))
@@ -24,7 +24,9 @@ mxVersion <- function (model=NULL, verbose=TRUE) {
 		msg = paste("OpenMx version: ", pvers, " [GIT ", gitVersion, "]", sep="")
 		msg = paste(msg, "\nR version: ", version$version.string, sep="")
 		msg = paste(msg, "\nPlatform: ", version$platform, sep="")
-
+		if ("Darwin" ==Sys.info()["sysname"]){
+			msg = paste(msg, "\nMacOS:", system("sw_vers -productVersion", intern=TRUE))
+		}
 		msg = paste(msg, "\nDefault optimiser: ", mxOption(NULL, "Default optimizer"), sep="")
 		if (!is.null(model)) {
 			thisModelsOptimiser = mxOption(model, "Default optimizer")

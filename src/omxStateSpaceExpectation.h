@@ -29,6 +29,7 @@ typedef struct {
 	omxMatrix *covInfo; //info from Cholesky decomp of small expected cov (smallS) to be passed to FIML single iteration
 	double oldT;
 	double deltaT;
+	int returnScores; // Whether or not to populated the row-by-row expected means, covariances, Kalman scores, and likelihoods back to R
 	
 	/* Eigen Matrix initialization */
 	Eigen::MatrixXd eigenExpA;
@@ -36,6 +37,7 @@ typedef struct {
 	Eigen::MatrixXd eigenIA;
 	Eigen::MatrixXd PSI;
 	Eigen::MatrixXd IP;
+	Eigen::MatrixXd eigenPreX;
 	
 } omxStateSpaceExpectation;
 
@@ -43,6 +45,7 @@ typedef struct {
 void omxKalmanPredict(omxStateSpaceExpectation* ose);
 void omxKalmanUpdate(omxStateSpaceExpectation* ose);
 void omxKalmanBucyPredict(omxStateSpaceExpectation* ose);
+void omxRauchTungStriebelSmooth(omxStateSpaceExpectation* ose);
 
 void omxInitStateSpaceExpectation(omxExpectation* ox);
 

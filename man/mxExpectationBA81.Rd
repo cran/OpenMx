@@ -61,6 +61,6 @@ of the prior ability distributions. Applied Psychological
 Measurement, 14(3), 299-311.
 }
 \seealso{
-\href{http://cran.r-project.org/web/packages/rpf/index.html}{RPF}
+\href{http://cran.r-project.org/package=rpf}{RPF}
 }
 

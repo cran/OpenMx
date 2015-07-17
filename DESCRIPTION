@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2015-05-26
+Date: 2015-07-17
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -13,7 +13,8 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Joshua", "N."), "Pritikin", email="jpritikin@pobox.com",
     role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"),
     person(c("Robert", "M."), "Kirkpatrick", role="aut"),
-    person(c("Yang"), "Wang", role="ctb"))
+    person(c("Yang"), "Wang", role="ctb"),
+    person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"))
 URL: http://openmx.psyc.virginia.edu
 BugReports: http://openmx.psyc.virginia.edu/forums
 Description: Facilitates treatment of statistical model specifications
@@ -28,7 +29,7 @@ Description: Facilitates treatment of statistical model specifications
     equations, state space, and many others.
 SystemRequirements: GNU make
 License: Apache License (== 2.0) | file LICENSE
-LinkingTo: RcppEigen, StanHeaders, BH
+LinkingTo: RcppEigen, StanHeaders (>= 2.7), BH
 Depends: R (>= 3.0.2), digest, MASS, methods, parallel
 Suggests: Matrix, mvtnorm, numDeriv, roxygen2 (>= 3.1), Rmpi, rpf (>=
         0.36), snowfall
@@ -63,9 +64,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'omxBrownie.R' 'omxConstrainThresholds.R' 'omxGetNPSOL.R'
         'MxFitFunctionR.R' 'MxRObjective.R' 'MxExpectationStateSpace.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
-        'MxExpectationGREML.R' 'MxMI.R' 'zzz.R'
-Version: 2.2.4
-Packaged: 2015-05-26 11:07:59 UTC; joshua
+        'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
+        'MxAvailableOptimizers.R' 'zzz.R'
+Version: 2.2.6
+Packaged: 2015-07-17 12:57:18 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -84,8 +86,9 @@ Author: Steven M. Boker [aut],
   Joshua N. Pritikin [aut, cre],
   Mahsa Zahery [aut],
   Robert M. Kirkpatrick [aut],
-  Yang Wang [ctb]
+  Yang Wang [ctb],
+  Charles Driver [ctb]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 NeedsCompilation: yes
 Repository: CRAN
-Date/Publication: 2015-05-28 12:02:44
+Date/Publication: 2015-07-17 15:46:27

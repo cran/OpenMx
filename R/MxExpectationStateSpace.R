@@ -49,14 +49,23 @@ setClass(Class = "MxExpectationStateSpace",
 		thresholdColumns = "numeric",
 		thresholdLevels = "numeric",
 		threshnames = "character",
-		t = "MxCharOrNumber"),
+		t = "MxCharOrNumber",
+		scores = "logical",
+		xPredicted = "matrix",
+		yPredicted = "matrix",
+		PPredicted = "matrix",
+		SPredicted = "matrix",
+		xUpdated = "matrix",
+		PUpdated = "matrix",
+		xSmoothed = "matrix",
+		PSmoothed = "matrix"),
 	contains = "MxBaseExpectation")
 
 
 #--------------------------------------------------------------------
 # **DONE**
 setMethod("initialize", "MxExpectationStateSpace",
-	function(.Object, A, B, C, D, Q, R, x0, P0, u, dims, thresholds, threshnames, t,
+	function(.Object, A, B, C, D, Q, R, x0, P0, u, dims, thresholds, threshnames, t, scores,
 		data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@A <- A
@@ -72,6 +81,7 @@ setMethod("initialize", "MxExpectationStateSpace",
 		.Object@dims <- dims
 		.Object@thresholds <- thresholds
 		.Object@t <- t
+		.Object@scores <- scores
 		.Object@definitionVars <- list()
 		.Object@threshnames <- threshnames
 		return(.Object)
@@ -208,6 +218,7 @@ setMethod("qualifyNames", signature("MxExpectationStateSpace"),
 		.Object@data <- imxConvertIdentifier(.Object@data, modelname, namespace)
 		.Object@thresholds <- sapply(.Object@thresholds, imxConvertIdentifier, modelname, namespace)
 		.Object@t <- imxConvertIdentifier(.Object@t, modelname, namespace)
+		#.Object@scores <- imxConvertIdentifier(.Object@scores, modelname, namespace)
 		return(.Object)
 	}
 )
@@ -238,7 +249,7 @@ checkSSMConformable <- function(mat, rows, cols, matname, modname){
 # TODO: Allow subsets of the matrices to be specified
 #  by filling in default matrices.
 setMethod("genericExpFunConvert", signature("MxExpectationStateSpace"), 
-	function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+	function(.Object, flatModel, model, labelsData, dependencies) {
 		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]	
 		name <- .Object@name
 		aMatrix <- .Object@A
@@ -314,7 +325,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationStateSpace"),
 		if (mxDataObject@type == 'raw') {
 			threshName <- .Object@thresholds
 			checkNumberOrdinalColumns(mxDataObject)
-			.Object@definitionVars <- imxFilterDefinitionVariables(defVars, data)
 			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
 			verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
 			.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
@@ -408,7 +418,7 @@ checkSSMargument <- function(x, xname) {
 
 #--------------------------------------------------------------------
 # **DONE**
-mxExpectationStateSpace <- function(A, B, C, D, Q, R, x0, P0, u, dimnames = NA, thresholds = NA, threshnames = dimnames, ..., t=NA){
+mxExpectationStateSpace <- function(A, B, C, D, Q, R, x0, P0, u, dimnames = NA, thresholds = NA, threshnames = dimnames, ..., t=NA, scores=FALSE){
 	A <- checkSSMargument(A, "A")
 	B <- checkSSMargument(B, "B")
 	C <- checkSSMargument(C, "C")
@@ -419,6 +429,9 @@ mxExpectationStateSpace <- function(A, B, C, D, Q, R, x0, P0, u, dimnames = NA, 
 	P0 <- checkSSMargument(P0, "P0")
 	u <- checkSSMargument(u, "u")
 	t <- checkSSMargument(t, "t")
+	if (length(scores) > 1 || typeof(scores) != "logical") {
+		stop("'scores' argument is not a logical value")
+	}
 	if (single.na(thresholds)) thresholds <- as.character(NA)
 	if (single.na(dimnames)) dimnames <- as.character(NA)
 	if (!is.vector(dimnames) || typeof(dimnames) != 'character') {
@@ -434,11 +447,11 @@ mxExpectationStateSpace <- function(A, B, C, D, Q, R, x0, P0, u, dimnames = NA, 
 		stop("NA values are not allowed for dimnames vector")
 	}
 	threshnames <- checkThreshnames(threshnames)
-	return(new("MxExpectationStateSpace", A, B, C, D, Q, R, x0, P0, u, dimnames, thresholds, threshnames, t=t))
+	return(new("MxExpectationStateSpace", A, B, C, D, Q, R, x0, P0, u, dimnames, thresholds, threshnames, t=t, scores=scores))
 }
 
-mxExpectationStateSpaceContinuousTime <- function(A, B, C, D, Q, R, x0, P0, u, t=NA, dimnames = NA, thresholds = NA, threshnames = dimnames){
-	mxExpectationStateSpace(t=t, A, B, C, D, Q, R, x0, P0, u, dimnames, thresholds, threshnames)
+mxExpectationStateSpaceContinuousTime <- function(A, B, C, D, Q, R, x0, P0, u, t=NA, dimnames = NA, thresholds = NA, threshnames = dimnames, ..., scores=FALSE){
+	mxExpectationStateSpace(t=t, scores=scores, A, B, C, D, Q, R, x0, P0, u, dimnames, thresholds, threshnames)
 }
 
 mxExpectationSSCT <- mxExpectationStateSpaceContinuousTime
@@ -518,10 +531,17 @@ mxKalmanScores <- function(model, data=NA){
 		#TODO check that data are raw
 		data <- model@data@observed
 	}
-	tem <- mxEvalByName(model@expectation@x0, model, compute=TRUE, cacheBack=TRUE)
-	x0 <- tem[[1]]
-	tem <- mxEvalByName(model@expectation@P0, model, compute=TRUE, cache=tem[[2]], cacheBack=TRUE)
-	P0 <- tem[[1]]
+	x0 <- mxEvalByName(model@expectation@x0, model, compute=TRUE)
+	P0 <- mxEvalByName(model@expectation@P0, model, compute=TRUE)
+	hasDefVars <- FALSE
+	for(i in 1:length(model@matrices)){
+		attempt <- sapply(model@matrices[[i]]$labels, imxIsDefinitionVariable)
+		attempt2 <- grep('[', model@matrices[[i]]$labels, fixed=TRUE)
+		if(any(attempt) || length(attempt2) > 0){
+			hasDefVars <- TRUE
+			break
+		}
+	}
 	X.pred <- matrix(0, nrow=nrow(data)+1, ncol=nrow(x0))
 	X.upda <- matrix(0, nrow=nrow(data)+1, ncol=nrow(x0))
 	X.pred[1,] <- x0
@@ -535,20 +555,22 @@ mxKalmanScores <- function(model, data=NA){
 	L <- numeric(nrow(data)+1)
 	L[1] <- 1
 	for(i in 1:nrow(data)){
-		tem <- mxEvalByName(model@expectation@A, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		A <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@B, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		B <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@C, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		C <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@D, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		D <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@Q, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		Q <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@R, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		R <- tem[[1]]
-		tem <- mxEvalByName(model@expectation@u, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
-		u <- tem[[1]]
+		if(i==1 || hasDefVars){
+			tem <- mxEvalByName(model@expectation@A, model, compute=TRUE, defvar.row=i, cacheBack=TRUE)
+			A <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@B, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			B <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@C, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			C <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@D, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			D <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@Q, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			Q <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@R, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			R <- tem[[1]]
+			tem <- mxEvalByName(model@expectation@u, model, compute=TRUE, defvar.row=i, cache=tem[[2]], cacheBack=TRUE)
+			u <- tem[[1]]
+		}
 		
 		res <- KalmanFilter(A=A, B=B, C=C, D=D, Q=Q, R=R, x=matrix(X.upda[i,]), y=matrix(unlist(data[i,rownames(C)])), u=u, P=P.upda[,,i])
 		X.pred[i+1,] <- res$x.pred
@@ -574,8 +596,23 @@ mxKalmanScores <- function(model, data=NA){
 }
 
 
+# From StateSpaceOsc.R
+#smod2 <- mxModel(name='with scores', model=smod,
+#	mxExpectationStateSpace(A='A', B='B', C='C', D='D', Q='Q', R='R', x0='x', P0='P', u='u', scores=TRUE)
+#)
+#smod3 <- omxSetParameters(smod2, labels=names(omxGetParameters(smod2)), free=FALSE)
+#srun3 <- mxRun(smod3)
 #a <- Sys.time(); res <- mxKalmanScores(srun); b <- Sys.time()
-
+#as.numeric(b-a)/as.numeric(summary(srun3)$wallTime)
+## [1] 147.7429
+# Without the backward pass yet (i.e. no smoother)
+#  backend is 147 times as fast as frontent.
+#require(rbenchmark)
+#benchmark(mxKalmanScores(srun), mxRun(smod3), replications=20)
+## relative time: 186x speedup
+#benchmark(mxRun(smod), mxRun(smod2), replications=20)
+## .2% increase in relative time
+## .0085 extra seconds per model
 
 #res <- mxKalmanScores(srun)
 
@@ -591,6 +628,15 @@ setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
 		R <- mxEvalByName(model@expectation@R, model, compute=TRUE)
 		u <- mxEvalByName(model@expectation@u, model, compute=TRUE)
 		
+		hasDefVars <- FALSE
+		for(i in 1:length(model@matrices)){
+			attempt <- sapply(model@matrices[[i]]$labels, imxIsDefinitionVariable)
+			if(any(attempt)){
+				hasDefVars <- TRUE
+				break
+			}
+		}
+		
 		x0 <- mxEvalByName(model@expectation@x0, model, compute=TRUE)
 		P0 <- mxEvalByName(model@expectation@P0, model, compute=TRUE)
 		
@@ -602,7 +648,9 @@ setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
 		
 		tx[,1] <- x0
 		for(i in 2:(tdim+1)){
-			u <- mxEvalByName(model@expectation@u, model, compute=TRUE, defvar.row=i-1)
+			if(hasDefVars){
+				u <- mxEvalByName(model@expectation@u, model, compute=TRUE, defvar.row=i-1)
+			}
 			tx[,i] <- A %*% tx[,i-1] + B %*% u + t(mvtnorm::rmvnorm(1, rep(0, xdim), Q))
 			ty[,i-1] <- C %*% tx[,i-1] + D %*% u + t(mvtnorm::rmvnorm(1, rep(0, ydim), R))
 		}

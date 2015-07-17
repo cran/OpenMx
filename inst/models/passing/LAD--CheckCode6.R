@@ -60,6 +60,9 @@ Laplace_rgsn_mod1 <- mxModel(
 
 Laplace_rgsn_fit1 <- mxRun(Laplace_rgsn_mod1)
 summary(Laplace_rgsn_fit1)
+omxCheckCloseEnough(Laplace_rgsn_fit1$output$fit, 64.55, .02)
+omxCheckCloseEnough(Laplace_rgsn_fit1$output$estimate, c(3.21, 1.01, 0.85), .03)
+
 print(Laplace_rgsn_fit1$compute$steps[[2]]$output$gradient)
 if (0) {
   # We cannot detect this problem reliably.

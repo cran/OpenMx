@@ -17,6 +17,7 @@ setClass(Class = "MxFitFunctionGREML",
          slots=c(
            dV = "MxCharOrNumber",
            dVnames = "character",
+           MLfit = "numeric",
            numObs = "integer"),
          contains = "MxBaseFitFunction")
 
@@ -25,6 +26,7 @@ setMethod("initialize", "MxFitFunctionGREML",
           function(.Object, name = 'fitfunction', dV=character(0)) {
             .Object@name <- name
             .Object@dV <- dV
+            .Object@MLfit <- 0
             .Object@vector <- FALSE
             .Object@numObs <- 0L
             return(.Object)
@@ -65,7 +67,7 @@ setMethod("genericFitConvertEntities", "MxFitFunctionGREML",
 
 
 setMethod("genericFitFunConvert", "MxFitFunctionGREML", 
-          function(.Object, flatModel, model, labelsData, defVars, dependencies) {
+          function(.Object, flatModel, model, labelsData, dependencies) {
             name <- .Object@name
             modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
             expectName <- paste(modelname, "expectation", sep=".")
@@ -84,6 +86,11 @@ setMethod("genericFitFunConvert", "MxFitFunctionGREML",
 
 setMethod("genericFitInitialMatrix", "MxFitFunctionGREML",
           function(.Object, flatModel) {return(matrix(as.double(NA), 1, 1))})
+
+setMethod("generateReferenceModels", "MxFitFunctionGREML",
+					function(.Object, model) {
+						stop("reference models for GREML expectation not implemented")
+					})
 
 
 mxFitFunctionGREML <- function(dV=character(0)){

@@ -895,9 +895,11 @@ setMethod("initialize", "MxComputeEM",
 ##' requires a special kind of expectation that can predict its
 ##' missing data to create a completed data model.
 ##'
-##' The EM algorithm does not produce a parameter covariance matrixn
+##' The EM algorithm does not produce a parameter covariance matrix
 ##' for standard errors. S-EM, an implementation of Meng & Rubin
 ##' (1991), is included.
+##'
+##' Ramsay (1975) was recommended in Bock, Gibbons, & Muraki (1988).
 ##'
 ##' @param expectation a vector of expectation names
 ##' @param predict what to predict from the observed data (available options depend on the expectation)
@@ -914,6 +916,11 @@ setMethod("initialize", "MxComputeEM",
 ##' @aliases
 ##' MxComputeEM-class
 ##' @references
+##'
+##' Bock, R. D., Gibbons, R., & Muraki, E. (1988). Full-information
+##' item factor analysis. \emph{Applied Psychological Measurement,
+##' 6}(4), 431-444.
+##' 
 ##' Dempster, A. P., Laird, N. M., & Rubin, D. B. (1977). Maximum likelihood from
 ##' incomplete data via the EM algorithm. \emph{Journal of the Royal Statistical Society.
 ##' Series B (Methodological)}, 1-38.
@@ -1101,7 +1108,8 @@ setMethod("displayCompute", signature(Ob="MxComputeNumericDeriv", indent="intege
 	  function(Ob, indent) {
 		  callNextMethod();
 		  sp <- paste(rep('  ', indent), collapse="")
-		  for (sl in c("fitfunction", "parallel", "stepSize", "iterations", "verbose")) {
+		  for (sl in c("fitfunction", "parallel", "stepSize", "iterations",
+			       "verbose", "knownHessian", 'checkGradient')) {
 			  slname <- paste("$", sl, sep="")
 			  if (is.character(slot(Ob, sl))) {
 				  cat(sp, slname, ":", omxQuotes(slot(Ob, sl)), '\n')
@@ -1127,6 +1135,8 @@ setMethod("initialize", "MxComputeStandardError",
 
 ##' Compute standard errors given the Hessian or inverse Hessian
 ##'
+##' The fit is assumed to be in deviance units (-2 log likelihood).
+##'
 ##' @param freeSet names of matrices containing free variables
 ##' @aliases
 ##' MxComputeStandardError-class
@@ -1138,31 +1148,46 @@ mxComputeStandardError <- function(freeSet=NA_character_) {
 #----------------------------------------------------
 
 setClass(Class = "MxComputeHessianQuality",
-	 contains = "BaseCompute")
+	 contains = "BaseCompute",
+	 representation = representation(
+	     verbose = "integer"))
 
 setMethod("initialize", "MxComputeHessianQuality",
-	  function(.Object, freeSet) {
+	  function(.Object, freeSet, verbose) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- freeSet
+		  .Object@verbose <- verbose
 		  .Object
 	  })
 
 ##' Compute the quality of the Hessian
 ##'
 ##' Tests whether the Hessian is positive definite
-##' (model$output$infoDefinite) and, if so, computes the condition
+##' (model$output$infoDefinite) and, if so, computes the approximate condition
 ##' number (model$output$conditionNumber). See Luenberger & Ye (2008)
 ##' Second Order Test (p. 190) and Condition Number (p. 239).
+##'
+##' The condition number is approximated by \eqn{\mathrm{norm}(H) *
+##' \mathrm{norm}(H^{-1})}{norm(H) * norm(solve(H))} where H is the
+##' Hessian. The norm is either the 1- or infinity-norm (both obtain
+##' the same result due to symmetry).
 ##' 
 ##' @param freeSet names of matrices containing free variables
+##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param verbose Level of debugging output.
 ##' @aliases
 ##' MxComputeHessianQuality-class
 ##' @references
 ##' Luenberger, D. G. & Ye, Y. (2008). Linear and nonlinear programming. Springer.
 
-mxComputeHessianQuality <- function(freeSet=NA_character_) {
-	new("MxComputeHessianQuality", freeSet)
+mxComputeHessianQuality <- function(freeSet=NA_character_, ..., verbose=0L) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeHessianQuality does not accept values for the '...' argument")
+	}
+
+	new("MxComputeHessianQuality", freeSet, as.integer(verbose))
 }
 
 #----------------------------------------------------
@@ -1265,8 +1290,10 @@ setMethod("displayCompute", signature(Ob="MxComputeSequence", indent="integer"),
 		  callNextMethod();
 		  sp <- paste(rep('  ', indent), collapse="")
 		  cat(sp, "independent :", Ob@independent, '\n')
+		  stepName <- paste("'", names(Ob@steps), "'",sep='')
+		  if (length(stepName) != length(Ob@steps)) stepName <- 1:length(Ob@steps)
 		  if (length(Ob@steps)) for (step in 1:length(Ob@steps)) {
-			  cat(sp, "steps[[", step, "]] :", '\n')
+			  cat(sp, "steps[[", stepName[step], "]] :", '\n')
 			  displayCompute(Ob@steps[[step]], indent+1L)
 		  }
 		  invisible(Ob)

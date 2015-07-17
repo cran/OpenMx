@@ -10,6 +10,6 @@ mxComputeStandardError(freeSet = NA_character_)
 \item{freeSet}{names of matrices containing free variables}
 }
 \description{
-Compute standard errors given the Hessian or inverse Hessian
+The fit is assumed to be in deviance units (-2 log likelihood).
 }
 

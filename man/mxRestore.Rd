@@ -23,13 +23,17 @@
 }
 
 \usage{
-mxRestore(model, chkpt.directory = ".", chkpt.prefix = "")
+mxRestore(model, chkpt.directory = ".", chkpt.prefix = "", line=NULL, strict=FALSE)
 }
 
 \arguments{
     \item{model}{\link{MxModel} object to be loaded.}    
     \item{chkpt.directory}{character. Directory where the checkpoint file is located.}
     \item{chkpt.prefix}{character. Prefix of the checkpoint file.}
+    \item{line}{integer. Which line from the checkpoint file to restore
+      (defaults to the last line)}
+    \item{strict}{logical. Require that the checkpoint name and model
+    name match.}
 }
 
 \details{
@@ -39,7 +43,9 @@ Alternatively, the checkpoint file can be manually loaded as a data.frame in R. 
 }
 
 \value{
-   Returns an MxModel object with free parameters updated to the last saved values.
+   Returns an MxModel object with free parameters updated to the last
+   saved values. When \sQuote{line} is provided, the MxModel is updated
+   to the values on that line within the checkpoint file.
 }
 
 \references{

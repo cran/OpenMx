@@ -84,6 +84,10 @@ setMethod("genericFitFunConvert", "MxFitFunctionWLS",
 			expectIndex <- as.integer(NA)
 		}
 		.Object@expectation <- expectIndex
+		eobj <- flatModel@expectations[[1L+expectIndex]]
+		if(!single.na(eobj@thresholds)){
+			checkWLSIdentification(model, eobj)
+		}
 		return(.Object)
 })
 
@@ -118,11 +122,12 @@ setMethod("genericFitInitialMatrix", "MxFitFunctionWLS",
 
 setMethod("genericFitAddEntities", "MxFitFunctionWLS",
 	function(.Object, job, flatJob, labelsData) {
-		type <- strsplit(is(job@expectation)[1], "MxExpectation")[[1]][2]
-		if(!single.na(job@data@thresholds)){
-			checkWLSIdentification(model=job, type=type)
-		}
-		# Note: only check identification when the data have thresholds
+		job <- mxOption(job, "Calculate Hessian", "No")
+		job <- mxOption(job, "Standard Errors", "No")
+		return(job)
+})
+
+checkWLSIdentification <- function(model, expect) {
 		#TODO check the job's expectation
 		# if it's expectation Normal
 		#	if it's identified how we want, then do nothing
@@ -135,17 +140,13 @@ setMethod("genericFitAddEntities", "MxFitFunctionWLS",
 		#	if it's identified how we want, then do nothing
 		#	else throw error
 		# else throw error that WLS doesn't work for that yet.
-		job <- mxOption(job, "Calculate Hessian", "No")
-		job <- mxOption(job, "Standard Errors", "No")
-		return(job)
-})
 
-checkWLSIdentification <- function(model, type){
+	type <- strsplit(is(expect)[1], "MxExpectation")[[1]][2]
 	if(type=='RAM'){
-		A <- model@expectation@A
-		S <- model@expectation@S
-		F <- model@expectation@F
-		M <- model@expectation@M
+		A <- expect@A
+		S <- expect@S
+		F <- expect@F
+		M <- expect@M
 		# ???
 		# mxComputeOnce the RAM expectation?
 		stop("Ordinal WLS with the RAM expectation is not yet implemented.  For now, use mxExpectationNormal.")
@@ -158,11 +159,11 @@ checkWLSIdentification <- function(model, type){
 	else if(type=='Normal'){
 		#Note: below strategy does NOT catch cases where starting values
 		# make the criteria true by accident.
-		theCov <- mxEvalByName(model@expectation@covariance, model, compute=TRUE) #Perhaps save time with cache?
+		theCov <- mxEvalByName(expect@covariance, model, compute=TRUE) #Perhaps save time with cache?
 		covDiagsOne <- all( ( (diag(theCov) - 1)^2 ) < 1e-7 )
-		meanName <- model@expectation@means
+		meanName <- expect@means
 		if(!single.na(meanName)){
-			theMeans <- mxEvalByName(model@expectation@means, model, compute=TRUE)
+			theMeans <- mxEvalByName(expect@means, model, compute=TRUE)
 			meanZeroNA <- all( ( (diag(theMeans) - 0)^2 ) < 1e-7 )
 		} else {
 			meanZeroNA <- TRUE
@@ -219,11 +220,23 @@ imxWlsStandardErrors <- function(model){
 	# Does it have data of type=='acov'
 	# Does the data have @fullWeight
 	theParams <- omxGetParameters(model)
-	d <- numDeriv::jacobian(func=.mat2param, x=theParams, model=model)
-	V <- model$data$acov #used weight matrix
-	W <- ginv(model$data$fullWeight)
+	d <- omxManifestModelByParameterJacobian(model)
+	if(is.null(model$expectation) && (class(model$fitfunction) %in% "MxFitFunctionMultigroup") ){
+		submNames <- sapply(strsplit(model$fitfunction$groups, ".", fixed=TRUE), "[", 1)
+		sV <- list()
+		sW <- list()
+		for(amod in submNames){
+			sV[[amod]] <- model[[amod]]$data$acov
+			sW[[amod]] <- ginv(model[[amod]]$data$fullWeight)
+		}
+		V <- Matrix::bdiag(sV)
+		W <- Matrix::bdiag(sW)
+	} else {
+		V <- model$data$acov #used weight matrix
+		W <- MASS::ginv(model$data$fullWeight)
+	}
 	dvd <- solve( t(d) %*% V %*% d )
-	nacov <- dvd %*% t(d) %*% V %*% W %*% V %*% d %*% dvd
+	nacov <- as.matrix(dvd %*% t(d) %*% V %*% W %*% V %*% d %*% dvd)
 	wls.se <- matrix(sqrt(diag(nacov)), ncol=1)
 	dimnames(nacov) <- list(names(theParams), names(theParams))
 	rownames(wls.se) <- names(theParams)
@@ -233,26 +246,42 @@ imxWlsStandardErrors <- function(model){
 }
 
 
+
 imxWlsChiSquare <- function(model, J=NA){
+	samp.param <- mxGetExpected(model, 'vector')
 	theParams <- omxGetParameters(model)
-	samp.param <- .mat2param(theParams, model)
-	cov <- model$data$observed
-	mns <- model$data$means
-	thr <- model$data$thresholds
-	expd.param <- c(cov[lower.tri(cov, TRUE)], mns[!is.na(mns)], thr[!is.na(thr)])
+	if(is.null(model$expectation) && (class(model$fitfunction) %in% "MxFitFunctionMultigroup") ){
+		submNames <- sapply(strsplit(model$fitfunction$groups, ".", fixed=TRUE), "[", 1)
+		sW <- list()
+		expd.param <- c()
+		for(amod in submNames){
+			cov <- model[[amod]]$data$observed
+			mns <- model[[amod]]$data$means
+			thr <- model[[amod]]$data$thresholds
+			expd.param <- c(expd.param, cov[lower.tri(cov, TRUE)], mns[!is.na(mns)], thr[!is.na(thr)])
+			sW[[amod]] <- MASS::ginv(model[[amod]]$data$fullWeight)
+		}
+		W <- Matrix::bdiag(sW)
+	} else {
+		cov <- model$data$observed
+		mns <- model$data$means
+		thr <- model$data$thresholds
+		expd.param <- c(cov[lower.tri(cov, TRUE)], mns[!is.na(mns)], thr[!is.na(thr)])
+		W <- MASS::ginv(model$data$fullWeight)
+	}
 	
 	e <- samp.param - expd.param
 	
-	W <- ginv(model$data$fullWeight)
 	if(single.na(J)){
-		jac <- numDeriv::jacobian(func=.mat2param, x=theParams, model=model)
+		jac <- omxManifestModelByParameterJacobian(model)
 	} else {jac <- J}
 	jacOC <- Null(jac)
 	if(prod(dim(jacOC)) > 0){
-		x2 <- t(e) %*% jacOC %*% ginv( t(jacOC) %*% W %*% jacOC ) %*% t(jacOC) %*% e
+		x2 <- t(e) %*% jacOC %*% ginv( as.matrix(t(jacOC) %*% W %*% jacOC) ) %*% t(jacOC) %*% e
 	} else {x2 <- 0}
 	df <- qr(jacOC)$rank
 	return(list(Chi=x2, ChiDoF=df))
 }
+
 
 

@@ -51,6 +51,13 @@ void FitContext::queue(HessianBlock *hb)
 		if (std::distance(hb->vars.end(),it) != 0) {
 			Rf_error("HessianBlock var mapping is not 1-to-1");
 		}
+		int prev = hb->vars[0];
+		for (int vx=1; vx < int(hb->vars.size()); vx++) {
+			if (prev > hb->vars[vx]) {
+				Rf_error("hb->vars must be sorted");
+			}
+			prev = hb->vars[vx];
+		}
 	}
 
 	minBlockSize = std::max(int(hb->vars.size()), minBlockSize);
@@ -923,8 +930,8 @@ void FitContext::copyParamToModelClean()
 
 	if(OMX_DEBUG) {
 		std::string buf;
-		buf += string_snprintf("[%d] copyParamToModel: %d(%d) ",
-				       omx_absolute_thread_num(), iterations, Global->computeCount);
+		buf += string_snprintf("copyParamToModel: %d(%d) ",
+				       iterations, Global->computeCount);
 		buf += ("Estimates: [");
 		for(size_t k = 0; k < numParam; k++) {
 			buf += string_snprintf(" %f", at[k]);

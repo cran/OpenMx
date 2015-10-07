@@ -48,6 +48,9 @@ biRegModel <- mxModel("Bivariate Regression of y on x1 and x2",
 
 biRegModelOut <- mxRun(biRegModel, suppressWarnings=TRUE)
 
+# ensure summary looks in model's runstate
+biRegModelOut$compute$steps[["GD"]]$engine <- 'XYZ'
+
 brmSum <- summary(biRegModelOut)
 omxCheckCloseEnough(brmSum$CFI, 1, 1e-6)
 omxCheckCloseEnough(brmSum$TLI, 1, 1e-6)
@@ -70,7 +73,5 @@ omxCheckCloseEnough(expectSE,
 
 omxCheckCloseEnough(expectMin, biRegModelOut$output$minimum, 0.001)
 
-
-
-    
+omxCheckEquals(brmSum$optimizerEngine, mxOption(NULL, "Default optimizer"))
 

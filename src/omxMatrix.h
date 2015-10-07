@@ -91,6 +91,12 @@ class omxMatrix {
 
 	friend void omxCopyMatrix(omxMatrix *dest, omxMatrix *src);  // turn into method later TODO
 	void setNotConstant();
+	const char *getType() const {
+		const char *what = "matrix";
+		if (algebra) what = "algebra";
+		if (fitFunction) what = "fitfunction";
+		return what;
+	}
 };
 
 // If you call these functions directly then you need to free the memory with omxFreeMatrix.
@@ -138,7 +144,7 @@ void omxRemoveRowsAndColumns(omxMatrix* om, int numRowsRemoved, int numColsRemov
 
 /* Matrix-Internal Helper functions */
 	void omxMatrixLeadingLagging(omxMatrix *matrix);
-void omxPrintMatrix(omxMatrix *source, const char* header);
+void omxPrintMatrix(omxMatrix *source, const char* header);  // deprecated, use omxPrint
 
 /* OMXINLINE functions and helper functions */
 
@@ -378,8 +384,7 @@ void mxPrintMat(const char *name, Eigen::DenseBase<T> &mat)
 {
 	std::string buf;
 	bool transpose = mat.rows() > mat.cols();
-	buf += string_snprintf("[%d] %s = %s matrix(c(    # %dx%d",
-			       omx_absolute_thread_num(),
+	buf += string_snprintf("%s = %s matrix(c(    # %dx%d",
 			       name, transpose? "t(" : "", mat.rows(), mat.cols());
 
 	int first=TRUE;

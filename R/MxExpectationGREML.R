@@ -93,6 +93,22 @@ setMethod("genericExpRename", signature("MxExpectationGREML"),
             return(.Object)
           })
 
+setMethod("genericGetExpected", signature("MxExpectationGREML"),
+	  function(.Object, model, what, defvar.row=1) {
+		  if ('covariance' %in% what) {
+			  covname <- .Object@V
+			  cov <- mxEvalByName(covname, model, compute=TRUE, defvar.row=defvar.row)
+			  ret[['covariance']] <- cov
+		  }
+		  if ('means' %in% what) {
+			  ret[['means']] <- NA
+		  }
+		  if ('thresholds' %in% what) {
+			  ret[['thresholds']] <- NA
+		  }
+		  ret
+	  })
+
 mxExpectationGREML <- function(V, yvars=character(0), Xvars=list(), addOnes=TRUE, blockByPheno=TRUE, 
                                staggerZeroes=TRUE, dataset.is.yX=FALSE, casesToDropFromV=integer(0)){
   blockByPheno <- as.logical(blockByPheno)[1]
@@ -185,7 +201,7 @@ setMethod("genericExpFunConvert", "MxExpectationGREML",
                                      staggerZeroes=.Object@staggerZeroes)
               .Object@y <- mxData(
                 observed=matrix(mm$yX[,1], nrow=1,
-                                dimnames=list(NULL,paste("y",1:nrow(mxDataObject@observed),sep=""))),
+                                dimnames=list(NULL,paste("y",1:length(mm$yX[,1]),sep=""))),
                 type="raw",sort=FALSE)
               .Object@X <- as.matrix(mm$yX[,-1])
               .Object@yXcolnames <- colnames(mm$yX)

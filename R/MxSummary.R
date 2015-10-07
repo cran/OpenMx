@@ -683,7 +683,7 @@ compareBounds <- function(estimate, bound, threshold){
 
 highlightProblem <- function(bound, boundMet){
 	if (boundMet){
-		return(paste(bound, "*", sep=""))
+		return(paste(bound, "!", sep=""))
 	}
 	else {
 		return(bound)
@@ -841,17 +841,12 @@ setMethod("summary", "MxModel",
 		retval$cpuTime <- model@output$cpuTime
 		retval$mxVersion <- model@output$mxVersion
 		retval$modelName <- model@name
-		if (is.null(model@compute)) {
-			# default compute plan
-			retval$compute <- model@runstate$compute
-			if (is(retval$compute, "MxComputeSequence")) {
-				gd <- retval$compute$steps[[1]]
-				if (is(gd, "MxComputeGradientDescent")) {
-					retval$optimizerEngine <- gd$engine
-				}
+		plan <- model@runstate$compute
+		if (is(plan, "MxComputeSequence")) {
+			gd <- plan$steps[['GD']]
+			if (is(gd, "MxComputeGradientDescent")) {
+				retval$optimizerEngine <- gd$engine
 			}
-		} else {
-			retval$compute <- model@compute
 		}
 		retval$verbose <- verbose
 		class(retval) <- "summary.mxmodel"
@@ -1093,3 +1088,5 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE){
       )])]
       return(out)
 }}}
+
+coef.MxModel <- function(object, ...) omxGetParameters(object)

@@ -145,14 +145,9 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 		row += (prevIdentical - 1);
 	}
 	
-	if(row == 0 && !strcmp(expectation->expType, "MxExpectationStateSpace") ) {
-		if(OMX_DEBUG){ mxLog("Resetting State Space state (x) and error cov (P)."); }
-		omxSetExpectationComponent(expectation, localobj, "Reset", NULL);
-	}
-	
 	
 	while(row < data->rows && (row - rowbegin) < rowcount) {
-		localobj->matrix->currentState->currentRow = row;		// Set to a new row.
+		mxLogSetCurrentRow(row);
 		int numIdentical = omxDataNumIdenticalRows(data, row);
 		if(numIdentical == 0) numIdentical = 1; 
 		// N.B.: numIdentical == 0 means an error occurred and was not properly handled;
@@ -179,7 +174,11 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 				int numVarsFilled = 0;
 				if(OMX_DEBUG_ROWS(row)) { mxLog("Handling Definition Vars."); }
 				numVarsFilled = data->handleDefinitionVarList(localobj->matrix->currentState, row, oldDefs.data());
-				if (numVarsFilled || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) { 
+				if (numVarsFilled || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {
+					if(row == 0 && !strcmp(expectation->expType, "MxExpectationStateSpace") ) {
+						if(OMX_DEBUG){ mxLog("Resetting State Space state (x) and error cov (P)."); }
+						omxSetExpectationComponent(expectation, localobj, "Reset", NULL);
+					}
 					omxExpectationCompute(expectation, NULL);
 				}
 			}
@@ -221,7 +220,7 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 			}
 			
 			if(OMX_DEBUG_ROWS(row)) {
-				mxLog("\n\nRemovals: %d ordinal, %d continuous out of %d total.", numOrdRemoves, numContRemoves, dataColumns->cols);
+				mxLog("Removals: %d ordinal, %d continuous out of %d total.", numOrdRemoves, numContRemoves, dataColumns->cols);
 			}
 			
 			for(int j=0; j < dataColumns->cols; j++) {
@@ -588,8 +587,8 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 				omxSetMatrixElement(rowLogLikelihoods, row, 0, logLikelihood);
 				
 				if(OMX_DEBUG_ROWS(row)) { 
-					mxLog("Change in Total log Likelihood for row %ld is %3.3f + %3.3f + %3.3f + %3.3f= %3.3f, ", 
-					localobj->matrix->currentState->currentRow, (2.0*determinant), Q, (log(2 * M_PI) * numContinuous), 
+					mxLog("row log Likelihood %3.3f + %3.3f + %3.3f + %3.3f= %3.3f, ", 
+					      (2.0*determinant), Q, (log(2 * M_PI) * numContinuous), 
 					-2  * log(rowLikelihood), (2.0 *determinant) + Q + (log(2 * M_PI) * numContinuous));
 				} 
 				

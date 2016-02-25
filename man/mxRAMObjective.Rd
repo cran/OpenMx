@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -117,7 +117,8 @@ fitFunction <- mxFitFunctionML()
 tmpModel <- mxModel(model="exampleRAMModel",
                     matrixA, matrixS, matrixF, matrixM,
                     expFunction, fitFunction,
-                    mxData(observed=tmpFrame, type="raw"))
+                    mxData(observed=cov(tmpFrame), type="cov", numObs=nrow(tmpFrame),
+                              means = colMeans(tmpFrame)))
 
 # Fit the model and print a summary
 

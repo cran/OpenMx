@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -88,11 +88,11 @@ autoregressiveMatrixCov$output
 
 # Comparing to old Mx Output
 omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["beta"]], 0.3729, 0.001)
-omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["varx"]], 0.6179, 0.001)
-omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e2"]], 1.1445, 0.001)
-omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e3"]], .9020, 0.001)
-omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e4"]], 0.8633, 0.001)
-omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e5"]], 1.031, 0.001)
+omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["varx"]], 0.6116, 0.001)
+omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e2"]], 1.1330, 0.001)
+omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e3"]], .8930, 0.001)
+omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e4"]], 0.8546, 0.001)
+omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["e5"]], 1.020, 0.001)
 omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["mean1"]], 2.5375, 0.001)
 omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["int2"]], 1.1314, 0.001)
 omxCheckCloseEnough(autoregressiveMatrixCov$output$estimate[["int3"]], 0.5853, 0.001)

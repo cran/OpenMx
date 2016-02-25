@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -79,8 +79,8 @@ constraintsToAlgebrasHelper <- function(constraint, flatModel) {
 	rightHandSide <- constraint@formula[[3]]
 	leftHandName <- imxUntitledName()
 	rightHandName <- imxUntitledName()
-	leftHandAlgebra <- new("MxAlgebra", NA, leftHandName)
-	rightHandAlgebra <- new("MxAlgebra", NA, rightHandName)
+	leftHandAlgebra <- new("MxAlgebra", NA, leftHandName, FALSE, NA_character_, NA_character_)
+	rightHandAlgebra <- new("MxAlgebra", NA, rightHandName, FALSE, NA_character_, NA_character_)
 	leftHandAlgebra@formula <- leftHandSide
 	rightHandAlgebra@formula <- rightHandSide
 	constraint@alg1 <- paste(flatModel@name, leftHandName, sep='.')

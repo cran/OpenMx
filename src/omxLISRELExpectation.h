@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ void omxCalculateLISRELCovarianceAndMeans(omxLISRELExpectation* oro);
 
 void omxInitLISRELExpectation(omxExpectation* oo);
 
-omxMatrix* omxGetLISRELExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component);
+omxMatrix* omxGetLISRELExpectationComponent(omxExpectation* ox, const char* component);
 
 /*
 void omxFastLISRELInverse(int numIters, omxMatrix* A, omxMatrix* Z, omxMatrix* Ax, omxMatrix* I ); // same as RAM inverse

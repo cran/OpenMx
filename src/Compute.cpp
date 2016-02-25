@@ -913,10 +913,47 @@ static void omxRepopulateRFitFunction(omxFitFunction* oo, double* x, int n)
 	omxMarkDirty(oo->matrix);
 }
 
+void FitContext::ensureParamWithinBox(bool nudge)
+{
+	for (size_t px = 0; px < varGroup->vars.size(); ++px) {
+		omxFreeVar *fv = varGroup->vars[px];
+		if (nudge && est[px] == 0.0) {
+			est[px] += 0.1;
+		}
+		if (fv->lbound > est[px]) {
+			est[px] = fv->lbound + 1.0e-6;
+		}
+		if (fv->ubound < est[px]) {
+			est[px] = fv->ubound - 1.0e-6;
+		}
+        }
+}
+
 void FitContext::copyParamToModel()
 {
 	copyParamToModelClean();
 	varGroup->markDirty(state);
+}
+
+void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at)
+{
+	size_t numParam = varGroup->vars.size();
+
+	if(OMX_DEBUG) {
+		std::string buf;
+		buf += string_snprintf("copyParamToModel: c(");
+		for(size_t k = 0; k < numParam; k++) {
+			buf += string_snprintf("%f", at[k]);
+			if (k < numParam-1) buf += string_snprintf(", ");
+		}
+		buf += (")\n");
+		mxLogBig(buf);
+	}
+
+	for(size_t k = 0; k < numParam; k++) {
+		omxFreeVar* freeVar = varGroup->vars[k];
+		freeVar->copyToState(os, at[k]);
+	}
 }
 
 void FitContext::copyParamToModelClean()
@@ -925,37 +962,9 @@ void FitContext::copyParamToModelClean()
 
 	if(numParam == 0) return;
 
-	omxState* os = state;
-	double *at = est;
+	copyParamToModelInternal(varGroup, state, est);
 
-	if(OMX_DEBUG) {
-		std::string buf;
-		buf += string_snprintf("copyParamToModel: %d(%d) ",
-				       iterations, Global->computeCount);
-		buf += ("Estimates: [");
-		for(size_t k = 0; k < numParam; k++) {
-			buf += string_snprintf(" %f", at[k]);
-		}
-		buf += ("]\n");
-		mxLogBig(buf);
-	}
-
-	for(size_t k = 0; k < numParam; k++) {
-		omxFreeVar* freeVar = varGroup->vars[k];
-		for(size_t l = 0; l < freeVar->locations.size(); l++) {
-			omxFreeVarLocation *loc = &freeVar->locations[l];
-			omxMatrix *matrix = os->matrixList[loc->matrix];
-			int row = loc->row;
-			int col = loc->col;
-			omxSetMatrixElement(matrix, row, col, at[k]);
-			if (OMX_DEBUG_MATRIX) {
-				mxLog("free var %d, matrix %s[%d, %d] = %f",
-				      (int) k, matrix->name(), row, col, at[k]);
-			}
-		}
-	}
-
-	if (RFitFunction) omxRepopulateRFitFunction(RFitFunction, at, numParam);
+	if (RFitFunction) omxRepopulateRFitFunction(RFitFunction, est, numParam);
 
 	if (childList.size() == 0) return;
 
@@ -1063,6 +1072,10 @@ void FitContext::createChildren()
 	for(size_t j = 0; j < state->expectationList.size(); j++) {
 		if (!state->expectationList[j]->canDuplicate) return;
 	}
+	for(size_t j = 0; j < state->algebraList.size(); j++) {
+		omxFitFunction *ff = state->algebraList[j]->fitFunction;
+		if (ff && !ff->canDuplicate) return;
+	}
 
 	if (childList.size()) return;
 
@@ -1075,7 +1088,7 @@ void FitContext::createChildren()
 	for(int ii = 0; ii < numThreads; ii++) {
 		//omxManageProtectInsanity mpi;
 		FitContext *kid = new FitContext(this, varGroup);
-		kid->state = new omxState(state);
+		kid->state = new omxState(state, kid);
 		kid->state->setWantStage(FF_COMPUTE_FIT);
 		childList.push_back(kid);
 		//if (OMX_DEBUG) mxLog("Protect depth at line %d: %d", __LINE__, mpi.getDepth());
@@ -1507,7 +1520,7 @@ class ComputeEM : public omxCompute {
 	size_t maxHistLen;
 	int semProbeCount;
 
-	void setExpectationPrediction(const char *context);
+	void setExpectationPrediction(FitContext *fc, const char *context);
 	void observedFit(FitContext *fc);
 	template <typename T1>
 	void accelLineSearch(bool major, FitContext *fc, Eigen::MatrixBase<T1> &preAccel);
@@ -1555,6 +1568,12 @@ class ComputeReportDeriv : public omxCompute {
         virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
 };
 
+class ComputeReportExpectation : public omxCompute {
+	typedef omxCompute super;
+ public:
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+};
+
 static class omxCompute *newComputeSequence()
 { return new omxComputeSequence(); }
 
@@ -1576,6 +1595,9 @@ static class omxCompute *newComputeHessianQuality()
 static class omxCompute *newComputeReportDeriv()
 { return new ComputeReportDeriv(); }
 
+static class omxCompute *newComputeReportExpectation()
+{ return new ComputeReportExpectation(); }
+
 struct omxComputeTableEntry {
         char name[32];
         omxCompute *(*ctor)();
@@ -1592,7 +1614,8 @@ static const struct omxComputeTableEntry omxComputeTable[] = {
 	{"MxComputeStandardError", &newComputeStandardError},
 	{"MxComputeHessianQuality", &newComputeHessianQuality},
 	{"MxComputeReportDeriv", &newComputeReportDeriv},
-	{"MxComputeConfidenceInterval", &newComputeConfidenceInterval}
+	{"MxComputeConfidenceInterval", &newComputeConfidenceInterval},
+	{"MxComputeReportExpectation", &newComputeReportExpectation}
 };
 
 omxCompute *omxNewCompute(omxState* os, const char *type)
@@ -1629,7 +1652,7 @@ void omxComputeSequence::initFromFrontend(omxState *globalState, SEXP rObj)
 		SEXP s4class;
 		const char *s4name;
 		{
-			ScopedProtect p1(s4class, STRING_ELT(Rf_getAttrib(step, Rf_install("class")), 0));
+			ScopedProtect p1(s4class, STRING_ELT(Rf_getAttrib(step, R_ClassSymbol), 0));
 			s4name = CHAR(s4class);
 		}
 		omxCompute *compute = omxNewCompute(globalState, s4name);
@@ -1691,7 +1714,7 @@ void omxComputeIterate::initFromFrontend(omxState *globalState, SEXP rObj)
 		SEXP s4class;
 		const char *s4name;
 		{
-			ScopedProtect p1(s4class, STRING_ELT(Rf_getAttrib(step, Rf_install("class")), 0));
+			ScopedProtect p1(s4class, STRING_ELT(Rf_getAttrib(step, R_ClassSymbol), 0));
 			s4name = CHAR(s4class);
 		}
 		omxCompute *compute = omxNewCompute(globalState, s4name);
@@ -1780,7 +1803,7 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 	}
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("mstep")));
-	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, Rf_install("class")), 0));
+	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
 	fit1 = omxNewCompute(globalState, CHAR(s4class));
 	fit1->initFromFrontend(globalState, slotValue);
 
@@ -1947,12 +1970,12 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 	origEigenvalues = NULL;
 }
 
-void ComputeEM::setExpectationPrediction(const char *context)
+void ComputeEM::setExpectationPrediction(FitContext *fc, const char *context)
 {
 	for (size_t wx=0; wx < expectations.size(); ++wx) {
 		omxExpectation *expectation = expectations[wx];
 		if (verbose >= 4) mxLog("ComputeEM: expectation[%d] %s predict %s", (int) wx, expectation->name, context);
-		omxExpectationCompute(expectation, context);
+		omxExpectationCompute(fc, expectation, context);
 	}
 }
 
@@ -1970,7 +1993,7 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 	if (verbose >= 3) mxLog("ComputeEM: probe %d of %s offset %.6f",
 				1+paramProbeCount[vx], fc->varGroup->vars[vx]->name, offset);
 
-	setExpectationPrediction(predict);
+	setExpectationPrediction(fc, predict);
 	int informSave = fc->inform;  // not sure if we want to hide inform here TODO
 	fit1->compute(fc);
 	if (fc->inform > INFORM_UNCONVERGED_OPTIMUM) {
@@ -1978,7 +2001,7 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 		failed = true;
 	}
 	fc->inform = informSave;
-	setExpectationPrediction("nothing");
+	setExpectationPrediction(fc, "nothing");
 
 	rijWork.col(paramProbeCount[vx]) = (Est - optimum) / offset;
 
@@ -2070,7 +2093,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 		++ EMcycles;
 		memcpy(&prevEst[0], fc->est, sizeof(double) * fc->numParam);
 		if (verbose >= 4) mxLog("ComputeEM[%d]: E-step", EMcycles);
-		setExpectationPrediction(predict);
+		setExpectationPrediction(fc, predict);
 
 		{
 			if (verbose >= 4) mxLog("ComputeEM[%d]: M-step", EMcycles);
@@ -2083,7 +2106,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 			fc1->updateParentAndFree();
 		}
 
-		setExpectationPrediction("nothing");
+		setExpectationPrediction(fc, "nothing");
 		if (accel) {
 			if (!lbound.size()) {
 				// omxFitFunctionPreoptimize can change bounds
@@ -2219,7 +2242,7 @@ void ComputeEM::Oakes(FitContext *fc)
 	int wanted = fc->wanted;
 	const int freeVars = (int) fc->varGroup->vars.size();
 
-	setExpectationPrediction(predict);
+	setExpectationPrediction(fc, predict);
 	fc->grad = Eigen::VectorXd::Zero(fc->numParam);
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_PREOPTIMIZE, fc);
@@ -2241,7 +2264,7 @@ void ComputeEM::Oakes(FitContext *fc)
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
-	setExpectationPrediction("nothing");
+	setExpectationPrediction(fc, "nothing");
 
 	fc->refreshDenseHess();
 	double *hess = fc->getDenseHessUninitialized();
@@ -2381,7 +2404,7 @@ void ComputeEM::MengRubinFamily(FitContext *fc)
 	//mxLog("rij symm");
 	//pda(rij.data(), freeVars, freeVars);
 
-	setExpectationPrediction(predict);
+	setExpectationPrediction(fc, predict);
 	int wanted = fc->wanted;
 	fc->wanted = 0;
 	fc->infoMethod = infoMethod;
@@ -2390,7 +2413,7 @@ void ComputeEM::MengRubinFamily(FitContext *fc)
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
-	setExpectationPrediction("nothing");
+	setExpectationPrediction(fc, "nothing");
 
 	Rf_protect(inputInfoMatrix = Rf_allocMatrix(REALSXP, freeVars, freeVars));
 	double *hess = REAL(inputInfoMatrix);
@@ -2677,7 +2700,7 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 		if (predict.size() > 1) Rf_error("Not implemented");
 		for (size_t wx=0; wx < expectations.size(); ++wx) {
 			omxExpectation *expectation = expectations[wx];
-			omxExpectationCompute(expectation, predict[0], how);
+			omxExpectationCompute(fc, expectation, predict[0], how);
 		}
 	}
 }
@@ -2801,28 +2824,54 @@ void ComputeReportDeriv::reportResults(FitContext *fc, MxRList *, MxRList *resul
 	}
 }
 
+void ComputeReportExpectation::reportResults(FitContext *fc, MxRList *, MxRList *result)
+{
+	std::vector< omxExpectation* > &expectationList = fc->state->expectationList;
+
+	SEXP expectations;
+	Rf_protect(expectations = Rf_allocVector(VECSXP, expectationList.size()));
+
+	for(size_t index = 0; index < expectationList.size(); index++) {
+		if(OMX_DEBUG) { mxLog("Final Calculation of Expectation %d.", (int) index); }
+		omxExpectation *curExpectation = expectationList[index];
+		omxExpectationRecompute(fc, curExpectation);
+		SEXP rExpect;
+		Rf_protect(rExpect = Rf_allocVector(LGLSXP, 1)); // placeholder to attach attributes
+		if(curExpectation->populateAttrFun != NULL) {
+			if(OMX_DEBUG) { mxLog("Expectation %d has attribute population.", (int) index); }
+			curExpectation->populateAttrFun(curExpectation, rExpect);
+		}
+		SET_VECTOR_ELT(expectations, index, rExpect);
+	}
+
+	result->add("expectations", expectations);
+}
+
 // ------------------------------------------------------------
 
 void GradientOptimizerContext::copyBounds()
 {
 	FreeVarGroup *varGroup = fc->varGroup;
-	for(int index = 0; index < int(fc->numParam); index++) {
-		solLB[index] = varGroup->vars[index]->lbound;
-		solUB[index] = varGroup->vars[index]->ubound;
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		solLB[px] = varGroup->vars[vx]->lbound;
+		solUB[px] = varGroup->vars[vx]->ubound;
+		++px;
 	}
 }
 
 void GradientOptimizerContext::setupSimpleBounds()
 {
-	solLB.resize(fc->numParam);
-	solUB.resize(fc->numParam);
+	solLB.resize(numFree);
+	solUB.resize(numFree);
 	copyBounds();
 }
 
 void GradientOptimizerContext::setupIneqConstraintBounds()
 {
-	solLB.resize(fc->numParam);
-	solUB.resize(fc->numParam);
+	solLB.resize(numFree);
+	solUB.resize(numFree);
 	copyBounds();
 
 	omxState *globalState = fc->state;
@@ -2834,9 +2883,8 @@ void GradientOptimizerContext::setupIneqConstraintBounds()
 
 void GradientOptimizerContext::setupAllBounds()
 {
-	FreeVarGroup *freeVarGroup = fc->varGroup;
 	omxState *globalState = fc->state;
-	int n = (int) freeVarGroup->vars.size();
+	int n = (int) numFree;
 
 	// treat all constraints as non-linear
 	int eqn, nineqn;
@@ -2879,11 +2927,20 @@ void GradientOptimizerContext::reset()
 	bestFit = std::numeric_limits<double>::max();
 }
 
-GradientOptimizerContext::GradientOptimizerContext(int verbose)
-	: verbose(verbose)
+GradientOptimizerContext::GradientOptimizerContext(FitContext *fc, int verbose)
+	: fc(fc), verbose(verbose)
 {
+	if (fc->profiledOut.size() == 0) {
+		fc->profiledOut.assign(fc->numParam, false);
+		numFree = fc->numParam;
+	} else {
+		numFree = 0;
+		for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+			if (fc->profiledOut[vx]) continue;
+			++numFree;
+		}
+	}
 	optName = "?";
-	fc = NULL;
 	fitMatrix = NULL;
 	ControlMajorLimit = 0;
 	ControlMinorLimit = 0;
@@ -2894,6 +2951,9 @@ GradientOptimizerContext::GradientOptimizerContext(int verbose)
 	warmStart = false;
 	ineqType = omxConstraint::LESS_THAN;
 	avoidRedundentEvals = false;
+	est.resize(numFree);
+	grad.resize(numFree);
+	copyToOptimizer(est.data());
 	reset();
 }
 
@@ -2908,6 +2968,59 @@ double GradientOptimizerContext::recordFit(double *myPars, int* mode)
 	return fit;
 }
 
+bool GradientOptimizerContext::inConfidenceIntervalProblem() const
+{
+	return fc->CI && fc->CI->varIndex >= 0;
+}
+
+int GradientOptimizerContext::getConfidenceIntervalVarIndex() const
+{
+	return fc->CI->varIndex;
+}
+
+void GradientOptimizerContext::copyToOptimizer(double *myPars)
+{
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		myPars[px] = fc->est[vx];
+		++px;
+	}
+}
+
+void GradientOptimizerContext::useBestFit()
+{
+	fc->fit = bestFit;
+	est = bestEst;
+	// restore gradient too? TODO
+}
+
+void GradientOptimizerContext::copyFromOptimizer(double *myPars)
+{
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		fc->est[vx] = myPars[px];
+		++px;
+	}
+	fc->copyParamToModel();
+}
+
+void GradientOptimizerContext::finish()
+{
+	fc->grad.resize(fc->numParam);
+	fc->grad.setConstant(nan("unset"));
+
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		fc->est[vx] = est[px];
+		fc->grad[vx] = grad[px];
+		++px;
+	}
+	fc->copyParamToModel();
+}
+
 double GradientOptimizerContext::solFun(double *myPars, int* mode)
 {
 	Eigen::Map< Eigen::VectorXd > Est(myPars, fc->numParam);
@@ -2918,8 +3031,7 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 	}
 
 	if (*mode == 1) fc->iterations += 1;
-	if (fc->est != myPars) memcpy(fc->est, myPars, sizeof(double) * fc->numParam);
-	fc->copyParamToModel();
+	copyFromOptimizer(myPars);
 
 	int want = FF_COMPUTE_FIT;
 	// eventually want to permit analytic gradient during CI
@@ -2937,6 +3049,13 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 		if (avoidRedundentEvals) {
 			prevPoint = Est;
 			prevMode = *mode;
+		}
+		if (want & FF_COMPUTE_GRADIENT) {
+			int px=0;
+			for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+				if (fc->profiledOut[vx]) continue;
+				grad[px++] = fc->grad[vx];
+			}
 		}
 	}
 

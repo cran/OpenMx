@@ -167,21 +167,13 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 	}
 
 	ComputeFit(engineName, fitMatrix, want, fc);
-	if (iter == 1) {
-		refFit = fc->fit;
-		if (!std::isfinite(refFit)) {
-			fc->inform = INFORM_STARTING_VALUES_INFEASIBLE;
-			return;
-		}
-	}
 
 	double speed = std::min(priorSpeed * 1.5, 1.0);
 	Eigen::VectorXd searchDir(fc->ihessGradProd());
 	double targetImprovement = searchDir.dot(fc->grad);
 
 	if (verbose >= 5) {
-		fc->log(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN);
-
+		fc->log(FF_COMPUTE_FIT | FF_COMPUTE_ESTIMATE | FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN);
 		std::string buf;
 		buf += "searchDir: c(";
 		for (int vx=0; vx < searchDir.size(); ++vx) {
@@ -190,6 +182,14 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 		}
 		buf += ")\n";
 		mxLogBig(buf);
+	}
+
+	if (iter == 1) {
+		refFit = fc->fit;
+		if (!std::isfinite(refFit)) {
+			fc->inform = INFORM_STARTING_VALUES_INFEASIBLE;
+			return;
+		}
 	}
 
 	if (!std::isfinite(targetImprovement)) {
@@ -241,17 +241,12 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 		}
 		const double improved = refFit - fc->fit;
 		if (improved <= 0) {
-			const double minSpeedReduction = .1;
-			double howBad = refFit / (scaledTarget - improved);
-			if (verbose >= 5) {
-				mxLog("refFit %.2g / scaledTarget - improved %.2g = %.4g",
-				      refFit, scaledTarget - improved, howBad);
+			double guess = scaledTarget/(scaledTarget-improved);
+			if (verbose >= 4) {
+				mxLog("%s: improved %.2g (%.2g), suspect excessive speed",
+				      name, improved, guess);
 			}
-			if (howBad < minSpeedReduction && verbose >= 4) {
-				mxLog("%s: scaledTarget is %2.g times over optimistic", name, 1/howBad);
-			}
-			if (howBad > minSpeedReduction) howBad = minSpeedReduction;
-			speed *= howBad;
+			speed *= std::min(0.1, guess);
 			continue;
 		}
 		bestImproved = improved;
@@ -267,11 +262,16 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 		return;
 	}
 
-	const double epsilon = .3;
-	if (!steepestDescent && speed < 1 && goodness < epsilon) {
+	const double epsilon = 0.5;
+	const double accelFactor = 0.5;
+	if (!steepestDescent && speed < 1/(1+0.5*accelFactor) && goodness < epsilon) {
+		if (verbose >= 3) {
+			mxLog("%s: goodness %.2f < %.2f, try to incr speed",
+			      name, goodness, epsilon);
+		}
 		int retries = 8;
 		while (--retries > 0) {
-			speed *= 1.5;
+			speed = std::min(speed * (1 + accelFactor), 1.0);
 			++probeCount;
 			trial = (prevEst - speed * searchDir).cwiseMax(lbound).cwiseMin(ubound);
 			++minorIter;
@@ -282,13 +282,13 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 			if (bestImproved >= improved) break;
 			double improvementOverBest = improved - bestImproved;
 			if (verbose >= 4) {
-				mxLog("%s: [%d] incr speed for fit improvement of %.2g",
+				mxLog("%s: [%d] incr speed for fit incremental improvement of %.2g",
 				      name, retries, improvementOverBest);
 			}
 			bestFit = fc->fit;
 			bestImproved = improved;
 			bestSpeed = speed;
-			if (relImprovement(improvementOverBest) < tolerance) break;
+			if (speed == 1 || relImprovement(improvementOverBest) < tolerance) break;
 		}
 	}
 

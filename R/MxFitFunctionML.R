@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -15,13 +15,23 @@
 
 
 setClass(Class = "MxFitFunctionML",
-	contains = "MxBaseFitFunction")
+	 contains = "MxBaseFitFunction",
+	 representation = representation(
+	     fellner = "logical",
+	     verbose = "integer",
+	     profileOut="MxOptionalChar",
+	     parallel = "logical"),
+	 )
 
 setMethod("initialize", "MxFitFunctionML",
-	function(.Object, vector, rowDiagnostics, name = 'fitfunction') {
+	function(.Object, vector, rowDiagnostics, fellner, verbose, profileOut, name = 'fitfunction') {
 		.Object@name <- name
 		.Object@vector <- vector
 		.Object@rowDiagnostics <- rowDiagnostics
+		.Object@fellner <- fellner
+		.Object@verbose <- verbose
+		.Object@profileOut <- profileOut
+		.Object@parallel <- as.logical(NA)
 		return(.Object)
 	}
 )
@@ -147,20 +157,33 @@ setMethod("generateReferenceModels", "MxFitFunctionML",
 		generateNormalReferenceModels(modelName, obsdata, datatype, any(!is.na(datasource@means)), datanobs)
 	})
 
-mxFitFunctionML <- function(vector = FALSE, rowDiagnostics=FALSE) {
+mxFitFunctionML <- function(vector = FALSE, rowDiagnostics=FALSE, ..., fellner=as.logical(NA),
+			    verbose=0L, profileOut=c()) {
+	if (length(list(...)) > 0) {
+		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
+	}
 	if (length(vector) > 1 || typeof(vector) != "logical") {
 		stop("'vector' argument is not a logical value")
 	}
 	if (length(rowDiagnostics) > 1 || typeof(rowDiagnostics) != "logical") {
 		stop("'rowDiagnostics' argument is not a logical value")
 	}
-	return(new("MxFitFunctionML", vector, rowDiagnostics))
+	if (length(fellner) > 1) {
+		stop("'fellner' argument must be one thing")
+	}
+	if (!is.na(fellner) && fellner && (vector || rowDiagnostics)) {
+		stop("'fellner' cannot be combined with 'vector' or 'rowDiagnostics'")
+	}
+	return(new("MxFitFunctionML", vector, rowDiagnostics, fellner,
+		   as.integer(verbose), as.character(profileOut)))
 }
 
 displayMxFitFunctionML <- function(fitfunction) {
 	cat("MxFitFunctionML", omxQuotes(fitfunction@name), '\n')
 	cat("$vector :", fitfunction@vector, '\n')
 	cat("$rowDiagnostics :", fitfunction@rowDiagnostics, '\n')
+	cat("$fellner :", fitfunction@fellner, '\n')
+	cat("$verbose :", fitfunction@verbose, '\n')
 	print(fitfunction@result)
 	invisible(fitfunction)
 }

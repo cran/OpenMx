@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 #   limitations under the License.
 
 require(OpenMx)
-library(MASS)
+
 #Definition Variable Test 3
 #Author: Mike Neale
 #Date: July 29 2009
@@ -31,8 +31,8 @@ set.seed(200)
 n = 500
 
 Sigma <- matrix(c(1,.5,.5,1),2,2)
-group1<-mvrnorm(n=n, c(1,2), Sigma)
-group2<-mvrnorm(n=n, c(0,0), Sigma)
+group1<-mvtnorm::rmvnorm(n=n, c(1,2), Sigma)
+group2<-mvtnorm::rmvnorm(n=n, c(0,0), Sigma)
 
 #put them both together, add a definition variable, and make an selection variables object
 y<-rbind(group1,group2)

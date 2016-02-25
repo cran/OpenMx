@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ simpleRun <- mxRun(simpleModel)
 omxCheckCloseEnough(omxGetParameters(simpleRun), mplusParam, 0.001)
 
 rd <- (summary(simpleRun)$parameters[,6] - mplusSE) / mplusSE
-omxCheckCloseEnough(rd, rep(0, length(mplusSE)), 0.015)
+omxCheckCloseEnough(rd, rep(0, length(mplusSE)), 0.02)
 
 
 

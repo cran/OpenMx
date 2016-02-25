@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ mxRefModels(x, run=FALSE)
 For typical structural equation models the saturated model is the free-est possible model.  All covariances and, when possilbe, all means are estimated.  In the case of ordinal data, the ordinal means are fixed to zero and the thresholds are estimated.  When the ordinal data are binary, those variances are also constrained to one.  This is the free-est possible model, only constrained for model identification.  The saturated model is used to create the RMSEA, and Chi-squared fit indices.
 
 The independence model, sometimes called the null model, is a model of each variable being completely independent of every other variable.  As such, all the variances and, when possible, all means are estimated.  However, covariances are set to zero.  Ordinal variables are handled the same for the independence and saturated models.  The independence model is used, along with the saturated model, to create CFI and TLI fit indices.
+
+The saturated and independence models could be used to create further fit indices.  However, OpenMx does not recommend using GFI, AGFI, NFI (aka Bentler-Bonett), or SRMR.  The page for \code{\link{mxSummary}} has information about why.
 
 When the \link{mxFitFunctionMultigroup} fit function is used, \code{mxRefModels} creates the appropriate multigroup saturated and independence models.  Saturated and independence models are created separately for each group.  Each group has its own saturated and independence model.  The multigroup saturated model is a multigroup model where each group has its own saturated model, and similarly for the independence model.
 

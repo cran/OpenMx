@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -195,7 +195,6 @@ catFitStatistics <- function(x) {
 		cat("RMSEA:  ", x$RMSEA, "  [95% CI (", x$RMSEACI[1], ", ", x$RMSEACI[2], ")]", '\n', sep="")
 	}
 	cat("Prob(RMSEA <= ", x$RMSEANull, "): ", x$RMSEAClose, '\n', sep='')
-	cat("OpenMx does not recommend using", "GFI, AGFI, NFI (aka Bentler-Bonett), or SRMR:\n", "See help(mxSummary) for why.", '\n')
 }
 
 fitStatistics <- function(model, useSubmodels, retval) {
@@ -540,17 +539,13 @@ print.summary.mxmodel <- function(x,...) {
 	IC <- x$informationCriteria
 	colnames(IC) <- c(" |  df Penalty", " |  Parameters Penalty", " |  Sample-Size Adjusted")
 	print(IC)
-	# cat("\n")
-	# cat("adjusted BIC:", '\n')
 	#
+	# Absolute fit indices
 	if(x$verbose==TRUE || any(!is.na(c(x$CFI, x$TLI, x$RMSEA)))){
 		catFitStatistics(x)
 	}
 	if(any(is.na(c(x$CFI, x$TLI, x$RMSEA)))){
-		cat("Some of your fit indices are missing.\n",
-			" To get them, fit saturated and independence models, and include them with\n",
-			" summary(yourModel, refModels=...)", '\n',
-			" See help(mxRefModels) for an easy way of doing this in many cases.", '\n')
+		cat("To get additional fit indices, see help(mxRefModels)\n")
 	}
 	#
 	# Timing information
@@ -683,6 +678,7 @@ compareBounds <- function(estimate, bound, threshold){
 
 highlightProblem <- function(bound, boundMet){
 	if (boundMet){
+		if (is.numeric(bound)) bound <- round(bound,4)
 		return(paste(bound, "!", sep=""))
 	}
 	else {
@@ -713,9 +709,8 @@ parseLikelihoodArg <- function(input, arg) {
 		return(input@fitfunction@result[1,1])
 	} else if(is.list(input) && length(input)==2) {
 		stop(paste("List of length two (illegal argument) passed to", omxQuotes(arg),
-			"argument of summary function in",
-			deparse(width.cutoff = 400L, sys.call(-1)), 
-			".  You probably meant to use the refModels argument instead."), call. = FALSE)
+			   "argument of summary function. You probably meant to use",
+			   "the refModels argument instead."), call. = FALSE)
 	} else {
 		stop(paste("Illegal argument passed to", omxQuotes(arg),
 			"argument of summary function in",
@@ -777,82 +772,80 @@ refToDof <- function(model) {
 	}
 }
 
-setMethod("summary", "MxModel",
-	function(object, ..., verbose=FALSE) {
-		model <- object
-		dotArguments <- list(...)
-		if (!is.null(dotArguments[["refModels"]])) {
-			refModels <- dotArguments[["refModels"]]
-			satModel <- refModels[['Saturated']]
-			indModel <- refModels[['Independence']]
-			saturatedLikelihood <- refToLikelihood(satModel)
-			saturatedDoF <- refToDof(satModel)
-			independenceLikelihood <- refToLikelihood(indModel)
-			independenceDoF <- refToDof(indModel)
-		} else {
-			saturatedLikelihood <- parseLikelihoodArg(dotArguments, "SaturatedLikelihood")
-			saturatedDoF <- parseDfArg(dotArguments, "SaturatedDoF")
-			independenceLikelihood <- parseLikelihoodArg(dotArguments, "IndependenceLikelihood")
-			independenceDoF <- parseDfArg(dotArguments, "IndependenceDoF")
-		}
-		numObs <- dotArguments$numObs
-		numStats <- dotArguments$numStats
-		useSubmodels <- dotArguments$indep
-		if (is.null(useSubmodels)) { useSubmodels <- TRUE }
-		retval <- list(wasRun=model@.wasRun, stale=model@.modifiedSinceRun)
-		retval$parameters <- parameterList(model, useSubmodels)
-		if (!is.null(model@compute$steps[['ND']]) && model@compute$steps[['ND']]$checkGradient &&
-		    !is.null(model@compute$steps[['ND']]$output$gradient)) {
-			retval$seSuspect <- !model@compute$steps[['ND']]$output$gradient[,'symmetric']
-		}
-    retval$GREMLfixeff <- GREMLFixEffList(model)
-		retval$infoDefinite <- model@output$infoDefinite
-		retval$conditionNumber <- model@output$conditionNumber
-		retval <- boundsMet(model, retval)
-		retval <- setLikelihoods(model, saturatedLikelihood, independenceLikelihood, retval)
-		retval <- setNumberObservations(numObs, model@runstate$datalist, model@runstate$fitfunctions, retval)
-		retval <- computeOptimizationStatistics(model, numStats, useSubmodels, saturatedDoF, independenceDoF, retval)
-		retval$dataSummary <- generateDataSummary(model, useSubmodels)
-		retval$CI <- as.data.frame(model@output$confidenceIntervals)
-		if (length(retval$CI) && nrow(retval$CI)) {
-			retval$CI <- cbind(retval$CI, note=apply(retval$CI, 1, function(ci) {
-				# This should probably take into account whether both bounds
-				# were requested and consider the optimizer codes also. TODO
-				if (any(is.na(ci)) || ci[1] == ci[3] || ci[1] >= ci[2] || ci[2] >= ci[3]) {
-					"!!!"
-				} else {
-					""
-				}
-			}))
-		}
-		retval$CIcodes <- model@output$confidenceIntervalCodes
-		if (!is.null(model@output$status$code)) {
-			message <- optimizerMessages[[as.character(model@output$status$code)]]
-			retval[['npsolMessage']] <- message
-		}
-		if( .hasSlot(model,"compute") && length(model$compute$steps$CI) ){
-			retval$CIdetail <- model$compute$steps$CI$output$detail
-		}
-		retval$timestamp <- model@output$timestamp
-		retval$frontendTime <- model@output$frontendTime
-		retval$backendTime <- model@output$backendTime
-		retval$independentTime <- model@output$independentTime
-		retval$wallTime <- model@output$wallTime
-		retval$cpuTime <- model@output$cpuTime
-		retval$mxVersion <- model@output$mxVersion
-		retval$modelName <- model@name
-		plan <- model@runstate$compute
-		if (is(plan, "MxComputeSequence")) {
-			gd <- plan$steps[['GD']]
-			if (is(gd, "MxComputeGradientDescent")) {
-				retval$optimizerEngine <- gd$engine
-			}
-		}
-		retval$verbose <- verbose
-		class(retval) <- "summary.mxmodel"
-		return(retval)
+summary.MxModel <- function(object, ..., verbose=FALSE) {
+	model <- object
+	dotArguments <- list(...)
+	if (!is.null(dotArguments[["refModels"]])) {
+		refModels <- dotArguments[["refModels"]]
+		satModel <- refModels[['Saturated']]
+		indModel <- refModels[['Independence']]
+		saturatedLikelihood <- refToLikelihood(satModel)
+		saturatedDoF <- refToDof(satModel)
+		independenceLikelihood <- refToLikelihood(indModel)
+		independenceDoF <- refToDof(indModel)
+	} else {
+		saturatedLikelihood <- parseLikelihoodArg(dotArguments, "SaturatedLikelihood")
+		saturatedDoF <- parseDfArg(dotArguments, "SaturatedDoF")
+		independenceLikelihood <- parseLikelihoodArg(dotArguments, "IndependenceLikelihood")
+		independenceDoF <- parseDfArg(dotArguments, "IndependenceDoF")
 	}
-)
+	numObs <- dotArguments$numObs
+	numStats <- dotArguments$numStats
+	useSubmodels <- dotArguments$indep
+	if (is.null(useSubmodels)) { useSubmodels <- TRUE }
+	retval <- list(wasRun=model@.wasRun, stale=model@.modifiedSinceRun)
+	retval$parameters <- parameterList(model, useSubmodels)
+	if (!is.null(model@compute$steps[['ND']]) && model@compute$steps[['ND']]$checkGradient &&
+	    !is.null(model@compute$steps[['ND']]$output$gradient)) {
+		retval$seSuspect <- !model@compute$steps[['ND']]$output$gradient[,'symmetric']
+	}
+	retval$GREMLfixeff <- GREMLFixEffList(model)
+	retval$infoDefinite <- model@output$infoDefinite
+	retval$conditionNumber <- model@output$conditionNumber
+	retval <- boundsMet(model, retval)
+	retval <- setLikelihoods(model, saturatedLikelihood, independenceLikelihood, retval)
+	retval <- setNumberObservations(numObs, model@runstate$datalist, model@runstate$fitfunctions, retval)
+	retval <- computeOptimizationStatistics(model, numStats, useSubmodels, saturatedDoF, independenceDoF, retval)
+	retval$dataSummary <- generateDataSummary(model, useSubmodels)
+	retval$CI <- as.data.frame(model@output$confidenceIntervals)
+	if (length(retval$CI) && nrow(retval$CI)) {
+		retval$CI <- cbind(retval$CI, note=apply(retval$CI, 1, function(ci) {
+					# This should probably take into account whether both bounds
+					# were requested and consider the optimizer codes also. TODO
+			if (any(is.na(ci)) || ci[1] == ci[3] || ci[1] >= ci[2] || ci[2] >= ci[3]) {
+				"!!!"
+			} else {
+				""
+			}
+		}))
+	}
+	retval$CIcodes <- model@output$confidenceIntervalCodes
+	if (!is.null(model@output$status$code)) {
+		message <- optimizerMessages[[as.character(model@output$status$code)]]
+		retval[['npsolMessage']] <- message
+	}
+	if( .hasSlot(model,"compute") && length(model$compute$steps$CI) ){
+		retval$CIdetail <- model$compute$steps$CI$output$detail
+	}
+	retval$timestamp <- model@output$timestamp
+	retval$frontendTime <- model@output$frontendTime
+	retval$backendTime <- model@output$backendTime
+	retval$independentTime <- model@output$independentTime
+	retval$wallTime <- model@output$wallTime
+	retval$cpuTime <- model@output$cpuTime
+	retval$mxVersion <- model@output$mxVersion
+	retval$modelName <- model@name
+	plan <- model@runstate$compute
+	if (is(plan, "MxComputeSequence")) {
+		gd <- plan$steps[['GD']]
+		if (is(gd, "MxComputeGradientDescent")) {
+			retval$optimizerEngine <- gd$engine
+		}
+	}
+	retval$verbose <- verbose
+	class(retval) <- "summary.mxmodel"
+	return(retval)
+}
 
 logLik.MxModel <- function(object, ...) {
 	model <- object

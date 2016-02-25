@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -66,7 +66,6 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
     omxMatrix *dataColumns;
 	omxData *data;
 	int isContiguous, contiguousStart, contiguousLength;
-    int numCols, numRemoves;
 
 	rowAlgebra	    = oro->rowAlgebra;
 	rowResults	    = shared_oro->rowResults;
@@ -80,22 +79,15 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
 	contiguousStart = oro->contiguous.start;
 	contiguousLength = oro->contiguous.length;
 
-	Eigen::VectorXd oldDefs;
-	oldDefs.resize(data->defVars.size());
-	oldDefs.setConstant(NA_REAL);
-
-	numCols = dataColumns->cols;
 	int *toRemove = (int*) malloc(sizeof(int) * dataColumns->cols);
 	int *zeros = (int*) calloc(dataColumns->cols, sizeof(int));
 
 	for(int row = rowbegin; row < data->rows && (row - rowbegin) < rowcount; row++) {
 		mxLogSetCurrentRow(row);
 
-		data->handleDefinitionVarList(localobj->matrix->currentState, row, oldDefs.data());
+		data->handleDefinitionVarList(localobj->matrix->currentState, row);
 
         // Populate data row
-		numRemoves = 0;
-	
 		if (isContiguous) {
 			omxContiguousDataRow(data, row, contiguousStart, contiguousLength, dataRow);
 		} else {
@@ -107,7 +99,6 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
 		for(int j = 0; j < dataColumns->cols; j++) {
 			double dataValue = omxVectorElement(dataRow, j);
 			if(std::isnan(dataValue)) {
-				numRemoves++;
 				toRemove[j] = 1;
                 omxSetVectorElement(existenceVector, j, 0);
 			} else {
@@ -115,18 +106,9 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
                 omxSetVectorElement(existenceVector, j, 1);
 			}
 		}		
-		// TODO: Determine if this is the correct response.
 		
-		if(numRemoves == numCols) {
-			char *errstr = (char*) calloc(250, sizeof(char));
-			sprintf(errstr, "Row %d completely missing.  omxRowFitFunction cannot have completely missing rows.", omxDataIndex(data, row));
-			omxRaiseError(errstr);
-			free(errstr);
-			continue;
-		}
-
 		omxCopyMatrix(filteredDataRow, dataRow);
-		omxRemoveRowsAndColumns(filteredDataRow, 0, numRemoves, zeros, toRemove);
+		omxRemoveRowsAndColumns(filteredDataRow, zeros, toRemove);
 
 		omxRecompute(rowAlgebra, fc);
 

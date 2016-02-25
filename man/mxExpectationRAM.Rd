@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ This function creates an MxExpectationRAM object.
 
 \usage{
 mxExpectationRAM(A="A", S="S", F="F", M = NA, dimnames = NA, thresholds = NA,
-                 threshnames = dimnames)
+                 threshnames = dimnames, ..., between=NULL, verbose=0L)
 }
 
 
@@ -39,6 +39,9 @@ mxExpectationRAM(A="A", S="S", F="F", M = NA, dimnames = NA, thresholds = NA,
    \item{dimnames}{An optional character vector to be assigned to the column names of the 'F' and 'M' matrices.}   
    \item{thresholds}{An optional character string indicating the name of the thresholds matrix.}
    \item{threshnames}{An optional character vector to be assigned to the column names of the thresholds matrix.}
+   \item{...}{Not used.  Forces remaining arguments to be specified by name.}
+   \item{between}{A character vector of matrices that specify cross model relationships.}
+   \item{verbose}{integer. Level of runtime diagnostic output.}
 }
 
 \details{

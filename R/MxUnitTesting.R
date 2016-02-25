@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -280,14 +280,16 @@ omxCheckWarning <- function(expression, message) {
 ##' omxCheckError(omxCheckCloseEnough(c(1, 2, 3), c(1.1, 1.9 ,3.0), .01), tmsg)
 omxCheckError <- function(expression, message) {
 	inputExpression <- match.call()$expression
-	checkErrorState <- FALSE
+	assign("checkErrorState", FALSE, pkg_globals)
 	tryCatch(eval(inputExpression), error = function(x) {
 		if(!any(trim(x$message) == trim(message))) {
 			stop(paste("An error was thrown with the wrong message:",
 				x$message), call. = FALSE)
-		} else { checkErrorState <<- TRUE }
+		} else {
+			assign("checkErrorState", TRUE, pkg_globals)
+		}
 	})
-	if (!checkErrorState) {
+	if (!get("checkErrorState", pkg_globals)) {
 		stop(paste("No error was observed for the expression",
 			deparse(inputExpression, width.cutoff = 500L)), call. = FALSE)
 	} else if (getOption("mxPrintUnitTests")) {

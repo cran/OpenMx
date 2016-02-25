@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -83,6 +83,12 @@ struct omxFreeVar {
 	// the first matching location.
 	const omxFreeVarLocation *getLocation(int matrix) const;
 	const omxFreeVarLocation *getLocation(omxMatrix *mat) const;
+
+	const omxFreeVarLocation *getOnlyOneLocation(int matrix, bool &moreThanOne) const;
+	const omxFreeVarLocation *getOnlyOneLocation(omxMatrix *mat, bool &moreThanOne) const;
+
+	// Warning: copyToState does not mark matrices dirty
+	void copyToState(struct omxState *os, double val);
 };
 
 #define FREEVARGROUP_ALL      0
@@ -100,6 +106,7 @@ struct FreeVarGroup {
 	int lookupVar(const char *name);  // index or -1 if not found
 	int lookupVar(int matrix, int row, int col);
 	int lookupVar(omxMatrix *matrix, int row, int col);
+	//int lookupVar(int id);
 	void cacheDependencies(omxState *os);
 	void markDirty(omxState *os);
 	void log(omxState *os);
@@ -221,6 +228,9 @@ class omxGlobal {
 	double absEps;
 	double relEps;
 
+	int RAMInverseOpt;
+	int RAMMaxDepth;
+
 	int maxStackDepth;
 
 	std::vector< omxConfidenceInterval* > intervalList;
@@ -286,13 +296,15 @@ class omxState {
 	std::vector< omxConstraint* > conList;
 
 	omxState() { init(); };
-	omxState(omxState *src);
+	omxState(omxState *src, FitContext *fc);
 	void omxProcessMxMatrixEntities(SEXP matList);
+	void omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues);
 	void omxProcessMxAlgebraEntities(SEXP algList);
 	void omxCompleteMxFitFunction(SEXP algList);
 	void omxProcessConfidenceIntervals(SEXP intervalList);
 	void omxProcessMxExpectationEntities(SEXP expList);
 	void omxCompleteMxExpectationEntities();
+	void omxInitialMatrixAlgebraCompute(FitContext *fc);
 	void omxProcessConstraints(SEXP constraints, FitContext *fc);
 	void omxProcessMxDataEntities(SEXP data, SEXP defvars);
 	omxData* omxNewDataFromMxData(SEXP dataObject, const char *name);
@@ -300,7 +312,8 @@ class omxState {
 	void omxExportResults(MxRList *out);
 	~omxState();
 
-	const char *matrixToName(int matnum); // matrix (2s complement) or algebra
+	omxMatrix *getMatrixFromIndex(int matnum) const; // matrix (2s complement) or algebra
+	const char *matrixToName(int matnum) const { return getMatrixFromIndex(matnum)->name(); };
 
 	void countNonlinearConstraints(int &equality, int &inequality)
 	{

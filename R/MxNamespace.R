@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -290,6 +290,53 @@ isLocalDefinitionVariable <- function(name) {
 	}
 }
 
+
+##' imxHasDefinitionVariable
+##'
+##' This is an internal function exported for those people who know
+##' what they are doing.  This function checks if a model (or its
+##' submodels) has at least one definition variable.
+##'
+##' @param model model
+imxHasDefinitionVariable <- function(model) {
+	# Check submodels for defvar
+	if(length(model$submodels) > 0){
+		for(i in 1:length(model@submodels)){
+			attempt <- sapply(model@submodels[[i]], imxHasDefinitionVariable)
+			if(any(attempt)){
+				return(TRUE)
+			}
+		}
+	}
+	
+	# Check if the model has data
+	if(length(model@data) == 0){
+		return(FALSE)
+	}
+	
+	# Check the matrices for defvar
+	if(length(model@matrices) > 0){
+		for(i in 1:length(model@matrices)){
+			attempt <- sapply(model@matrices[[i]]$labels, imxIsDefinitionVariable)
+			if(any(attempt)){
+				return(TRUE)
+			}
+		}
+	}
+	
+	# Check the algebras for defvar
+	if(length(model@algebras) > 0){
+		for(i in 1:length(model@algebras)){
+			attempt <- sapply(as.character(model@algebras[[i]]$formula), imxIsDefinitionVariable)
+			if(any(attempt)){
+				return(TRUE)
+			}
+		}
+	}
+	
+	# All checks find nothing, return FALSE
+	return(FALSE)
+}
 
 ##' imxIdentifier
 ##'
@@ -695,7 +742,8 @@ imxConvertSubstitution <- function(substitution, modelname, namespace) {
 ##' @param identifiers identifiers
 ##' @param modelname modelname
 ##' @param namespace namespace
-imxConvertIdentifier <- function(identifiers, modelname, namespace) {
+##' @param strict strict
+imxConvertIdentifier <- function(identifiers, modelname, namespace, strict=FALSE) {
 	if (length(identifiers) == 0) return(identifiers)
 	identifiers <- as.character(identifiers)
 	if (all(is.na(identifiers))) return(identifiers)
@@ -706,6 +754,9 @@ imxConvertIdentifier <- function(identifiers, modelname, namespace) {
 		} else if (isLocalDefinitionVariable(identifier)) {
 			return(imxIdentifier(modelname, identifier))
 		} else {
+			if (strict && length(unlist(strsplit(identifier, imxSeparatorChar, fixed = TRUE))) == 1) {
+				stop(paste("Identifier", omxQuotes(identifier), "refers to what?"))
+			}
 			return(identifier)
 		}
 	}, "", USE.NAMES=FALSE)

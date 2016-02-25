@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2015-10-06
+Date: 2016-02-25
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -15,24 +15,22 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Robert", "M."), "Kirkpatrick", role="aut"),
     person(c("Yang"), "Wang", role="ctb"),
     person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"))
-URL: http://openmx.psyc.virginia.edu
+URL: http://openmx.psyc.virginia.edu, https://github.com/OpenMx/OpenMx
 BugReports: http://openmx.psyc.virginia.edu/forums
-Description: Facilitates treatment of statistical model specifications
-    as things that can be generated and manipulated programmatically.
-    Structural equation models may be specified with reticular action model matrices or paths,
-    linear structural relations matrices or paths, or
-    directly in matrix algebra.
-    Fit functions include full information maximum likelihood,
-    maximum likelihood, and weighted least squares.
-    Example models include confirmatory factor, multiple group, mixture
-    distribution, categorical threshold, modern test theory, differential
-    equations, state space, and many others.
+Description: Facilitates treatment of statistical model specifications as things
+    that can be generated and manipulated programmatically. Structural equation
+    models may be specified with reticular action model matrices or paths, linear
+    structural relations matrices or paths, or directly in matrix algebra. Fit
+    functions include full information maximum likelihood, maximum likelihood, and
+    weighted least squares. Example models include confirmatory factor, multiple
+    group, mixture distribution, categorical threshold, modern test theory,
+    differential equations, state space, and many others.
 SystemRequirements: GNU make
-License: Apache License (== 2.0) | file LICENSE
-LinkingTo: RcppEigen, StanHeaders (>= 2.7), BH
-Depends: R (>= 3.0.2), digest, MASS, methods, parallel
-Suggests: Matrix, mvtnorm, numDeriv, roxygen2 (>= 3.1), Rmpi, rpf (>=
-        0.36), snowfall
+License: GPL (>= 3)
+LinkingTo: Rcpp, RcppEigen, StanHeaders (>= 2.7), BH, rpf (>= 0.45)
+Depends: R (>= 3.0.2), digest, MASS, methods, Matrix, Rcpp, parallel
+Suggests: mvtnorm, numDeriv, roxygen2 (>= 3.1), Rmpi, rpf (>= 0.45),
+        snowfall, lme4
 LazyLoad: yes
 LazyData: yes
 Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
@@ -65,10 +63,11 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxFitFunctionR.R' 'MxRObjective.R' 'MxExpectationStateSpace.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
         'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
-        'MxAvailableOptimizers.R' 'zzz.R'
-Version: 2.3.1
+        'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'zzz.R'
+Version: 2.5.1
+RoxygenNote: 5.0.0
 NeedsCompilation: yes
-Packaged: 2015-10-06 20:16:48 UTC; joshua
+Packaged: 2016-02-25 16:14:53 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -91,4 +90,4 @@ Author: Steven M. Boker [aut],
   Charles Driver [ctb]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2015-10-07 09:13:10
+Date/Publication: 2016-02-25 18:34:18

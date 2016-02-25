@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,10 +41,6 @@ struct omxAlgebra {						// A matrix
 	omxMatrix* matrix;				// The matrix populated by this algebra
     SEXP sexpAlgebra;               // The SEXP MxAlgebra object
 
-	// char pointers are from R and should not be freed
-	std::vector<const char *> rownames;
-	std::vector<const char *> colnames;
-
 	const omxAlgebraTableEntry *oate;
 
 	omxAlgebra();
@@ -65,7 +61,7 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 	void omxAlgebraCopyAlgebra(omxAlgebra *dest, omxAlgebra *src);		// Copy across another element.  
 																		// NOTE: Duplicates.
 
-void omxAlgebraRecompute(omxAlgebra *oa, FitContext *fc);
+void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc);
 
 	void omxDuplicateAlgebra(omxMatrix *tgt, omxMatrix* src, omxState* tgtState);
 

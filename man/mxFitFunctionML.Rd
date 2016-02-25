@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -26,12 +26,21 @@
 }
 
 \usage{
-mxFitFunctionML(vector = FALSE, rowDiagnostics = FALSE)
+mxFitFunctionML(vector = FALSE, rowDiagnostics = FALSE, ..., fellner =
+  as.logical(NA), verbose=0L, profileOut=c())
 }
 
 \arguments{
    \item{vector}{A logical value indicating whether the objective function result is the likelihood vector.}
-   \item{rowDiagnostics}{A logical value indicating whether the row-wise results of the objective function should be returned as an attribute of the fit function.}
+   \item{rowDiagnostics}{A logical value indicating whether the row-wise
+   results of the objective function should be returned as an attribute
+   of the fit function.}
+   \item{...}{Not used.  Forces remaining arguments to be specified by name.}
+   \item{fellner}{Whether to fully expand the covariance matrix for
+     maximum flexibility.}
+   \item{verbose}{Level of diagnostic output}
+   \item{profileOut}{Character vector naming constant coefficients to
+   profile out of the likelihood (sometimes known as REML)}
 }
 
 \details{
@@ -52,7 +61,15 @@ The results of the optimization can be reported using the \link{summary} functio
 Returns a new MxFitFunctionML object. One and only one MxFitFunctionML object should be included in each model along  with an associated \link{mxExpectationNormal} or \link{mxExpectationRAM} object.
 }
 
-\seealso{\link{mxFitFunctionMultigroup} for multiple group models and \link{mxFitFunctionAlgebra} for user-defined fit functions.}
+\seealso{
+Other fit functions:
+\code{\link{mxFitFunctionMultigroup}},  
+\code{\link{mxFitFunctionWLS}}, \code{\link{mxFitFunctionAlgebra}}, 
+\code{\link{mxFitFunctionGREML}}, \code{\link{mxFitFunctionR}}, 
+\code{\link{mxFitFunctionRow}}
+
+More information about the OpenMx package may be found \link[=OpenMx]{here}. 
+}
 
 \references{
 The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.

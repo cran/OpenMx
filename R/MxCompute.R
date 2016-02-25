@@ -337,22 +337,31 @@ imxHasNPSOL <- function() .Call(hasNPSOL_wrapper)
 ##' Optimize parameters using a gradient descent optimizer
 ##'
 ##' This optimizer does not require analytic derivatives of the fit
-##' function. The open-source version of OpenMx offers 2 choices,
-##' SLSQP (from the NLOPT collection) and CSOLNP.  The proprietary version of
+##' function. The fully open-source CRAN version of OpenMx offers 2 choices,
+##' SLSQP (from the NLOPT collection) and CSOLNP.  The OpenMx Team's version of
 ##' OpenMx offers the choice of three optimizers: SLSQP, CSOLNP, and NPSOL.
 ##'
 ##' One of the most important options for SLSQP is
-##' \code{gradientAlgo}. By default, the \code{forward} method is
-##' used. This method requires \code{gradientIterations} function
-##' evaluations per parameter per gradient.  This method often works
-##' well enough but can result in imprecise gradient estimations that
-##' may not allow SLSQP to fully optimize a given model. If code red
-##' is reported then you are encouraged to try the \code{central}
-##' method. The \code{central} method requires 2 times
-##' \code{gradientIterations} function evaluations per parameter per
-##' gradient, but it can be much more accurate.
+##' \code{gradientAlgo}. By default, ##' the \code{central} method 
+##' is used.  This method requires 2 times 
+##' \code{gradientIterations} function evaluations per parameter 
+##' per gradient.  The \code{central} method can be much more accurate 
+##' than the \code{forward} method, which requires 
+##' \code{gradientIterations} function evaluations per parameter per 
+##' gradient.  The \code{forward} method is faster, and often works
+##' well enough, but can result in imprecise gradient estimations that
+##' may not allow SLSQP to fully optimize a given model, possibly 
+##' resulting in code RED (status code 5 or 6).
+##' 
+##' Currently, only SLSQP uses arguments \code{gradientIterations} 
+##' and \code{gradientAlgo}.  CSOLNP always uses the \code{forward} 
+##' method; NPSOL usually uses the \code{forward} method, but 
+##' adaptively switches to \code{central} under certain circumstances.
+##' 
+##' Currently, only SLSQP and NPSOL can use analytic gradients, 
+##' and only NPSOL uses \code{warmStart}.
 ##'
-##' @param freeSet names of matrices containing free variables
+##' @param freeSet names of matrices containing free parameters.
 ##' @param ...  Not used.  Forces remaining arguments to be specified by name.
 ##' @param engine specific 'NPSOL', 'SLSQP', or 'CSOLNP'
 ##' @param fitfunction name of the fitfunction (defaults to 'fitfunction')
@@ -615,8 +624,13 @@ setMethod("initialize", "MxComputeNewtonRaphson",
 ##' Optimize parameters using the Newton-Raphson algorithm
 ##'
 ##' This optimizer requires analytic 1st and 2nd derivatives of the
-##' fit function.  Comprehensive diagnostics are available by
-##' increasing the verbose level.
+##' fit function. Box constraints are supported. Parameters can
+##' approach box constraints but will not leave the feasible region
+##' (even by some small epsilon>0). Non-finite fit values are
+##' interpreted as soft feasibility constraints. That is, when a
+##' non-finite fit is encountered, line search is continued after the
+##' step size is multipled by 10%. Comprehensive diagnostics are
+##' available by increasing the verbose level.
 ##'
 ##' @param freeSet names of matrices containing free variables
 ##' @param ...  Not used.  Forces remaining arguments to be specified by name.
@@ -982,7 +996,8 @@ setClass(Class = "MxComputeNumericDeriv",
 	     iterations = "integer",
 	     verbose="integer",
 	     knownHessian="MxOptionalMatrix",
-	     checkGradient="logical"))
+	     checkGradient="logical",
+	 hessian="logical"))
 
 setMethod("qualifyNames", signature("MxComputeNumericDeriv"),
 	function(.Object, modelname, namespace) {
@@ -1002,7 +1017,7 @@ setMethod("convertForBackend", signature("MxComputeNumericDeriv"),
 
 setMethod("initialize", "MxComputeNumericDeriv",
 	  function(.Object, freeSet, fit, parallel, stepSize, iterations, verbose, knownHessian,
-		   checkGradient) {
+		   checkGradient, hessian) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- freeSet
@@ -1013,6 +1028,7 @@ setMethod("initialize", "MxComputeNumericDeriv",
 		  .Object@verbose <- verbose
 		  .Object@knownHessian <- knownHessian
 		  .Object@checkGradient <- checkGradient
+		  .Object@hessian <- hessian
 		  .Object
 	  })
 
@@ -1055,6 +1071,7 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 ##' @param verbose Level of debugging output.
 ##' @param knownHessian an optional matrix of known Hessian entries
 ##' @param checkGradient whether to check the first order convergence criterion (gradient is near zero)
+##' @param hessian whether to estimate the Hessian
 ##' @aliases
 ##' MxComputeNumericDeriv-class
 ##' @examples
@@ -1077,7 +1094,7 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 
 mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfunction',
 				      parallel=TRUE, stepSize=0.0001, iterations=4L, verbose=0L,
-				  knownHessian=NULL, checkGradient=TRUE)
+				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE)
 {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -1101,7 +1118,7 @@ mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfu
 	}
 
 	new("MxComputeNumericDeriv", freeSet, fitfunction, parallel, stepSize, iterations,
-	    verbose, knownHessian, checkGradient)
+	    verbose, knownHessian, checkGradient, hessian)
 }
 
 setMethod("displayCompute", signature(Ob="MxComputeNumericDeriv", indent="integer"),
@@ -1109,7 +1126,7 @@ setMethod("displayCompute", signature(Ob="MxComputeNumericDeriv", indent="intege
 		  callNextMethod();
 		  sp <- paste(rep('  ', indent), collapse="")
 		  for (sl in c("fitfunction", "parallel", "stepSize", "iterations",
-			       "verbose", "knownHessian", 'checkGradient')) {
+			       "verbose", "knownHessian", 'checkGradient', 'hessian')) {
 			  slname <- paste("$", sl, sep="")
 			  if (is.character(slot(Ob, sl))) {
 				  cat(sp, slname, ":", omxQuotes(slot(Ob, sl)), '\n')
@@ -1213,6 +1230,31 @@ setMethod("initialize", "MxComputeReportDeriv",
 
 mxComputeReportDeriv <- function(freeSet=NA_character_) {
 	new("MxComputeReportDeriv", freeSet)
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeReportExpectation",
+	 contains = "BaseCompute")
+
+setMethod("initialize", "MxComputeReportExpectation",
+	  function(.Object, freeSet) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object
+	  })
+
+##' Report expectation
+##'
+##' Copy the internal model expectations back to R.
+##'
+##' @param freeSet names of matrices containing free variables
+##' @aliases
+##' MxComputeReportExpectation-class
+
+mxComputeReportExpectation <- function(freeSet=NA_character_) {
+	new("MxComputeReportExpectation", freeSet)
 }
 
 #----------------------------------------------------

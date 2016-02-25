@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -49,6 +49,16 @@ Returns a new MxFitFunctionWLS object. One and only one MxFitFunctionWLS object 
 
 \references{
 The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+}
+
+\seealso{
+Other fit functions:
+\code{\link{mxFitFunctionMultigroup}}, \code{\link{mxFitFunctionML}}, 
+\code{\link{mxFitFunctionAlgebra}}, 
+\code{\link{mxFitFunctionGREML}}, \code{\link{mxFitFunctionR}}, 
+\code{\link{mxFitFunctionRow}}
+
+More information about the OpenMx package may be found \link[=OpenMx]{here}. 
 }
 
 \examples{

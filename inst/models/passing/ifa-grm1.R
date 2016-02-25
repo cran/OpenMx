@@ -22,7 +22,10 @@ m2 <- mxModel(model="grm1", ip.mat,
               mxData(observed=data, type="raw"),
               mxExpectationBA81(ItemSpec=spec, qpoints=31, debugInternal=TRUE),
               mxFitFunctionML(),
-	      mxComputeOnce('expectation', 'scores'))
+	      mxComputeSequence(list(
+		  mxComputeOnce('expectation', 'scores'),
+		  mxComputeReportExpectation()
+	      )))
 middle <- mxRun(m2)
 omxCheckCloseEnough(sum(middle$expectation$debug$patternLikelihood), -9742.31, .1)
 omxCheckCloseEnough(fivenum(middle$expectation$debug$patternLikelihood),
@@ -46,7 +49,7 @@ omxCheckCloseEnough(fivenum(testDeriv$output$hessian[testDeriv$output$hessian !=
 omxCheckCloseEnough(max(abs(solve(testDeriv$output$hessian) - testDeriv$output$ihessian)), 0, .001)
 
 plan <- mxComputeSequence(list(mxComputeEM('expectation', 'scores',
-                                           mxComputeNewtonRaphson()),
+                                           mxComputeNewtonRaphson(verbose=0L)),
                                mxComputeOnce('fitfunction', 'information', "meat"),
                                mxComputeOnce('fitfunction', 'gradient'),
                                mxComputeHessianQuality(),

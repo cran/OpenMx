@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -103,8 +103,9 @@ namespaceGetModel <- function(model, path) {
 	} else if (pathlen == 2) {
 		return(model@submodels[[path[[2]]]])
 	} else {
-		remainder <- path[3:pathlen]
-		return(namespaceGetModel(model@submodels[[path[[2]]]], remainder))
+		remainder <- path[2:pathlen]
+		got <- namespaceGetModel(model@submodels[[path[[2]]]], remainder)
+		return(got)
 	}
 }
 
@@ -204,7 +205,7 @@ namespaceSearchReplaceHelper <- function(model, name, value, path) {
 		model@submodels[[subname]] <- submodel
 		return(model)
 	} else {
-		remainder <- path[3:pathlen]
+		remainder <- path[2:pathlen]
 		model@submodels[[subname]] <- namespaceSearchReplaceHelper(
 			model@submodels[[subname]], name, value, remainder)
 		return(model)

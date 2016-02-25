@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -39,5 +39,4 @@ model <- mxModel(A, D, expectedCov, objective, observedCov, mxFitFunctionML())
 
 model <- mxRun(model)
 
-omxCheckCloseEnough(model$output$estimate, c(1.0954, .7303, .7667),
-	0.001)
+omxCheckCloseEnough(model$output$estimate, c(1.0917, .7278, .7615), 0.001)

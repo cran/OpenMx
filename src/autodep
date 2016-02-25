@@ -2,7 +2,8 @@ Compute.o: Makevars.in Compute.cpp glue.h omxState.h omxDefines.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
  omxData.h omxFitFunction.h Compute.h \
  omxExportBackendState.h omxRFitFunction.h matrix.h omxBuffer.h \
- finiteDifferences.h
+ finiteDifferences.h \
+ 
 ComputeGD.o: Makevars.in ComputeGD.cpp omxDefines.h omxState.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
  omxData.h omxFitFunction.h Compute.h \
@@ -17,11 +18,16 @@ ComputeSD.o: Makevars.in ComputeSD.cpp ComputeSD.h omxState.h omxDefines.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
  omxData.h omxFitFunction.h Compute.h \
  glue.h omxExportBackendState.h matrix.h finiteDifferences.h
+FellnerFitFunction.o: Makevars.in FellnerFitFunction.cpp glue.h omxState.h \
+ omxDefines.h omxMatrix.h \
+ omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
+ omxData.h omxFitFunction.h Compute.h \
+ RAMInternal.h
 ba81quad.o: Makevars.in ba81quad.cpp ba81quad.h glue.h omxState.h omxDefines.h \
  omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
  omxData.h omxFitFunction.h Compute.h \
- libifa-rpf.h dmvnorm.h
+  dmvnorm.h
 dmvnorm.o: Makevars.in dmvnorm.cpp omxDefines.h \
  omxBuffer.h matrix.h glue.h omxState.h omxMatrix.h omxBLAS.h \
  omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h omxData.h \
@@ -37,7 +43,7 @@ glue.o: Makevars.in glue.cpp omxDefines.h glue.h omxState.h omxMatrix.h \
  omxData.h omxFitFunction.h Compute.h \
  omxNPSOLSpecific.h omxImportFrontendState.h omxExportBackendState.h \
  dmvnorm.h npsolswitch.h omxCsolnp.h
-libifa-rpf.o: Makevars.in libifa-rpf.cpp libifa-rpf.h \
+libifa-rpf.o: Makevars.in libifa-rpf.cpp  \
  
 matrix.o: Makevars.in matrix.cpp omxDefines.h omxBuffer.h matrix.h \
  omxMatrix.h omxBLAS.h
@@ -64,7 +70,7 @@ omxData.o: Makevars.in omxData.cpp omxData.h omxDefines.h omxAlgebra.h \
  omxSymbolTable.h omxMatrix.h \
  omxBLAS.h algebraOp.h omxState.h omxExpectation.h omxFitFunction.h \
  Compute.h \
- glue.h omxExpectationBA81.h ba81quad.h libifa-rpf.h
+ glue.h omxExpectationBA81.h ba81quad.h 
 omxExpectation.o: Makevars.in omxExpectation.cpp omxExpectation.h omxDefines.h \
  omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h \
@@ -74,7 +80,7 @@ omxExpectationBA81.o: Makevars.in omxExpectationBA81.cpp omxExpectationBA81.h \
  omxExpectation.h omxDefines.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h \
  omxFitFunction.h omxData.h Compute.h \
- glue.h ba81quad.h libifa-rpf.h dmvnorm.h omxBuffer.h matrix.h
+ glue.h ba81quad.h  dmvnorm.h omxBuffer.h matrix.h
 omxExportBackendState.o: Makevars.in omxExportBackendState.cpp omxDefines.h \
  omxState.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
@@ -99,7 +105,7 @@ omxFitFunctionBA81.o: Makevars.in omxFitFunctionBA81.cpp omxFitFunction.h \
  omxDefines.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h \
  omxExpectation.h omxData.h Compute.h \
- glue.h omxExpectationBA81.h ba81quad.h libifa-rpf.h matrix.h omxBuffer.h
+ glue.h omxExpectationBA81.h ba81quad.h  matrix.h omxBuffer.h
 omxGREMLExpectation.o: Makevars.in omxGREMLExpectation.cpp omxExpectation.h \
  omxDefines.h omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h \
@@ -128,10 +134,10 @@ omxLISRELExpectation.o: Makevars.in omxLISRELExpectation.cpp omxExpectation.h \
  omxFitFunction.h omxData.h Compute.h \
  glue.h omxFIMLFitFunction.h omxLISRELExpectation.h
 omxMLFitFunction.o: Makevars.in omxMLFitFunction.cpp omxDefines.h \
- multi_normal_sufficient.hpp \
- omxExpectation.h omxMatrix.h omxBLAS.h omxAlgebra.h omxSymbolTable.h \
- algebraOp.h omxState.h omxFitFunction.h omxData.h Compute.h \
- glue.h omxFIMLFitFunction.h omxRAMExpectation.h omxBuffer.h matrix.h
+ multi_normal_sufficient.hpp omxExpectation.h omxMatrix.h omxBLAS.h \
+ omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h omxFitFunction.h \
+ omxData.h Compute.h \
+ glue.h omxFIMLFitFunction.h omxRAMExpectation.h omxBuffer.h matrix.h RAMInternal.h
 omxMatrix.o: Makevars.in omxMatrix.cpp omxMatrix.h omxDefines.h \
  omxBLAS.h matrix.h \
  omxState.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \
@@ -152,7 +158,7 @@ omxRAMExpectation.o: Makevars.in omxRAMExpectation.cpp omxExpectation.h omxDefin
  omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxState.h \
  omxFitFunction.h omxData.h Compute.h \
- glue.h omxRAMExpectation.h
+ glue.h omxRAMExpectation.h RAMInternal.h
 omxRFitFunction.o: Makevars.in omxRFitFunction.cpp glue.h omxState.h omxDefines.h \
  omxMatrix.h \
  omxBLAS.h omxAlgebra.h omxSymbolTable.h algebraOp.h omxExpectation.h \

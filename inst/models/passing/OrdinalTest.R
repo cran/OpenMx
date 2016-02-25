@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -117,8 +117,8 @@ omxCheckCloseEnough(modelOut$output$Minus2LogLikelihood, 4081.48, 0.02)
 
 # Do something crazy
 
-dataMatrix@observed[[1]] <-
-  omxCheckWarning(ordered(dataMatrix@observed[[1]], levels=0:12, labels=c(0:11,3)),
+dataMatrix$observed[[1]] <-
+  omxCheckWarning(ordered(dataMatrix$observed[[1]], levels=0:12, labels=c(0:11,3)),
                   "duplicated levels in factors are deprecated")
 omxCheckError(mxRun(mxModel(model, dataMatrix, name="failModel")),
               "Ordered factor column 't1neur1' in model 'failModel' has more than 1 level with the same name: '3'")

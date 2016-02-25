@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ static void ensureElemConform(FitContext *fc, omxMatrix **matList, omxMatrix *re
 		omxFillAlgebraFromTableEntry(oa, entry, 1);
 		oa->algArgs[0] = mat0;
 		matList[0] = om;
-		omxAlgebraRecompute(oa, fc);
+		omxAlgebraRecompute(om, FF_COMPUTE_INITIAL_FIT, fc);
 		return;
 	}
 	if (mat1->cols == 1 && mat1->rows == 1 && mat0->rows != 0 && mat0->cols != 0) {
@@ -109,7 +109,7 @@ static void ensureElemConform(FitContext *fc, omxMatrix **matList, omxMatrix *re
 		omxFillAlgebraFromTableEntry(oa, entry, 1);
 		oa->algArgs[0] = mat1;
 		matList[1] = om;
-		omxAlgebraRecompute(oa, fc);
+		omxAlgebraRecompute(om, FF_COMPUTE_INITIAL_FIT, fc);
 		return;
 	}
 }
@@ -1071,6 +1071,96 @@ static void omxElementTanh(FitContext *fc, omxMatrix** matList, int numArgs, omx
 
 }
 
+static void omxElementArcCosine(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = acos(data[j]);
+	}
+	
+}
+
+static void omxElementArcSine(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = asin(data[j]);
+	}
+	
+}
+
+static void omxElementArcTangent(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = atan(data[j]);
+	}
+	
+}
+
+static void omxElementAsinh(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = asinh(data[j]);
+	}
+	
+}
+
+static void omxElementAcosh(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = acosh(data[j]);
+	}
+	
+}
+
+static void omxElementAtanh(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix* inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = atanh(data[j]);
+	}
+	
+}
+
 static void omxElementExponent(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
 {
 	omxMatrix* inMat = matList[0];
@@ -1129,6 +1219,20 @@ static void omxElementPtoZ(FitContext *fc, omxMatrix** matList, int numArgs, omx
 	}
 }
 
+static void omxElementLogPtoZ(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = Rf_qnorm5(data[j], 0, 1, 1, 1);
+	}
+}
+
 static void omxElementLgamma(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
 {
 	omxMatrix *inMat = matList[0];
@@ -1140,6 +1244,175 @@ static void omxElementLgamma(FitContext *fc, omxMatrix** matList, int numArgs, o
 	double* data = result->data;
 	for(int j = 0; j < max; j++) {
 		data[j] = Rf_lgammafn(data[j]);
+	}
+}
+
+static void omxElementLgamma1p(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	
+	int max = inMat->cols * inMat->rows;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < max; j++) {
+		data[j] = Rf_lgamma1p(data[j]);
+	}
+}
+
+static void omxElementDbeta(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *a = matList[1];
+	omxMatrix *b = matList[2];
+	omxMatrix *ncp = matList[3];
+	omxMatrix *give_log = matList[4];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(a);
+	omxEnsureColumnMajor(b);
+	omxEnsureColumnMajor(ncp);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int aDataSize = a->rows * a->cols;
+	int bDataSize = b->rows * b->cols;
+	int ncpDataSize = ncp->rows * ncp->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		if( Rf_sign(ncp->data[j%ncpDataSize]) == -1 ){
+			data[j] = Rf_dbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],give_log_arg);
+		}
+		else{
+			data[j] = Rf_dnbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],ncp->data[j%ncpDataSize],give_log_arg);
+		}
+	}
+}
+
+static void omxElementPbeta(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *a = matList[1];
+	omxMatrix *b = matList[2];
+	omxMatrix *ncp = matList[3];
+	omxMatrix *lower_tail = matList[4];
+	omxMatrix *give_log = matList[5];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(a);
+	omxEnsureColumnMajor(b);
+	omxEnsureColumnMajor(ncp);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int aDataSize = a->rows * a->cols;
+	int bDataSize = b->rows * b->cols;
+	int ncpDataSize = ncp->rows * ncp->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		//data[j] = Rf_pbeta(data[j],a->data[j],b->data[j],lower_tail_arg,give_log_arg);
+		if( Rf_sign(ncp->data[j%ncpDataSize]) == -1 ){
+			data[j] = Rf_pbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],lower_tail_arg,give_log_arg);
+		}
+		else{
+			data[j] = Rf_pnbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],ncp->data[j%ncpDataSize],lower_tail_arg,give_log_arg);
+		}
+	}
+}
+
+static void omxElementBesselI(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *nu = matList[1];
+	omxMatrix *expo = matList[2];
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(nu);
+	omxEnsureColumnMajor(expo);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nuDataSize = nu->rows * nu->cols;
+	int expoDataSize = expo->rows * expo->cols;
+	double expocurr;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		expocurr = (expo->data[j%expoDataSize] != 0) ? 2 : 1;
+		data[j] = Rf_bessel_i(data[j],nu->data[j%nuDataSize],expocurr);
+	}
+}
+
+static void omxElementBesselJ(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *nu = matList[1];
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(nu);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nuDataSize = nu->rows * nu->cols;
+
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_bessel_j(data[j],nu->data[j%nuDataSize]);
+	}
+}
+
+static void omxElementBesselK(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *nu = matList[1];
+	omxMatrix *expo = matList[2];
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(nu);
+	omxEnsureColumnMajor(expo);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nuDataSize = nu->rows * nu->cols;
+	int expoDataSize = expo->rows * expo->cols;
+	double expocurr;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		expocurr = (expo->data[j%expoDataSize] != 0) ? 2 : 1;
+		data[j] = Rf_bessel_k(data[j],nu->data[j%nuDataSize],expocurr);
+	}
+}
+
+static void omxElementBesselY(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *nu = matList[1];
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(nu);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nuDataSize = nu->rows * nu->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_bessel_y(data[j],nu->data[j%nuDataSize]);
 	}
 }
 
@@ -1356,7 +1629,19 @@ static void omxMultivariateNormalIntegration(FitContext *fc, omxMatrix** matList
 	weights = (double*) malloc(nElements * sizeof(double));
 	corList = (double*) malloc((nElements * (nElements + 1) / 2) * sizeof(double));
 
-	omxStandardizeCovMatrix(cov, corList, weights);
+	omxStandardizeCovMatrix(cov, corList, weights, fc);
+	if(!R_finite(omxMatrixElement(cov, 0, 0))) {
+		/*char *errstr = (char*) calloc(250, sizeof(char));
+		sprintf(errstr, "Found correlation greater than 1.");
+		omxRaiseErrorf(errstr);
+		free(errstr);*/
+		free(corList);
+		free(weights);
+		free(uBounds);
+		free(lBounds);
+		omxSetMatrixElement(result, 0, 0, NA_REAL);
+		return;
+	}
 
 	// SADMVN calls Alan Genz's sadmvn.f--see appropriate file for licensing info.
 	// TODO: Check with Genz: should we be using sadmvn or sadmvn?
@@ -1512,7 +1797,7 @@ static void omxAllIntegrationNorms(FitContext *fc, omxMatrix** matList, int numA
 	double *weights = (double*) malloc(nCols * sizeof(double));
 	double *corList = (double*) malloc((nCols * (nCols + 1) / 2) * sizeof(double));
 
-	omxStandardizeCovMatrix(cov, &(*corList), &(*weights));
+	omxStandardizeCovMatrix(cov, &(*corList), &(*weights), fc);
 
 	// SADMVN calls Alan Genz's sadmvn.f--see appropriate file for licensing info.
 	// TODO: Check with Genz: should we be using sadmvn or sadmvn?
@@ -1989,7 +2274,6 @@ static void omxSelectRows(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	int rows = inMat->rows;
     int selectLength = selector->rows * selector->cols;
     Eigen::VectorXi toRemove(rows);
-    int numRemoves = 0;
     
     if((selector->cols != 1) && selector->rows !=1) {
 		char *errstr = (char*) calloc(250, sizeof(char));
@@ -2011,23 +2295,14 @@ static void omxSelectRows(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	
     for(int index = 0; index < selectLength; index++) {
         if(omxVectorElement(selector, index) == 0) {
-            numRemoves++;
             toRemove[index] = 1;
         } else {
             toRemove[index] = 0;
         }
     }
     
-    if(numRemoves >= rows) {
-		char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Attempted to select zero columns.\n");
-        omxRaiseError(errstr);
-		free(errstr);        
-		return;
-    }
-    
     std::vector<int> zeros(inMat->cols);
-    omxRemoveRowsAndColumns(result, numRemoves, 0, toRemove.data(), zeros.data());
+    omxRemoveRowsAndColumns(result, toRemove.data(), zeros.data());
 
 }
 
@@ -2039,7 +2314,6 @@ static void omxSelectCols(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	int cols = inMat->cols;
     int selectLength = selector->rows * selector->cols;
     Eigen::VectorXi toRemove(cols);
-    int numRemoves = 0;
 
     if((selector->cols != 1) && selector->rows !=1) {
 		char *errstr = (char*) calloc(250, sizeof(char));
@@ -2061,23 +2335,14 @@ static void omxSelectCols(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	
     for(int index = 0; index < selectLength; index++) {
         if(omxVectorElement(selector, index) == 0) {
-            numRemoves++;
             toRemove[index] = 1;
         } else {
             toRemove[index] = 0;
         }
     }
     
-    if(numRemoves >= cols) {
-		char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Attempted to select zero columns.\n");
-        omxRaiseError(errstr);
-		free(errstr);        
-		return;
-    }
-    
     std::vector<int> zeros(inMat->rows);
-    omxRemoveRowsAndColumns(result, 0, numRemoves, zeros.data(), toRemove.data());
+    omxRemoveRowsAndColumns(result, zeros.data(), toRemove.data());
 }
 
 static void omxSelectRowsAndCols(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
@@ -2089,7 +2354,6 @@ static void omxSelectRowsAndCols(FitContext *fc, omxMatrix** matList, int numArg
 	int cols = inMat->cols;
     int selectLength = selector->rows * selector->cols;
     Eigen::VectorXi toRemove(cols);
-    int numRemoves = 0;
 
     if((selector->cols != 1) && selector->rows !=1) {
 		char *errstr = (char*) calloc(250, sizeof(char));
@@ -2119,22 +2383,13 @@ static void omxSelectRowsAndCols(FitContext *fc, omxMatrix** matList, int numArg
 	
     for(int index = 0; index < selectLength; index++) {
         if(omxVectorElement(selector, index) == 0) {
-            numRemoves++;
             toRemove[index] = 1;
         } else {
             toRemove[index] = 0;
         }
     }
     
-    if(numRemoves >= cols) {
-		char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Attempted to select zero columns.\n");
-        omxRaiseError(errstr);
-		free(errstr);        
-		return;
-    }
-    
-    omxRemoveRowsAndColumns(result, numRemoves, numRemoves, toRemove.data(), toRemove.data());
+    omxRemoveRowsAndColumns(result, toRemove.data(), toRemove.data());
 }
 
 static void omxCovToCor(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)

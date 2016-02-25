@@ -156,27 +156,23 @@ void omxComputeGD::initFromFrontend(omxState *globalState, SEXP rObj)
 
 void omxComputeGD::computeImpl(FitContext *fc)
 {
-	size_t numParam = varGroup->vars.size();
+	omxFitFunctionPreoptimize(fitMatrix->fitFunction, fc);
+	if (isErrorRaised()) return;
+
+	size_t numParam = fc->varGroup->vars.size();
+	if (fc->profiledOut.size()) {
+		if (fc->profiledOut.size() != fc->numParam) Rf_error("Fail");
+		for (size_t vx=0; vx < fc->varGroup->vars.size(); ++vx) {
+			if (fc->profiledOut[vx]) --numParam;
+		}
+	}
+
 	if (numParam <= 0) {
 		omxRaiseErrorf("%s: model has no free parameters", name);
 		return;
 	}
 
-	for (int px = 0; px < int(numParam); ++px) {
-		omxFreeVar *fv = varGroup->vars[px];
-		if (nudge && fc->est[px] == 0.0) {
-			fc->est[px] += 0.1;
-		}
-		if (fv->lbound > fc->est[px]) {
-			fc->est[px] = fv->lbound + 1.0e-6;
-		}
-		if (fv->ubound < fc->est[px]) {
-			fc->est[px] = fv->ubound - 1.0e-6;
-		}
-        }
-
-	omxFitFunctionPreoptimize(fitMatrix->fitFunction, fc);
-
+	fc->ensureParamWithinBox(nudge);
 	fc->createChildren();
 
 	int beforeEval = Global->computeCount;
@@ -185,8 +181,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 				name, engineName, engine, gradientAlgoName, optimalityTolerance);
 
 	//if (fc->CI) verbose=3;
-	GradientOptimizerContext rf(verbose);
-	rf.fc = fc;
+	GradientOptimizerContext rf(fc, verbose);
 	rf.fitMatrix = fitMatrix;
 	rf.ControlTolerance = optimalityTolerance;
 	rf.useGradient = useGradient;
@@ -213,7 +208,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 	switch (engine) {
         case OptEngine_NPSOL:{
 #if HAS_NPSOL
-		omxNPSOL(fc->est, rf);
+		omxNPSOL(rf);
+		rf.finish();
 		fc->wanted |= FF_COMPUTE_GRADIENT;
 		if (rf.hessOut.size() && fitMatrix->currentState->conList.size() == 0) {
 			if (!hessChol) {
@@ -229,7 +225,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		break;}
         case OptEngine_CSOLNP:
 		rf.avoidRedundentEvals = true;
-		omxCSOLNP(fc->est, rf);
+		omxCSOLNP(rf);
+		rf.finish();
 		if (rf.gradOut.size()) {
 			fc->grad = rf.gradOut.tail(numParam);
 			Eigen::Map< Eigen::MatrixXd > hess(fc->getDenseHessUninitialized(), numParam, numParam);
@@ -239,19 +236,21 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		break;
         case OptEngine_NLOPT:
 		if (rf.maxMajorIterations == -1) rf.maxMajorIterations = Global->majorIterations;
-		omxInvokeNLOPT(fc->est, rf);
+		omxInvokeNLOPT(rf);
+		rf.finish();
 		fc->wanted |= FF_COMPUTE_GRADIENT;
 		break;
         case OptEngine_SD:{
-		rf.fc->copyParamToModel();
+		fc->copyParamToModel();
 		rf.setupSimpleBounds();
 		rf.setupIneqConstraintBounds();
 		rf.solEqBFun();
 		rf.myineqFun();
 		if(rf.inequality.size() == 0 && rf.equality.size() == 0) {
 			omxSD(rf);   // unconstrained problems
+			rf.finish();
 		} else {
-			omxSD_AL(rf);       // constrained problems
+			Rf_error("Constrained problems are not implemented");
 		}
 		fc->wanted |= FF_COMPUTE_GRADIENT;
 		break;}
@@ -269,7 +268,6 @@ void omxComputeGD::computeImpl(FitContext *fc)
 	}
 
 	// Optimizers can terminate with inconsistent fit and parameters
-	fc->copyParamToModel();
 	ComputeFit(name, fitMatrix, FF_COMPUTE_FIT, fc);
 
 	if (verbose >= 2) {
@@ -354,7 +352,7 @@ void ComputeCI::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
 	SEXP s4class;
-	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, Rf_install("class")), 0));
+	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
 	plan = omxNewCompute(globalState, CHAR(s4class));
 	plan->initFromFrontend(globalState, slotValue);
 }
@@ -439,7 +437,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 				name, numInts, fitMatrix->name(), mle->fit, ctypeName);
 	if (!numInts) return;
 
-	if (!std::isfinite(mle->fit)) Rf_error("%s: reference fit is not finite", name);
+	if (!mle->haveReferenceFit(fitMatrix)) return;
 
 	// I'm not sure why INFORM_NOT_AT_OPTIMUM is okay, but that's how it was.
 	if (mle->inform >= INFORM_LINEAR_CONSTRAINTS_INFEASIBLE && mle->inform != INFORM_NOT_AT_OPTIMUM) {

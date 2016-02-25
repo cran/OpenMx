@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -71,8 +71,6 @@ print(output2$output$estimate)
 #"Super" Model: This should have a value of 1.5
 print(output$output$estimate)
 
-omxCheckCloseEnough(output1$output$estimate, c(1), 0.001)
-omxCheckCloseEnough(output2$output$estimate, c(2), 0.001)
-omxCheckCloseEnough(output$output$estimate, c(1.5), 0.001)
-
-
+omxCheckCloseEnough(output1$output$estimate, .99 * c(1), 0.001)
+omxCheckCloseEnough(output2$output$estimate, .99 * c(2), 0.001)
+omxCheckCloseEnough(output$output$estimate, .99 * c(1.5), 0.001)

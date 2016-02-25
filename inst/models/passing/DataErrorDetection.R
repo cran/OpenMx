@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -52,4 +52,18 @@ data$numObs <- 100L
 model <- mxModel(model, objective, data, mxFitFunctionML())
 
 fit <- mxRun(model)
-	
+
+primaryKey <- c(1:4, 3L)
+m1 <- mxModel("uniqueModel", type="RAM",
+              latentVars = "ign",
+              mxData(type="raw", observed=data.frame(key=primaryKey), primaryKey = "key"),
+              mxPath("one", "ign"),
+              mxPath("ign", arrows=2))
+omxCheckError(mxRun(m1), "uniqueModel.data: primary keys are not unique (examine rows with key=3)")
+
+bad <- mxModel("bad", type="RAM",
+              latentVars = "ign",
+	       mxPath("one", "ign"),
+	       mxPath("ign", arrows=2),
+	       mxData(data.frame(key=1), 'raw', primaryKey="key"))
+omxCheckError(mxRun(bad), "bad.data: primary key must be an integer column in raw observed data")

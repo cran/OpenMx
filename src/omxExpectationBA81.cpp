@@ -1,5 +1,5 @@
 /*
-  Copyright 2012-2014 Joshua Nathaniel Pritikin and contributors
+  Copyright 2012-2015 Joshua Nathaniel Pritikin and contributors
 
   This is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,13 +20,15 @@
 
 #include "omxExpectationBA81.h"
 #include "glue.h"
-#include "libifa-rpf.h"
+#include <libifa-rpf.h>
 #include "dmvnorm.h"
 #include "omxBuffer.h"
 #include "matrix.h"
 
-const struct rpf *rpf_model = NULL;
-int rpf_numModels;
+#define USE_EXTERNAL_LIBRPF 1
+
+const struct rpf *Glibrpf_model = NULL;
+int Glibrpf_numModels;
 
 void pda(const double *ar, int rows, int cols)
 {
@@ -133,7 +135,10 @@ void BA81LatentSummary<T>::end(class ifaGroup *grp, T extraData)
 	int numLatents = quad.maxAbilities + triangleLoc1(quad.maxAbilities);
 	std::vector<double> latentDist;
 	latentDist.assign(numLatents, 0.0);
-	quad.EAP(thrDweight, 1/extraData->weightSum, latentDist.data());
+	quad.EAP(thrDweight, extraData->weightSum, latentDist.data());
+	for (int d1=quad.maxAbilities; d1 < numLatents; d1++) {
+		latentDist[d1] *= extraData->weightSum / (extraData->weightSum - 1.0);
+	}
 	exportLatentDistToOMX(quad, latentDist.data(), extraData->estLatentMean, extraData->estLatentCov);
 
 	++extraData->ElatentVersion;
@@ -177,7 +182,10 @@ void ba81AggregateDistributions(std::vector<struct omxExpectation *> &expectatio
 	int numLatents = quad.maxAbilities + triangleLoc1(quad.maxAbilities);
 	std::vector<double> latentDist;
 	latentDist.assign(numLatents, 0.0);
-	quad.EAP(dist.data(), 1.0/got, latentDist.data());
+	quad.EAP(dist.data(), got, latentDist.data());
+	for (int d1=quad.maxAbilities; d1 < numLatents; d1++) {
+		latentDist[d1] *= got / (got - 1.0);
+	}
 	exportLatentDistToOMX(quad, latentDist.data(), meanMat, covMat);
 }
 
@@ -351,7 +359,7 @@ void refreshPatternLikelihood(BA81Expect *state, bool hasFreeLatent)
 }
 
 static void
-ba81compute(omxExpectation *oo, const char *what, const char *how)
+ba81compute(omxExpectation *oo, FitContext *fc, const char *what, const char *how)
 {
 	BA81Expect *state = (BA81Expect *) oo->argStruct;
 
@@ -359,6 +367,12 @@ ba81compute(omxExpectation *oo, const char *what, const char *how)
 		if (strcmp(what, "latentDistribution")==0 && how && strcmp(how, "copy")==0) {
 			omxCopyMatrix(state->_latentMeanOut, state->estLatentMean);
 			omxCopyMatrix(state->_latentCovOut, state->estLatentCov);
+
+			double sampleSizeAdj = (state->weightSum - 1.0) / state->weightSum;
+			int covSize = state->_latentCovOut->rows * state->_latentCovOut->cols;
+			for (int cx=0; cx < covSize; ++cx) {
+				state->_latentCovOut->data[cx] *= sampleSizeAdj;
+			}
 			return;
 		}
 
@@ -511,7 +525,7 @@ static void ba81Destroy(omxExpectation *oo) {
 static void ignoreSetVarGroup(omxExpectation*, FreeVarGroup *)
 {}
 
-static omxMatrix *getComponent(omxExpectation *oo, omxFitFunction*, const char *what)
+static omxMatrix *getComponent(omxExpectation *oo, const char *what)
 {
 	BA81Expect *state = (BA81Expect *) oo->argStruct;
 
@@ -541,18 +555,15 @@ void omxInitExpectationBA81(omxExpectation* oo) {
 	if(OMX_DEBUG) {
 		mxLog("Initializing %s.", oo->name);
 	}
-	if (!rpf_model) {
-		if (0) {
-			const int wantVersion = 3;
-			int version;
-			get_librpf_t get_librpf = (get_librpf_t) R_GetCCallable("rpf", "get_librpf_model_GPL");
-			(*get_librpf)(&version, &rpf_numModels, &rpf_model);
-			if (version < wantVersion) Rf_error("librpf binary API %d installed, at least %d is required",
-							 version, wantVersion);
-		} else {
-			rpf_numModels = librpf_numModels;
-			rpf_model = librpf_model;
-		}
+	if (!Glibrpf_model) {
+#if USE_EXTERNAL_LIBRPF
+		get_librpf_t get_librpf = (get_librpf_t) R_GetCCallable("rpf", "get_librpf_model_GPL");
+		(*get_librpf)(LIBIFA_RPF_API_VERSION, &Glibrpf_numModels, &Glibrpf_model);
+#else
+		// if linking against included source code
+		Glibrpf_numModels = librpf_numModels;
+		Glibrpf_model = librpf_model;
+#endif
 	}
 	
 	BA81Expect *state = new BA81Expect;
@@ -704,7 +715,7 @@ void omxInitExpectationBA81(omxExpectation* oo) {
 	// sanity check data
 	for (int cx = 0; cx < numItems; cx++) {
 		if (!omxDataColumnIsFactor(data, colMap[cx])) {
-			omxPrintData(data, "diagnostic", 3);
+			data->omxPrintData("diagnostic", 3);
 			omxRaiseErrorf("%s: column %d is not a factor", oo->name, int(1 + colMap[cx]));
 			return;
 		}

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ obj <- mxFitFunctionAlgebra("twin")
 model <- mxModel("both", twin, obj, modelMZ, modelDZ)
 modelOut <- mxRun(model)
 
-expectedACE <- c(.6, .2, .2)
+expectedACE <- c(.6, .2, .2) * 99/100
 observedACE <- c(modelOut$modelMZ.A$result, 
 	modelOut$modelMZ.C$result, modelOut$modelMZ.E$result)
 

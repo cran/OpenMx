@@ -22,6 +22,9 @@
 #include <Eigen/Core>
 #include "libifa-rpf.h"
 
+extern const struct rpf *Glibrpf_model;
+extern int Glibrpf_numModels;
+
 class ba81NormalQuad {
  private:
 	inline void pointToWhere(const int *quad, double *where, int upto);
@@ -63,7 +66,7 @@ class ba81NormalQuad {
 
 	// For dense cov, Dweight is size totalQuadPoints
 	// For two-tier, Dweight is numSpecific x totalQuadPoints
-	inline void EAP(double *thrDweight, double scalingFactor, double *scorePad);
+	inline void EAP(double *thrDweight, double sampleSize, double *scorePad);
 };
 
 void ba81NormalQuad::mapDenseSpace(double piece, const double *where,
@@ -97,7 +100,7 @@ void ba81NormalQuad::mapSpecificSpace(int sgroup, double piece, const double *wh
 	latentDist[to] += piece_var;
 }
 
-void ba81NormalQuad::EAP(double *thrDweight, double scalingFactor, double *scorePad)
+void ba81NormalQuad::EAP(double *thrDweight, const double sampleSize, double *scorePad)
 {
 	if (numSpecific == 0) { // use template to handle this branch at compile time? TODO
 		for (int qx=0; qx < totalQuadPoints; ++qx) {
@@ -119,7 +122,7 @@ void ba81NormalQuad::EAP(double *thrDweight, double scalingFactor, double *score
 
 	const int padSize = maxAbilities + triangleLoc1(maxAbilities);
 	for (int d1=0; d1 < padSize; d1++) {
-		scorePad[d1] *= scalingFactor;
+		scorePad[d1] /= sampleSize;
 	}
 
 	int cx = maxAbilities;
@@ -227,7 +230,7 @@ void ifaGroup::ba81OutcomeProb(double *param, bool wantLog)
 		int dims = ispec[RPF_ISpecDims];
 		Eigen::VectorXd ptheta(dims);
 		double *iparam = param + paramRows * ix;
-		rpf_prob_t prob_fn = wantLog? librpf_model[id].logprob : librpf_model[id].prob;
+		rpf_prob_t prob_fn = wantLog? Glibrpf_model[id].logprob : Glibrpf_model[id].prob;
 
 		for (int qx=0; qx < quad.totalQuadPoints; qx++) {
 			double *where = quad.wherePrep.data() + qx * maxDims;

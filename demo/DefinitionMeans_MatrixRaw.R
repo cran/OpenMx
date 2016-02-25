@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ library(MASS)
 set.seed(200)
 N=500
 Sigma          <- matrix(c(1,.5,.5,1),2,2)
-group1         <- mvrnorm(N, c(1,2), Sigma) # Use mvrnorm from MASS package
-group2         <- mvrnorm(N, c(0,0), Sigma)
+group1         <- mvtnorm::rmvnorm(N, c(1,2), Sigma) # Use mvrnorm from MASS package
+group2         <- mvtnorm::rmvnorm(N, c(0,0), Sigma)
 
 xy             <- rbind(group1,group2)      # Bind groups together by rows
 dimnames(xy)[2]<- list(c("x","y"))          # Add names

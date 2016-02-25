@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 		mat->nameStr = CHAR(STRING_ELT(matListNames, index));
 		matrixList.push_back(mat);
 
-		if(OMX_DEBUG) { omxPrintMatrix(mat, "Imported"); }
+		if(OMX_DEBUG) { omxPrintMatrix(mat, NULL); }
 
 		if (isErrorRaised()) return;
 	}
@@ -119,7 +119,7 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 		Rf_protect(nextAlgTuple = VECTOR_ELT(algList, index));
 		if(IS_S4_OBJECT(nextAlgTuple)) {
 			SEXP fitFunctionClass;
-			ScopedProtect p1(fitFunctionClass, STRING_ELT(Rf_getAttrib(nextAlgTuple, Rf_install("class")), 0));
+			ScopedProtect p1(fitFunctionClass, STRING_ELT(Rf_getAttrib(nextAlgTuple, R_ClassSymbol), 0));
 			const char *fitType = CHAR(fitFunctionClass);
 			omxMatrix *fm = algebraList[index];
 			omxFillMatrixFromMxFitFunction(fm, fitType, index, nextAlgTuple);
@@ -129,7 +129,8 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 			omxMatrix *amat = algebraList[index];
 			Rf_protect(dimnames = VECTOR_ELT(nextAlgTuple, 0));
 			omxFillMatrixFromRPrimitive(amat, NULL, this, 1, index);
-			Rf_protect(formula = VECTOR_ELT(nextAlgTuple, 1));
+			amat->setJoinInfo(VECTOR_ELT(nextAlgTuple, 1), VECTOR_ELT(nextAlgTuple, 2));
+			Rf_protect(formula = VECTOR_ELT(nextAlgTuple, 3));
 			std::string name = CHAR(STRING_ELT(algListNames, index));
 			omxFillMatrixFromMxAlgebra(amat, formula, name, dimnames);
 		}
@@ -187,37 +188,67 @@ void omxGlobal::omxProcessMxComputeEntities(SEXP rObj, omxState *currentState)
 	if (Rf_isNull(rObj)) return;
 
 	SEXP s4class;
-	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(rObj, Rf_install("class")), 0));
+	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(rObj, R_ClassSymbol), 0));
 	omxCompute *compute = omxNewCompute(currentState, CHAR(s4class));
 	compute->initFromFrontend(currentState, rObj);
 	computeList.push_back(compute);
 }
 
-void omxInitialMatrixAlgebraCompute(omxState *state, FitContext *fc)
+// This is called at initialization and when we copy
+// state to facilitate multiple threads. When we copy
+// state, it would be more efficient to deeply copy the
+// state instead of recomputing it. However, it is less
+// error prone from a programming standpoint to recompute.
+void omxState::omxInitialMatrixAlgebraCompute(FitContext *fc)
 {
+	// Note: some overlap with cacheDependencies
+	FreeVarGroup *fvg = Global->findVarGroup(FREEVARGROUP_ALL);
+	for (size_t vx=0; vx < fvg->vars.size(); ++vx) {
+		omxFreeVar &fv = *fvg->vars[vx];
+		for (size_t lx = 0; lx < fv.locations.size(); ++lx) {
+			omxMatrix *mat = matrixList[ fv.locations[lx].matrix ];
+			if (OMX_DEBUG && !mat->dependsOnParameters()) {
+				mxLog("Matrix '%s' depends on free parameter '%s'", mat->name(), fv.name);
+			}
+			mat->setDependsOnParameters();
+		}
+	}
+
+	for (size_t dx=0; dx < dataList.size(); ++dx) {
+		std::vector<omxDefinitionVar> &defVars = dataList[dx]->defVars;
+		for (size_t vx=0; vx < defVars.size(); ++vx) {
+			omxDefinitionVar &dv = defVars[vx];
+			for (int l = 0; l < dv.numLocations; l++) {
+				int matrixNumber = dv.matrices[l];
+				omxMatrix *matrix = matrixList[matrixNumber];
+				matrix->setDependsOnDefinitionVariables();
+			}
+		}
+	}
+
 	// We use FF_COMPUTE_INITIAL_FIT because an expectation
 	// could depend on the value of an algebra. However, we
 	// don't mark anything clean because an algebra could
 	// depend on an expectation (via a fit function).
 
-	size_t numMats = state->matrixList.size();
-	int numAlgs = state->algebraList.size();
+	size_t numMats = matrixList.size();
+	int numAlgs = algebraList.size();
 
-	if(OMX_DEBUG) mxLog("omxInitialMatrixAlgebraCompute(state[%d], ...)", state->getId());
+	if(OMX_DEBUG) mxLog("omxInitialMatrixAlgebraCompute(state[%d], ...)", getId());
 
-	state->setWantStage(FF_COMPUTE_INITIAL_FIT);
+	setWantStage(FF_COMPUTE_INITIAL_FIT);
 
 	// Need something finite for definition variables to avoid exceptions
 
-	for (int ex = 0; ex < (int) state->dataList.size(); ++ex) {
+	for (int ex = 0; ex < (int) dataList.size(); ++ex) {
 		// It is necessary to load some number (like 1) instead
 		// of NAs because algebra can use definition variables
 		// for indexing. We will load real data later.
-		state->dataList[ex]->loadFakeData(state, 1);
+		dataList[ex]->loadFakeData(this, 1);
 	}
 
 	for(size_t index = 0; index < numMats; index++) {
-		omxRecompute(state->matrixList[index], fc);
+		omxRecompute(matrixList[index], fc);
 	}
 
 	// This is required because we have chosen to compute algebras
@@ -225,7 +256,7 @@ void omxInitialMatrixAlgebraCompute(omxState *state, FitContext *fc)
 	// that we loop over _all_ algebras and compute them.
 
 	for(int index = 0; index < numAlgs; index++) {
-		omxMatrix *matrix = state->algebraList[index];
+		omxMatrix *matrix = algebraList[index];
 		omxRecompute(matrix, fc);
 	}
 }
@@ -284,7 +315,7 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 	}
 }
 
-void omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues)
+void omxState::omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues)
 {
 	if(OMX_DEBUG) { mxLog("Processing Free Parameters."); }
 

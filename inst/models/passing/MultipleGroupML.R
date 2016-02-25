@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ obj <- mxFitFunctionAlgebra("alg")
 model <- mxModel("both", alg, obj, model1, model2)
 model <- mxRun(model, suppressWarnings = TRUE)
 
-omxCheckCloseEnough(model$output$estimate, c(1, 2), 0.001)
+omxCheckCloseEnough(model$output$estimate, .99 * c(1, 2), 0.001)
 
 # Also use the multigroup fit function
 mft <- mxFitFunctionMultigroup(c("model1", "model2"))

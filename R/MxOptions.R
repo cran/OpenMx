@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -149,8 +149,8 @@ npsolOptions <- list(
 checkpointOptions <- list(
 	"Checkpoint Directory" = ".", 
 	"Checkpoint Prefix" = "",
-	"Checkpoint Units" = "minutes", 
-	"Checkpoint Count" = c("minutes" = 10, "iterations" = 100),
+	"Checkpoint Units" = "iterations",
+	"Checkpoint Count" = 1,
         "Checkpoint Fullpath" = "",
 	"Socket Server" = "", 
 	"Socket Port" = 8080,
@@ -167,7 +167,6 @@ otherOptions <- list(
 	"UsePPML" = "No",
 	"Allow Unlabeled" = FALSE,
     "loglikelihoodScale" = -2.0,
-    "Debug Protect Stack" = 0,
     "mvnMaxPointsA" = 0,
     "mvnMaxPointsB" = 0,
     "mvnMaxPointsC" = 5000,

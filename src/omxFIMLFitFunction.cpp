@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -79,19 +79,25 @@ void omxPopulateFIMLAttributes(omxFitFunction *off, SEXP algebra) {
 
 static void CallFIMLFitFunction(omxFitFunction *off, int want, FitContext *fc)
 {
+	omxFIMLFitFunction* ofiml = ((omxFIMLFitFunction*)off->argStruct);
+
 	// TODO: Figure out how to give access to other per-iteration structures.
 	// TODO: Current implementation is slow: update by filtering correlations and thresholds.
 	// TODO: Current implementation does not implement speedups for sorting.
 	// TODO: Current implementation may fail on all-continuous-missing or all-ordinal-missing rows.
 	
-	if (want & (FF_COMPUTE_PREOPTIMIZE)) return;
+	if (want & (FF_COMPUTE_PREOPTIMIZE)) {
+		omxMatrix *means	= ofiml->means;
+		omxExpectation* expectation = off->expectation;
+		if (!means) complainAboutMissingMeans(expectation);
+		return;
+	}
 
     if(OMX_DEBUG) { 
 	    mxLog("Beginning Joint FIML Evaluation.");
     }
 	int returnRowLikelihoods = 0;
 
-	omxFIMLFitFunction* ofiml = ((omxFIMLFitFunction*)off->argStruct);
 	omxMatrix* fitMatrix  = off->matrix;
 	int numChildren = (int) fc->childList.size();
 
@@ -106,7 +112,7 @@ static void CallFIMLFitFunction(omxFitFunction *off, int want, FitContext *fc)
 
 	if (data->defVars.size() == 0 && !strEQ(expectation->expType, "MxExpectationStateSpace")) {
 		if(OMX_DEBUG) {mxLog("Precalculating cov and means for all rows.");}
-		omxExpectationRecompute(expectation);
+		omxExpectationRecompute(fc, expectation);
 		// MCN Also do the threshold formulae!
 		
 		for(int j=0; j < dataColumns->cols; j++) {
@@ -131,7 +137,7 @@ static void CallFIMLFitFunction(omxFitFunction *off, int want, FitContext *fc)
 		double *weights		= ofiml->weights;
 
 		if (corList) {
-			omxStandardizeCovMatrix(cov, corList, weights);	// Calculate correlation and covariance
+			omxStandardizeCovMatrix(cov, corList, weights, fc);	// Calculate correlation and covariance
 		}
 		for(int index = 0; index < numChildren; index++) {
 			FitContext *kid = fc->childList[index];
@@ -200,6 +206,7 @@ void omxInitFIMLFitFunction(omxFitFunction* off)
 	if(OMX_DEBUG) {
 		mxLog("Initializing FIML fit function function.");
 	}
+	off->canDuplicate = TRUE;
 	SEXP rObj = off->rObj;
 
 	int numOrdinal = 0, numContinuous = 0;
@@ -212,19 +219,14 @@ void omxInitFIMLFitFunction(omxFitFunction* off)
 		return;
 	}
 
-	cov = omxGetExpectationComponent(expectation, off, "cov");
+	cov = omxGetExpectationComponent(expectation, "cov");
 	if(cov == NULL) { 
 		omxRaiseError("No covariance expectation in FIML evaluation.");
 		return;
 	}
 
-	means = omxGetExpectationComponent(expectation, off, "means");
+	means = omxGetExpectationComponent(expectation, "means");
 	
-	if(means == NULL) { 
-		omxRaiseError("No means model in FIML evaluation.");
-		return;
-	}
-
 	if(OMX_DEBUG) {
 		mxLog("FIML Initialization Completed.");
 	}
@@ -246,7 +248,6 @@ void omxInitFIMLFitFunction(omxFitFunction* off)
 	
     newObj->SingleIterFn = omxFIMLSingleIterationJoint;
 
-	off->fitType = "imxFitFunctionFIML";
 	off->destructFun = omxDestroyFIMLFitFunction;
 	off->populateAttrFun = omxPopulateFIMLAttributes;
 
@@ -293,14 +294,16 @@ void omxInitFIMLFitFunction(omxFitFunction* off)
 //  newObj->zeros = omxInitMatrix(1, newObj->cov->cols, TRUE, off->matrix->currentState);
 
     omxCopyMatrix(newObj->smallCov, newObj->cov);          // Will keep its aliased state from here on.
-    newObj->smallMeans = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
-    omxCopyMatrix(newObj->smallMeans, newObj->means);
+    if (means) {
+	    newObj->smallMeans = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
+	    omxCopyMatrix(newObj->smallMeans, newObj->means);
+	    newObj->ordMeans = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
+	    omxCopyMatrix(newObj->ordMeans, newObj->means);
+    }
     newObj->contRow = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
     omxCopyMatrix(newObj->contRow, newObj->smallRow );
     newObj->ordCov = omxInitMatrix(covCols, covCols, TRUE, off->matrix->currentState);
     omxCopyMatrix(newObj->ordCov, newObj->cov);
-    newObj->ordMeans = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
-    omxCopyMatrix(newObj->ordMeans, newObj->means);
     newObj->ordRow = omxInitMatrix(covCols, 1, TRUE, off->matrix->currentState);
     omxCopyMatrix(newObj->ordRow, newObj->smallRow );
     newObj->Infin = (int*) R_alloc(covCols, sizeof(int));

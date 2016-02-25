@@ -35,7 +35,7 @@ enum GradientAlgorithm {
 // These are ordered from good to bad so we can use max() on a set
 // of inform results to obtain a bound on convergence status.
 typedef int ComputeInform;
-#define INFORM_UNINITIALIZED -1
+#define INFORM_UNINITIALIZED NA_INTEGER
 #define INFORM_CONVERGED_OPTIMUM 0
 #define INFORM_UNCONVERGED_OPTIMUM 1
 	// The final iterate satisfies the optimality conditions to the accuracy requested,
@@ -130,6 +130,7 @@ class FitContext {
 	double fit;
 	int fitUnits;
 	double *est;
+	std::vector<bool> profiledOut;
 	std::vector<const char*> flavor;
 	Eigen::VectorXd grad;
 	int infoDefinite;
@@ -154,6 +155,7 @@ class FitContext {
 	void createChildren();
 	void destroyChildren();
 	void allocStderrs();
+	void ensureParamWithinBox(bool nudge);
 	void copyParamToModel();
 	void copyParamToModelClean();
 	double *take(int want);
@@ -163,6 +165,20 @@ class FitContext {
 	void updateParentAndFree();
 	template <typename T> void moveInsideBounds(std::vector<T> &prevEst);
 	void log(int what);
+	bool haveReferenceFit(omxMatrix *fitMat) {
+		if (std::isfinite(fit)) return true;
+		if (inform == INFORM_UNINITIALIZED) {
+			omxRecompute(fitMat, this);
+			fit = omxMatrixElement(fitMat, 0, 0);
+			if (std::isfinite(fit)) return true;
+			inform = INFORM_STARTING_VALUES_INFEASIBLE;
+		}
+		if (inform != INFORM_CONVERGED_OPTIMUM &&
+		    inform != INFORM_UNCONVERGED_OPTIMUM) {
+			return false;
+		}
+		Rf_error("%s: reference fit is not finite", fitMat->name());
+	};
 	~FitContext();
 	
 	// deriv related
@@ -194,6 +210,8 @@ class FitContext {
 	static void cacheFreeVarDependencies();
 	static void setRFitFunction(omxFitFunction *rff);
 };
+
+void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at);
 
 typedef std::vector< std::pair<int, MxRList*> > LocalComputeResult;
 
@@ -230,15 +248,20 @@ class GradientOptimizerContext {
  private:
 	void copyBounds();
 
+	// We need to hide this from the optimizer because
+	// some parameters might be profiled out and should
+	// not be subject to optimization.
+	FitContext *fc;
+
  public:
 	const int verbose;
+	int numFree;          // how many parameters are not profiled out
 	const char *optName;  // filled in by the optimizer
 	bool feasible;
 	bool avoidRedundentEvals;
 	Eigen::VectorXd prevPoint;
 	int prevMode;
 	void *extraData;
-	FitContext *fc;
 	omxMatrix *fitMatrix;
 	int maxMajorIterations;
 
@@ -264,14 +287,16 @@ class GradientOptimizerContext {
 	// NPSOL has bugs and can return the wrong fit & estimates
 	// even when optimization proceeds correctly.
 	double bestFit;
+	Eigen::VectorXd est;    //like fc->est but omitting profiled out params
 	Eigen::VectorXd bestEst;
+	Eigen::VectorXd grad;
 
 	// output
 	int informOut;
 	Eigen::VectorXd gradOut;
 	Eigen::MatrixXd hessOut;  // in-out for warmstart
 
-	GradientOptimizerContext(int verbose);
+	GradientOptimizerContext(FitContext *fc, int verbose);
 	void reset();
 
 	void setupSimpleBounds();          // NLOPT style
@@ -284,6 +309,18 @@ class GradientOptimizerContext {
 	void myineqFun();
 	template <typename T1> void allConstraintsFun(Eigen::MatrixBase<T1> &constraintOut);
 	template <typename T1> void checkActiveBoxConstraints(Eigen::MatrixBase<T1> &nextEst);
+	void useBestFit();
+	void copyToOptimizer(double *myPars);
+	void copyFromOptimizer(double *myPars);
+	void finish();
+	double getFit() const { return fc->fit; };
+	int getIteration() const { return fc->iterations; };
+	int getWanted() const { return fc->wanted; };
+	void setWanted(int nw) { fc->wanted = nw; };
+	bool inConfidenceIntervalProblem() const;
+	int getConfidenceIntervalVarIndex() const;
+	bool inConfidenceIntervalLowerBound() const { return fc->lowerBound; };
+	omxState *getState() const { return fc->state; };
 };
 
 template <typename T1>
@@ -300,5 +337,45 @@ void GradientOptimizerContext::checkActiveBoxConstraints(Eigen::MatrixBase<T1> &
 }
 
 typedef void (*GradientOptimizerType)(double *, GradientOptimizerContext &);
+
+template <typename T>
+void printSparse(Eigen::SparseMatrixBase<T> &sm) {
+	typedef typename T::Index Index;
+	typedef typename T::Scalar Scalar;
+	typedef typename T::Storage Storage;
+	// assume column major
+	std::string buf;
+	const Index *nzp = sm.derived().innerNonZeroPtr();
+	//const Scalar *vp = sm.derived().valuePtr();
+	//const Index *iip = sm.derived().innerIndexPtr();
+	const Index *oip = sm.derived().outerIndexPtr();
+	const Storage &m_data = sm.derived().data();
+	if (!nzp) buf += "compressed ";
+	buf += string_snprintf("%dx%d\n", sm.innerSize(), sm.outerSize());
+	for (int rx=0; rx < sm.innerSize(); ++rx) {
+		for (int cx=0; cx < sm.outerSize(); ++cx) {
+			Index start = oip[cx];
+			Index end = nzp ? oip[cx] + nzp[cx] : oip[cx+1];
+			if (end <= start) {
+				buf += " ***";
+			} else {
+				const Index p = m_data.searchLowerIndex(start,end-1,rx);
+				if ((p<end) && (m_data.index(p)==rx)) {
+					double v = m_data.value(p);
+					if (v < 0) {
+						buf += string_snprintf("%2.1f", v);
+					} else {
+						buf += string_snprintf(" %2.1f", v);
+					}
+				}
+				else
+					buf += " ***";
+			}
+			if (cx < sm.outerSize() - 1) buf += " ";
+		}
+		buf += "\n";
+	}
+	mxLogBig(buf);
+}
 
 #endif

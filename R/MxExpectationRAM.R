@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-
 
 setClass(Class = "MxExpectationRAM",
 	representation = representation(
@@ -30,12 +29,17 @@ setClass(Class = "MxExpectationRAM",
 		usePPML = "logical",
 		ppmlData = "MxData",
 		UnfilteredExpCov = "matrix",
-	        numStats = "numeric"),
+	    numStats = "numeric",
+	    between = "MxOptionalCharOrNumber",
+	    verbose = "integer",
+	    .rampart = "integer",
+	    .forceSingleGroup = "logical"
+	),
 	contains = "BaseExpectationNormal")
 
 setMethod("initialize", "MxExpectationRAM",
 	function(.Object, A, S, F, M, dims, thresholds, threshnames,
-		data = as.integer(NA), name = 'expectation') {
+		 between, verbose, data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@A <- A
 		.Object@S <- S
@@ -47,13 +51,17 @@ setMethod("initialize", "MxExpectationRAM",
 		.Object@threshnames <- threshnames
 		.Object@usePPML <- FALSE
 		.Object@UnfilteredExpCov <- matrix()
+		.Object@between <- between
+		.Object@verbose <- verbose
+		.Object@.rampart <- as.integer(NA)
+		.Object@.forceSingleGroup <- FALSE
 		return(.Object)
 	}
 )
 
 setMethod("genericExpDependencies", signature("MxExpectationRAM"),
 	function(.Object, dependencies) {
-	sources <- c(.Object@A, .Object@S, .Object@F, .Object@M, .Object@thresholds)
+	sources <- c(.Object@A, .Object@S, .Object@F, .Object@M, .Object@thresholds, .Object@between)
 	sources <- sources[!is.na(sources)]
 	dependencies <- imxAddDependency(sources, .Object@name, dependencies)
 	return(dependencies)
@@ -62,13 +70,14 @@ setMethod("genericExpDependencies", signature("MxExpectationRAM"),
 setMethod("qualifyNames", signature("MxExpectationRAM"), 
 	function(.Object, modelname, namespace) {
 		.Object@name <- imxIdentifier(modelname, .Object@name)
-		.Object@A <- imxConvertIdentifier(.Object@A, modelname, namespace)
-		.Object@S <- imxConvertIdentifier(.Object@S, modelname, namespace)
-		.Object@F <- imxConvertIdentifier(.Object@F, modelname, namespace)
-		.Object@M <- imxConvertIdentifier(.Object@M, modelname, namespace)
+		.Object@A <- imxConvertIdentifier(.Object@A, modelname, namespace, TRUE)
+		.Object@S <- imxConvertIdentifier(.Object@S, modelname, namespace, TRUE)
+		.Object@F <- imxConvertIdentifier(.Object@F, modelname, namespace, TRUE)
+		.Object@M <- imxConvertIdentifier(.Object@M, modelname, namespace, TRUE)
 		.Object@data <- imxConvertIdentifier(.Object@data, modelname, namespace)
 		.Object@thresholds <- sapply(.Object@thresholds, 
-			imxConvertIdentifier, modelname, namespace)
+					     imxConvertIdentifier, modelname, namespace)
+		.Object@between <- imxConvertIdentifier(.Object@between, modelname, namespace)
 		return(.Object)
 })
 
@@ -100,7 +109,44 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			stop(msg, call. = FALSE)
 		}
 		mxDataObject <- flatModel@datasets[[.Object@data]]
-		if(!is.na(mMatrix) && single.na(mxDataObject@means) && mxDataObject@type != "raw") {
+		if (.hasSlot(.Object, "between") && length(.Object@between)) {
+			.Object@between <- sapply(.Object@between, function(bName) {
+				zMat <- flatModel[[ bName ]]
+				expName <- paste0(zMat@joinModel, imxSeparatorChar, 'expectation')
+				upperA <- flatModel[[ flatModel@expectations[[ expName ]]$A ]]
+				lowerA <- flatModel[[ aMatrix ]]
+
+				if (length(rownames(zMat)) != length(colnames(lowerA))) {
+					msg <- paste("Join mapping matrix", zMat@name,
+						     "must have", length(colnames(lowerA)), "rows:",
+						     omxQuotes(colnames(lowerA)))
+					stop(msg, call. = FALSE)
+				}
+				lowerMatch <- rownames(zMat) == colnames(lowerA)
+				if (any(!lowerMatch)) {
+					msg <- paste("Join mapping matrix", zMat@name,
+						     "needs mapping rows for",
+						     omxQuotes(colnames(lowerA)[!lowerMatch]))
+					stop(msg, call. = FALSE)
+				}
+				if (length(colnames(zMat)) != length(colnames(upperA))) {
+					msg <- paste("Join mapping matrix", zMat@name,
+						     "must have", length(colnames(upperA)), "columns:",
+						     omxQuotes(colnames(upperA)))
+					stop(msg, call. = FALSE)
+				}
+				upperMatch <- colnames(zMat) == colnames(upperA)
+				if (any(!upperMatch)) {
+					msg <- paste("Join mapping matrix", zMat@name,
+						     "needs mapping columns for",
+						     omxQuotes(colnames(upperA)[!upperMatch]))
+					stop(msg, call. = FALSE)
+				}
+				imxLocateIndex(flatModel, bName, name)
+			})
+		}
+		hasMeanModel <- !is.na(mMatrix)
+		if(hasMeanModel && single.na(mxDataObject@means) && mxDataObject@type != "raw") {
 			msg <- paste("The RAM expectation function",
 				"has an expected means vector but",
 				"no observed means vector in model",
@@ -115,11 +161,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			stop(msg, call. = FALSE)		
 		}
 		checkNumericData(mxDataObject)
-		.Object@A <- imxLocateIndex(flatModel, aMatrix, name)
-		.Object@S <- imxLocateIndex(flatModel, sMatrix, name)
-		.Object@F <- imxLocateIndex(flatModel, fMatrix, name)
-		.Object@M <- imxLocateIndex(flatModel, mMatrix, name)
-		.Object@data <- as.integer(imxLocateIndex(flatModel, data, name))
 		verifyObservedNames(mxDataObject@observed, mxDataObject@means, mxDataObject@type, flatModel, modelname, "RAM")
 		fMatrix <- flatModel[[fMatrix]]@values
 		if (is.null(dimnames(fMatrix))) {
@@ -133,7 +174,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			stop(msg, call. = FALSE)
 		}
 		mMatrix <- flatModel[[mMatrix]]		
-		if(!is.null(mMatrix)) {
+		if (hasMeanModel && !is.null(mMatrix)) {
 			means <- dimnames(mMatrix)
 			if (is.null(means)) {
 				msg <- paste("The M matrix associated",
@@ -160,41 +201,59 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 		}
 		translatedNames <- fMatrixTranslateNames(fMatrix, modelname)
 		.Object@depth <- generateRAMDepth(flatModel, aMatrix, model@options)
-		if (mxDataObject@type == 'raw' || mxDataObject@type == 'acov') {
-			threshName <- .Object@thresholds
-			checkNumberOrdinalColumns(mxDataObject)
-			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
-			verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
-			.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
-			retval <- generateThresholdColumns(flatModel, model, labelsData, translatedNames, data, threshName)
-			.Object@thresholdColumns <- retval[[1]]
-			.Object@thresholdLevels <- retval[[2]]
-			if (length(mxDataObject@observed) == 0) {
-				.Object@data <- as.integer(NA)
-			}
-			if (single.na(.Object@dims)) {
-				.Object@dims <- translatedNames
+		if (length(translatedNames)) {
+			if (mxDataObject@type == 'raw' || mxDataObject@type == 'acov') {
+				threshName <- .Object@thresholds
+				checkNumberOrdinalColumns(mxDataObject)
+				.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
+				verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
+				.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
+				retval <- generateThresholdColumns(flatModel, model, labelsData, translatedNames, data, threshName)
+				.Object@thresholdColumns <- retval[[1]]
+				.Object@thresholdLevels <- retval[[2]]
+				if (length(mxDataObject@observed) == 0) {
+					.Object@data <- as.integer(NA)
+				}
+				if (single.na(.Object@dims)) {
+					.Object@dims <- translatedNames
+				}
+			} else {
+				.Object@thresholds <- as.integer(NA)
+				targetNames <- rownames(mxDataObject@observed)
+				if (!identical(translatedNames, targetNames)) {
+					varsNotInData <- translatedNames[!(translatedNames %in% targetNames)]
+					msg <- paste("The names of the manifest",
+						     "variables in the F matrix of model",
+						     omxQuotes(modelname), "does not match the",
+						     "dimnames of the observed covariance matrix.")
+					if (length(varsNotInData) > 0) {
+						msg <- paste(msg,
+							     "To get you started, the following variables are used but",
+							     "are not in the observed data:", 
+							     omxQuotes(varsNotInData))
+					}
+					stop(msg, call. = FALSE)
+				}
 			}
 		} else {
 			.Object@thresholds <- as.integer(NA)
-			targetNames <- rownames(mxDataObject@observed)
-			if (!identical(translatedNames, targetNames)) {
-				varsNotInData <- translatedNames[!(translatedNames %in% targetNames)]
-				msg <- paste("The names of the manifest",
-					"variables in the F matrix of model",
-					omxQuotes(modelname), "does not match the",
-					"dimnames of the observed covariance matrix.")
-				if (length(varsNotInData) > 0) {
-					msg <- paste(msg,
-						"To get you started, the following variables are used but",
-						"are not in the observed data:", 
-						omxQuotes(varsNotInData))
-				}
-				stop(msg, call. = FALSE)
-			}
+			.Object@thresholdColumns <- as.integer(NA)
+			.Object@thresholdLevels <- as.integer(NA)
 		}
 		return(.Object)
 })
+
+setMethod("genericNameToNumber", signature("MxExpectationRAM"),
+	  function(.Object, flatModel, model) {
+		  name <- .Object@name
+		  data <- .Object@data
+		  .Object@data <- imxLocateIndex(flatModel, data, name)
+		  .Object@A <- imxLocateIndex(flatModel, .Object@A, name)
+		  .Object@S <- imxLocateIndex(flatModel, .Object@S, name)
+		  .Object@F <- imxLocateIndex(flatModel, .Object@F, name)
+		  .Object@M <- imxLocateIndex(flatModel, .Object@M, name)
+		  .Object
+	  })
 
 setMethod("genericGetExpected", signature("MxExpectationRAM"),
 	  function(.Object, model, what, defvar.row=1) {
@@ -281,10 +340,13 @@ omxGetRAMDepth <- function(A, maxdepth = nrow(A) - 1) {
 	aValues[mxObject@values != 0] <- 1
 	aValues[defvars] <- 1
 	aValues[squarebrackets] <- 1
-	return(generateDepthHelper(aValues, aValues, 0, maxdepth))
+	depth <- generateDepthHelper(aValues, aValues, 0, maxdepth)
+	#print(depth)
+	depth
 }
 
 generateDepthHelper <- function(aValues, currentProduct, depth, maxdepth) {
+	#print(currentProduct)
 	if (depth > maxdepth) {
 		return(as.integer(NA))
 	}
@@ -297,6 +359,7 @@ generateDepthHelper <- function(aValues, currentProduct, depth, maxdepth) {
 
 fMatrixTranslateNames <- function(fMatrix, modelName) {
 	retval <- character()
+	if (length(fMatrix) == 0) return(retval)
 	colNames <- dimnames(fMatrix)[[2]]
 	for(i in 1:nrow(fMatrix)) {
 		irow <- fMatrix[i,]
@@ -402,15 +465,6 @@ setMethod("genericExpConvertEntities", "MxExpectationRAM",
 			return(flatModel)
 		}
 
-		if (is.na(.Object@M) || is.null(flatModel[[.Object@M]])) {
-			modelname <- getModelName(.Object)
-			msg <- paste("The RAM expectation function",
-				"has raw data but is missing",
-				"an expected means vector in model",
-				omxQuotes(modelname))
-			stop(msg, call.=FALSE)
-		}
-				
 		flatModel <- updateThresholdDimnames(.Object, flatModel, labelsData)
 
 		return(flatModel)
@@ -438,7 +492,11 @@ imxSimpleRAMPredicate <- function(model) {
 }
 
 mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresholds = NA,
-	threshnames = dimnames) {
+	threshnames = dimnames, ..., between=NULL, verbose=0L) {
+
+	if (length(list(...)) > 0) {
+		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
+	}
 
 	if (typeof(A) != "character") {
 		msg <- paste("argument 'A' is not a string",
@@ -476,17 +534,12 @@ mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresho
 		stop("NA values are not allowed for dimnames vector")
 	}
 	threshnames <- checkThreshnames(threshnames)
-	return(new("MxExpectationRAM", A, S, F, M, dimnames, thresholds, threshnames))
+	return(new("MxExpectationRAM", A, S, F, M, dimnames, thresholds, threshnames,
+		   between, as.integer(verbose)))
 }
 
 displayMxExpectationRAM <- function(expectation) {
 	cat("MxExpectationRAM", omxQuotes(expectation@name), '\n')
-	if (length(expectation@container)) {
-		cat("$container :", omxQuotes(expectation@container), '\n')
-	}
-	if (length(expectation@submodels)) {
-		cat("$submodels :", omxQuotes(expectation@submodels), '\n')
-	}
 	cat("$A :", omxQuotes(expectation@A), '\n')
 	cat("$S :", omxQuotes(expectation@S), '\n')
 	cat("$F :", omxQuotes(expectation@F), '\n')
@@ -504,6 +557,9 @@ displayMxExpectationRAM <- function(expectation) {
 		cat("$thresholds : NA \n")
 	} else {
 		cat("$thresholds :", omxQuotes(expectation@thresholds), '\n')
+	}
+	if (length(expectation@between)) {
+		cat("$between :", omxQuotes(expectation@between), fill=TRUE)
 	}
 	invisible(expectation)
 }

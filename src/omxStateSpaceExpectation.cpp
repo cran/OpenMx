@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,16 +41,16 @@
 #include <iostream>
 
 
-void omxCallStateSpaceExpectation(omxExpectation* ox, const char *, const char *) {
+void omxCallStateSpaceExpectation(omxExpectation* ox, FitContext *fc, const char *, const char *) {
     if(OMX_DEBUG) { mxLog("State Space Expectation Called."); }
 	omxStateSpaceExpectation* ose = (omxStateSpaceExpectation*)(ox->argStruct);
 	
-	omxRecompute(ose->A, NULL);
-	omxRecompute(ose->B, NULL);
-	omxRecompute(ose->C, NULL);
-	omxRecompute(ose->D, NULL);
-	omxRecompute(ose->Q, NULL);
-	omxRecompute(ose->R, NULL);
+	omxRecompute(ose->A, fc);
+	omxRecompute(ose->B, fc);
+	omxRecompute(ose->C, fc);
+	omxRecompute(ose->D, fc);
+	omxRecompute(ose->Q, fc);
+	omxRecompute(ose->R, fc);
 	
 	// Probably should loop through all the data here!!!
 	if(ose->t == NULL){
@@ -162,10 +162,6 @@ void omxPopulateSSMAttributes(omxExpectation *ox, SEXP algebra) {
 		}
 	}
 	
-	Eigen::VectorXd oldDefs;
-	oldDefs.resize(ox->data->defVars.size());
-	oldDefs.setConstant(NA_REAL);
-	
 	// Probably should loop through all the data here!!!
 	if(OMX_DEBUG_ALGEBRA) { mxLog("Beginning forward loop ..."); }
 	for(row=1; row < (nt+1); row++){
@@ -176,8 +172,7 @@ void omxPopulateSSMAttributes(omxExpectation *ox, SEXP algebra) {
 		}
 		
 		// handle definition variables
-		int numVarsFilled = 0;
-		numVarsFilled = ox->data->handleDefinitionVarList(ox->currentState, row-1, oldDefs.data());
+		ox->data->handleDefinitionVarList(ox->currentState, row-1);
 		
 		/* Run Kalman prediction */
 		if(ose->t == NULL){
@@ -271,8 +266,7 @@ void omxPopulateSSMAttributes(omxExpectation *ox, SEXP algebra) {
 	if(OMX_DEBUG_ALGEBRA) { mxLog("Beginning backward loop ..."); }
 	for(row = nt-1; row > -1; row--){
 		// handle definition variables
-		int numVarsFilled = 0;
-		numVarsFilled = ox->data->handleDefinitionVarList(ox->currentState, row, oldDefs.data());
+		ox->data->handleDefinitionVarList(ox->currentState, row);
 		
 		// Copy Z = updated P from pupda
 		counter = 0;
@@ -446,7 +440,6 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	int ny = y->rows;
 	int nx = x->rows;
 	Eigen::VectorXi toRemoveSS(ny);
-	int numRemovesSS = 0;
 	Eigen::VectorXi toRemoveNoneLat(nx);
 	toRemoveNoneLat.setZero();
 	Eigen::VectorXi toRemoveNoneOne(1);
@@ -487,7 +480,6 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 		double dataValue = omxMatrixElement(y, j, 0);
 		int dataValuefpclass = std::fpclassify(dataValue);
 		if(dataValuefpclass == FP_NAN || dataValuefpclass == FP_INFINITE) {
-			numRemovesSS++;
 			toRemoveSS[j] = 1;
 			omxSetMatrixElement(r, j, 0, 0.0);
 		} else {
@@ -500,32 +492,28 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	//omxDAXPY(-1.0, s, r); // r = r - s THAT IS r = y - (C x + D u)
 	omxCopyMatrix(smallr, ose->r);
 	
-	/* Filter S Here */
-	// N.B. if y is completely missing or completely present, leave S alone.
-	// Otherwise, filter S.
-	if(numRemovesSS < ny && numRemovesSS > 0) {
-		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: S"); }
-		if(OMX_DEBUG) { mxLog("Filtering S, R, C, r, K, and Y."); }
-		omxRemoveRowsAndColumns(smallS, numRemovesSS, numRemovesSS, toRemoveSS.data(), toRemoveSS.data());
-		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: S (Filtered)"); }
+	//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: S"); }
+	if(OMX_DEBUG) { mxLog("Filtering S, R, C, r, K, and Y."); }
+	omxRemoveRowsAndColumns(smallS, toRemoveSS.data(), toRemoveSS.data());
+	//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: S (Filtered)"); }
 		
-		omxRemoveRowsAndColumns(smallR, numRemovesSS, numRemovesSS, toRemoveSS.data(), toRemoveSS.data());
+	omxRemoveRowsAndColumns(smallR, toRemoveSS.data(), toRemoveSS.data());
 		
-		if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallC, "....State Space: C"); }
-		omxRemoveRowsAndColumns(smallC, numRemovesSS, 0, toRemoveSS.data(), toRemoveNoneLat.data());
-		if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallC, "....State Space: C (Filtered)"); }
+	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallC, "....State Space: C"); }
+	omxRemoveRowsAndColumns(smallC, toRemoveSS.data(), toRemoveNoneLat.data());
+	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallC, "....State Space: C (Filtered)"); }
 		
-		if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(r, "....State Space: r"); }
-		omxRemoveRowsAndColumns(smallr, numRemovesSS, 0, toRemoveSS.data(), toRemoveNoneOne.data());
-		if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallr, "....State Space: r (Filtered)"); }
+	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(r, "....State Space: r"); }
+	omxRemoveRowsAndColumns(smallr, toRemoveSS.data(), toRemoveNoneOne.data());
+	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallr, "....State Space: r (Filtered)"); }
 		
-		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallK, "....State Space: K"); }
-		omxRemoveRowsAndColumns(smallK, numRemovesSS, 0, toRemoveSS.data(), toRemoveNoneLat.data());
-		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallK, "....State Space: K (Filtered)"); }
+	//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallK, "....State Space: K"); }
+	omxRemoveRowsAndColumns(smallK, toRemoveSS.data(), toRemoveNoneLat.data());
+	//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallK, "....State Space: K (Filtered)"); }
 		
-		omxRemoveRowsAndColumns(smallY, numRemovesSS, 0, toRemoveSS.data(), toRemoveNoneLat.data());
-	}
-	if(numRemovesSS == ny) {
+	omxRemoveRowsAndColumns(smallY, toRemoveSS.data(), toRemoveNoneLat.data());
+
+	if(smallY->rows == 0) {
 		if(OMX_DEBUG_ALGEBRA) { mxLog("Completely missing row of data found."); }
 		if(OMX_DEBUG_ALGEBRA) { mxLog("Skipping much of Kalman Update."); }
 		return ;
@@ -649,14 +637,24 @@ void omxKalmanBucyPredict(omxStateSpaceExpectation* ose) {
 	eigenExpA = eigenExpA.exp();
 	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space eigenExpA:\n" << eigenExpA << std::endl; }
 	
-	/* eigenIA = eigenExpA - I*/
-	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space I:\n" << I << std::endl; }
-	eigenIA = eigenExpA - I;
-	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space expA - I:\n" << eigenIA << std::endl; }
-	eigenIA = eigenA.lu().solve(eigenIA);
-	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space A^-1 (expA - I):\n" << eigenIA << std::endl; }
-	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space eigenA:\n" << eigenA << std::endl; }
-	/* eigenIA = A^-1 IA  THAT IS eigenIA = A^-1 (expm(A*deltaT) - I) */
+	if( !(ose->flagAIsZero) ){
+		if(OMX_DEBUG) { mxLog("A is not zero, so doing full A inversion."); }
+		
+		/* eigenIA = eigenExpA - I*/
+		if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space I:\n" << I << std::endl; }
+		eigenIA = eigenExpA - I;
+		if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space expA - I:\n" << eigenIA << std::endl; }
+		eigenIA = eigenA.lu().solve(eigenIA);
+		if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space A^-1 (expA - I):\n" << eigenIA << std::endl; }
+		if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space eigenA:\n" << eigenA << std::endl; }
+		/* eigenIA = A^-1 IA  THAT IS eigenIA = A^-1 (expm(A*deltaT) - I) */
+	} else {
+		if(OMX_DEBUG) { mxLog("A is zero, so skipping inversion."); }
+		eigenIA = I*deltaT;
+		/* Note that eigenIA = integral( expm(A*tau) dtau , from=0, to=deltaT) */
+		/* When A = 0, this is I*deltaT */
+		/* When A!= 0, this is A^-1 (expm(A*deltaT) - I) */
+	}
 	
 	/* x = expm(A*deltaT) * x + IA * B * u */
 	EigenMatrixAdaptor eigenx(x); //or vector
@@ -905,6 +903,12 @@ void omxInitStateSpaceExpectation(omxExpectation* ox) {
 	}
 	SSMexp->returnScores = Rf_asInteger(R_do_slot(rObj, Rf_install("scores")));
 	
+	/* Fixed and Zero A matrix Flag*/
+	if(OMX_DEBUG) {
+		mxLog("Accessing flag for fixed, zero A matrix.");
+	}
+	SSMexp->flagAIsZero = Rf_asInteger(R_do_slot(rObj, Rf_install("AIsZero")));
+	
 	
 	omxCopyMatrix(SSMexp->smallC, SSMexp->C);
 	omxCopyMatrix(SSMexp->smallD, SSMexp->D);
@@ -917,7 +921,7 @@ void omxInitStateSpaceExpectation(omxExpectation* ox) {
 }
 
 
-omxMatrix* omxGetStateSpaceExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component) {
+omxMatrix* omxGetStateSpaceExpectationComponent(omxExpectation* ox, const char* component) {
 	omxStateSpaceExpectation* ose = (omxStateSpaceExpectation*)(ox->argStruct);
 	omxMatrix* retval = NULL;
 

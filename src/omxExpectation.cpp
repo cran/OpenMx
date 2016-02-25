@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -56,24 +56,25 @@ void omxFreeExpectationArgs(omxExpectation *ox) {
 	Free(ox);
 }
 
-void omxExpectationRecompute(omxExpectation *ox) {
+void omxExpectationRecompute(FitContext *fc, omxExpectation *ox)
+{
 	for(int i = 0; i < int(ox->thresholds.size()); i++) {
 		if (!ox->thresholds[i].matrix) continue;
-		omxRecompute(ox->thresholds[i].matrix, NULL);
+		omxRecompute(ox->thresholds[i].matrix, fc);
 	}
 
-	omxExpectationCompute(ox, NULL);
+	omxExpectationCompute(fc, ox, NULL);
 }
 
-void omxExpectationCompute(omxExpectation *ox, const char *what, const char *how)
+void omxExpectationCompute(FitContext *fc, omxExpectation *ox, const char *what, const char *how)
 {
 	if (!ox) return;
 
 	ox->data->recompute(); // for dynamic data
-	ox->computeFun(ox, what, how);
+	ox->computeFun(ox, fc, what, how);
 }
 
-omxMatrix* omxGetExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component)
+omxMatrix* omxGetExpectationComponent(omxExpectation* ox, const char* component)
 {
 	if(component == NULL) return NULL;
 
@@ -84,8 +85,7 @@ omxMatrix* omxGetExpectationComponent(omxExpectation* ox, omxFitFunction* off, c
 
 	if(ox->componentFun == NULL) return NULL;
 
-	return(ox->componentFun(ox, off, component));
-	
+	return(ox->componentFun(ox, component));
 }
 
 void omxSetExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component, omxMatrix* om) {
@@ -188,7 +188,7 @@ omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os)
 
 	SEXP ExpectationClass;
 	const char *expType;
-	{ScopedProtect p1(ExpectationClass, STRING_ELT(Rf_getAttrib(rObj, Rf_install("class")), 0));
+	{ScopedProtect p1(ExpectationClass, STRING_ELT(Rf_getAttrib(rObj, R_ClassSymbol), 0));
 		expType = CHAR(ExpectationClass);
 	}
 
@@ -208,36 +208,9 @@ omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os)
 void omxCompleteExpectation(omxExpectation *ox) {
 	
 	if(ox->isComplete) return;
-
-	if (ox->rObj) {
-		omxState *os = ox->currentState;
-		SEXP rObj = ox->rObj;
-		SEXP slot;
-		{ScopedProtect(slot, R_do_slot(rObj, Rf_install("container")));
-		if (Rf_length(slot) == 1) {
-			int ex = INTEGER(slot)[0];
-			ox->container = os->expectationList.at(ex);
-		}
-		}
-
-		{ScopedProtect(slot, R_do_slot(rObj, Rf_install("submodels")));
-		if (Rf_length(slot)) {
-			int numSubmodels = Rf_length(slot);
-			int *submodel = INTEGER(slot);
-			for (int ex=0; ex < numSubmodels; ex++) {
-				int sx = submodel[ex];
-				ox->submodels.push_back(omxExpectationFromIndex(sx, os));
-			}
-		}
-		}
-	}
+	ox->isComplete = TRUE;
 
 	omxExpectationProcessDataStructures(ox, ox->rObj);
-
-	int numSubmodels = (int) ox->submodels.size();
-	for (int ex=0; ex < numSubmodels; ex++) {
-		omxCompleteExpectation(ox->submodels[ex]);
-	}
 
 	ox->initFun(ox);
 
@@ -270,8 +243,6 @@ void omxCompleteExpectation(omxExpectation *ox) {
 		}
 		mxLogBig(msg);
 	}
-
-	ox->isComplete = TRUE;
 }
 
 static void defaultSetVarGroup(omxExpectation *ox, FreeVarGroup *fvg)
@@ -323,3 +294,11 @@ void omxExpectationPrint(omxExpectation* ox, char* d) {
 		mxLog("(Expectation, type %s) ", (ox->expType==NULL?"Untyped":ox->expType));
 	}
 }
+
+void complainAboutMissingMeans(omxExpectation *off)
+{
+	omxRaiseErrorf("%s: raw data observed but no expected means "
+		       "vector was provided. Add something like mxPath(from = 'one',"
+		       " to = manifests) to your model.", off->name);
+}
+

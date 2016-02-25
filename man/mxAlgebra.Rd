@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 \name{mxAlgebra}
 \alias{mxAlgebra}
 \alias{p2z}
+\alias{logp2z}
+\alias{lgamma1p}
 \alias{\%&\%}
 \alias{\%^\%}
 
@@ -26,7 +28,8 @@
 }
 
 \usage{
-mxAlgebra(expression, name = NA, dimnames = NA, ..., fixed = FALSE)
+mxAlgebra(expression, name = NA, dimnames = NA, ..., fixed = FALSE,
+          joinKey=as.character(NA), joinModel=as.character(NA))
 }
 
 \arguments{
@@ -41,6 +44,10 @@ mxAlgebra(expression, name = NA, dimnames = NA, ..., fixed = FALSE)
    \item{fixed}{If TRUE, this algebra will not be recomputed
      automatically when things it depends on change. \link{mxComputeOnce}
      can be used to force it to recompute.}
+\item{joinKey}{The name of the column in current model's raw data that
+  is used as a foreign key to match against the primary key in
+  joinModel's raw data.}
+\item{joinModel}{The name of the model that this matrix joins against.}
 }
 
 \details{
@@ -67,7 +74,7 @@ Operators
 \item{\code{*}}{Elementwise product}
 \item{\code{/}}{Elementwise division}
 \item{\code{\%x\%}}{Kronecker product}
-\item{\code{\%&\%}}{Quadratic product}
+\item{\code{\%&\%}}{Quadratic product: pre- and post-multiply B by A and its transpose t(A), i.e: A \code{\%&\%} B ==  A \code{\%*\%} B \code{\%*\%} t(A)}
 }
 
 Functions
@@ -80,21 +87,30 @@ Functions
 \item{\code{det}}{Determinant}
 \item{\code{tr}}{Trace}
 \item{\code{sum}}{Sum}
+\item{\code{mean}}{Arithmetic mean}
 \item{\code{prod}}{Product}
 \item{\code{max}}{Maximum}
 \item{\code{min}}{Min}
 \item{\code{abs}}{Absolute value}
 \item{\code{sin}}{Sine}
 \item{\code{sinh}}{Hyperbolic sine}
+\item{\code{asin}}{Arcsine}
+\item{\code{asinh}}{Inverse hyperbolic sine}
 \item{\code{cos}}{Cosine}
 \item{\code{cosh}}{Hyperbolic cosine}
+\item{\code{acos}}{Arccosine}
+\item{\code{acosh}}{Inverse hyperbolic cosine}
 \item{\code{tan}}{Tangent}
 \item{\code{tanh}}{Hyperbolic tangent}
+\item{\code{atan}}{Arctangent}
+\item{\code{atanh}}{Inverse hyperbolic tangent}
 \item{\code{exp}}{Exponent}
 \item{\code{log}}{Natural Logarithm}
 \item{\code{sqrt}}{Square root}
 \item{\code{p2z}}{\emph{Standard}-normal quantile}
+\item{\code{logp2z}}{\emph{Standard}-normal quantile from log probabilities}
 \item{\code{lgamma}}{Log-gamma function}
+\item{\code{lgamma1p}}{Compute log(gamma(x+1)) accurately for small x}
 \item{\code{\link{eigenval}}}{Eigenvalues of a square matrix. Usage: eigenval(x); eigenvec(x); ieigenval(x); ieigenvec(x)}
 \item{\code{\link{rvectorize}}}{Vectorize by row}
 \item{\code{\link{cvectorize}}}{Vectorize by column}
@@ -115,7 +131,20 @@ Functions
 \item{\code{\link[=omxLogical]{omxGreaterThan}}}{Perform binary greater on two matrices}
 \item{\code{\link[=omxLogical]{omxLessThan}}}{Perform binary less than on two matrices}
 \item{\code{\link[=omxLogical]{omxApproxEquals}}}{Perform binary equals to (within a specified epsilon) on two matrices}
-}}
+\item{\code{\link[OpenMx:omxSelectRowsAndCols]{omxSelectRows}}}{Filter rows from a matrix}
+\item{\code{\link[OpenMx:omxSelectRowsAndCols]{omxSelectCols}}}{Filter columns from a matrix}
+\item{\code{\link[OpenMx:omxSelectRowsAndCols]{omxSelectRowsAndCols}}}{Filter rows and columns from a matrix}
+}
+
+There are also several multiargument functions usable in MxAlgebras, which apply themselves elementwise to the matrix provided as their first argument.  These functions have slightly different usage from their \R counterparts.  Their result is always a matrix with the same dimensions as that provided for their first argument.  Values must be provided for ALL arguments of these functions, in order.  Provide zeroes as logical values of \code{FALSE}, and non-zero numerical values as logical values of \code{TRUE}.  For most of these functions, OpenMx cycles over values of arguments other than the first, by column (i.e., in column-major order), to the length of the first argument.  Notable exceptions are the \code{log}, \code{log.p}, and \code{lower.tail} arguments to probability-distribution-related functions, for which only the [1,1] element is used.  It is recommended that all arguments after the first be either (1) scalars, or (2) matrices with the same dimensions as the first argument.
+\tabular{ccl}{
+Function \tab Arguments \tab Notes \cr
+\code{dbeta} \tab \code{x,shape1,shape2,ncp,log} \tab The algorithm for the non-central beta distribution is used for non-negative values of \code{ncp}.  Negative \code{ncp} values are ignored, and the algorithm for the central beta distribution is used. \cr
+\code{pbeta} \tab \code{x,shape1,shape2,ncp,lower.tail,log.p} \tab Values of \code{ncp} are handled as with \code{dbeta()}.\cr
+\code{besselJ} & \code{besselY} \tab \code{x,nu} \tab  \cr
+\code{besselI} & \code{besselK} \tab \code{x,nu,expon.scaled} \tab Note that OpenMx \emph{does} cycle over the elements of \code{expon.scaled}. \cr
+}
+}
 
 \value{
     Returns a new \link{MxAlgebra} object.

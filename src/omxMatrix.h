@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -47,12 +47,26 @@ struct populateLocation {
 };
 
 class omxMatrix {
-/* For inclusion in(or of) other matrices */
-	std::vector< populateLocation > populate;
+	std::vector< populateLocation > populate;  // For inclusion of values from other matrices
+	// Note: some overlap with FreeVarGroup::cacheDependencies
+	bool dependsOnParametersCache;    // Ignores free variable groups
+	bool dependsOnDefVarCache;
+	int joinKey;
+	struct omxExpectation *joinModel;
  public:
+	omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1), joinModel(0) {};
+	void setDependsOnParameters() { dependsOnParametersCache = true; };
+	void setDependsOnDefinitionVariables() { dependsOnDefVarCache = true; };
+	bool dependsOnParameters() const { return dependsOnParametersCache; };
+	bool dependsOnDefinitionVariables() const { return dependsOnDefVarCache; };
+	bool hasPopulateSubstitutions() const { return populate.size(); };
 	void transposePopulate();
+	void setJoinInfo(SEXP Rmodel, SEXP Rkey);
 	void omxProcessMatrixPopulationList(SEXP matStruct);
 	void omxPopulateSubstitutions(int want, FitContext *fc);
+	void markPopulatedEntries();
+	int getJoinKey() const { return joinKey; }
+	struct omxExpectation *getJoinModel() const { return joinModel; }
 										//TODO: Improve encapsulation
 /* Actually Useful Members */
 	int rows, cols;						// Matrix size  (specifically, its leading edge)
@@ -62,10 +76,6 @@ class omxMatrix {
 	int matrixNumber;					// the offset into the matrices or algebras arrays
 
 	SEXP owner;	// The R object owning data or NULL if we own it.
-
-	// size of allocated memory of data pointer
-	int originalRows;
-	int originalCols;
 
 /* For BLAS Multiplication Speedup */ 	// TODO: Replace some of these with inlines or macros.
 	const char* majority;				// Filled by compute(), included for speed
@@ -77,6 +87,9 @@ class omxMatrix {
 	omxState* currentState;				// Optimizer State
 	unsigned cleanVersion;
 	unsigned version;
+
+	int originalRows; //deprecated
+	int originalCols; //deprecated
 
 /* For Algebra Functions */				// At most, one of these may be non-NULL.
 	omxAlgebra* algebra;				// If it's not an algebra, this is NULL.
@@ -90,7 +103,8 @@ class omxMatrix {
 	std::vector<const char *> colnames;
 
 	friend void omxCopyMatrix(omxMatrix *dest, omxMatrix *src);  // turn into method later TODO
-	void setNotConstant();
+	void unshareMemroyWithR();
+	void loadDimnames(SEXP dimnames);
 	const char *getType() const {
 		const char *what = "matrix";
 		if (algebra) what = "algebra";
@@ -139,8 +153,8 @@ void omxEnsureColumnMajor(omxMatrix *mat);
 void omxRecompute(omxMatrix *matrix, FitContext *fc);
 
 
-void omxRemoveElements(omxMatrix *om, int numRemoved, int removed[]);
-void omxRemoveRowsAndColumns(omxMatrix* om, int numRowsRemoved, int numColsRemoved, int rowsRemoved[], int colsRemoved[]);
+void omxRemoveElements(omxMatrix *om, int removed[]);
+void omxRemoveRowsAndColumns(omxMatrix *om, int rowsRemoved[], int colsRemoved[]);
 
 /* Matrix-Internal Helper functions */
 	void omxMatrixLeadingLagging(omxMatrix *matrix);
@@ -352,7 +366,7 @@ double omxMaxAbsDiff(omxMatrix *m1, omxMatrix *m2);
 
 void checkIncreasing(omxMatrix* om, int column, int count, FitContext *fc);
 
-void omxStandardizeCovMatrix(omxMatrix* cov, double* corList, double* weights);
+void omxStandardizeCovMatrix(omxMatrix* cov, double* corList, double* weights, FitContext* fc);
 
 void omxMatrixHorizCat(omxMatrix** matList, int numArgs, omxMatrix* result);
 
@@ -380,21 +394,21 @@ struct EigenVectorAdaptor : Eigen::Map< Eigen::VectorXd > {
 };
 
 template <typename T>
-void mxPrintMat(const char *name, Eigen::DenseBase<T> &mat)
+void mxPrintMat(const char *name, const Eigen::DenseBase<T> &mat)
 {
 	std::string buf;
 	bool transpose = mat.rows() > mat.cols();
 	buf += string_snprintf("%s = %s matrix(c(    # %dx%d",
 			       name, transpose? "t(" : "", mat.rows(), mat.cols());
 
-	int first=TRUE;
+	bool first=true;
 	int rr = mat.rows();
 	int cc = mat.cols();
 	if (transpose) std::swap(rr,cc);
 	for(int j = 0; j < rr; j++) {
 		buf += "\n";
 		for(int k = 0; k < cc; k++) {
-			if (first) first=FALSE;
+			if (first) first=false;
 			else buf += ",";
 			double val;
 			if (transpose) {

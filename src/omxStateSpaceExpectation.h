@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ typedef struct {
 	double oldT;
 	double deltaT;
 	int returnScores; // Whether or not to populated the row-by-row expected means, covariances, Kalman scores, and likelihoods back to R
+	int flagAIsZero; //Whether the A matrix is fixed to zero
 	
 	/* Eigen Matrix initialization */
 	Eigen::MatrixXd eigenExpA;
@@ -49,7 +50,7 @@ void omxRauchTungStriebelSmooth(omxStateSpaceExpectation* ose);
 
 void omxInitStateSpaceExpectation(omxExpectation* ox);
 
-omxMatrix* omxGetStateSpaceExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component);
+omxMatrix* omxGetStateSpaceExpectationComponent(omxExpectation* ox, const char* component);
 
 void omxSetStateSpaceExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component, omxMatrix* om);
 

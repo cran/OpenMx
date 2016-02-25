@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -35,9 +35,9 @@
 setClass(Class = "MxBaseExpectation", 
 	 representation = representation(
 	   data = "MxCharOrNumber",      # filled in during flattening
-	   submodels = "MxOptionalCharOrNumber", # filled in during flattening
-	   container = "MxOptionalCharOrNumber", # filled in during flattening
 	     .runDims = "character",
+	     output = "list",
+	     debug = "list",
 	   "VIRTUAL"),
 	 contains = "MxBaseNamed")
 
@@ -155,10 +155,15 @@ setReplaceMethod("$", "MxBaseExpectation",
 setMethod("names", "MxBaseExpectation", slotNames)
 
 convertExpectationFunctions <- function(flatModel, model, labelsData, dependencies) {
+	# The idea is to split genericExpFunConvert into sanity checking,
+	# which often requires access to the actual objects, and
+	# converting symbolic names into numbers that are easy to deal
+	# with in the backend.
 	retval <- lapply(flatModel@expectations, function(ex) {
-		ex@container <- imxLocateIndex(flatModel, ex@container, ex@name)
-		ex@submodels <- imxLocateIndex(flatModel, ex@submodels, ex@name)
 		genericExpFunConvert(ex, flatModel, model, labelsData, dependencies)
+	})
+	retval <- lapply(retval, function(ex) {
+		genericNameToNumber(ex, flatModel, model)
 	})
 	return(retval)
 }

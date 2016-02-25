@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -132,8 +132,8 @@ setGeneric("imxSquareMatrix", function(.Object) {
 ##' @param byrow byrow
 ##' @param name name
 ##' @param condenseSlots condenseSlots
-##' @param persist persist
-##' @param ... Not used.
+##' @param joinKey joinKey
+##' @param joinModel joinModel
 ##' @aliases
 ##' imxCreateMatrix,MxMatrix-method
 ##' imxCreateMatrix,DiagMatrix-method
@@ -146,7 +146,8 @@ setGeneric("imxSquareMatrix", function(.Object) {
 ##' imxCreateMatrix,UnitMatrix-method
 ##' imxCreateMatrix,ZeroMatrix-method
 setGeneric("imxCreateMatrix", 
-	function(.Object, labels, values, free, lbound, ubound, nrow, ncol, byrow, name, condenseSlots, persist, ...) {
+	   function(.Object, labels, values, free, lbound, ubound, nrow, ncol, byrow, name,
+		    condenseSlots, joinKey, joinModel) {
 		return(standardGeneric("imxCreateMatrix"))
 })
 
@@ -161,12 +162,14 @@ setClass(Class = "MxMatrix",
     values = "matrix", labels = "matrix", free = "matrix", 
     lbound = "matrix", ubound = "matrix",
 		.squareBrackets = "matrix", .persist = "logical", .condenseSlots="logical",
-		display = "character", dependencies = "integer",
+	    display = "character", dependencies = "integer",
+	    joinModel = "MxCharOrNumber",
+	    joinKey = "MxCharOrNumber",
 	  "VIRTUAL"))
 
 setMethod("imxCreateMatrix", "MxMatrix",
-	function(.Object, labels, values, free, lbound, ubound, nrow, ncol, byrow, name, 
-           condenseSlots=getOption('mxCondenseMatrixSlots'), persist=TRUE, ...) {
+	function(.Object, labels, values, free, lbound, ubound, nrow, ncol, byrow, name,
+		    condenseSlots, joinKey, joinModel) {
 	  .Object@.condenseSlots <- condenseSlots
     .Object <- populateMatrixSlot(.Object, "values", values, nrow, ncol)
     if(condenseSlots && all.false(free) && all.na(labels)){
@@ -182,7 +185,9 @@ setMethod("imxCreateMatrix", "MxMatrix",
     if(condenseSlots && all.na(ubound)){.Object <- populateMatrixSlot(.Object, "ubound", as.numeric(NA), 1, 1)}
     else{.Object <- populateMatrixSlot(.Object, "ubound", ubound, nrow, ncol)}
 		.Object@name <- name
-    .Object@.persist <- persist
+	  .Object@.persist <- TRUE
+	  .Object@joinKey <- joinKey
+	  .Object@joinModel <- joinModel
 		return(.Object)
 	}
 )	
@@ -482,7 +487,11 @@ matrixCheckDims <- function(type, values, free, labels, lbound, ubound, nrow, nc
 mxMatrix <- function(type = "Full", nrow = NA, ncol = NA, 
 	free = FALSE, values = NA, labels = NA, 
 	lbound = NA, ubound = NA, byrow = getOption('mxByrow'), 
-	dimnames = NA, name = NA, condenseSlots=getOption('mxCondenseMatrixSlots')) {
+		     dimnames = NA, name = NA, condenseSlots=getOption('mxCondenseMatrixSlots'),
+		     ..., joinKey=as.character(NA), joinModel=as.character(NA)) {
+	if (length(list(...)) > 0) {
+		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
+	}
 	if (missing(dimnames) && !missing(values) && !is.null(dimnames(values))) {
 		dimnames <- dimnames(values)
 	}
@@ -529,7 +538,8 @@ mxMatrix <- function(type = "Full", nrow = NA, ncol = NA,
 	typeName <- paste(type, "Matrix", sep="")
 	newMatrix <- new(typeName)
 	newMatrix <- imxCreateMatrix(newMatrix, labels, values, 
-		free, lbound, ubound, nrow, ncol, byrow, name, condenseSlots)
+		free, lbound, ubound, nrow, ncol, byrow, name, condenseSlots,
+				     joinKey=joinKey, joinModel=joinModel)
 	if(length(dimnames) == 1 && is.na(dimnames)) {
 	} else {
 		dimnames(newMatrix) <- dimnames
@@ -758,6 +768,47 @@ generateMatrixValuesHelper <- function(mxMatrix) {
 	return(mxMatrix@values)
 }
 
+#' Resize an MxMatrix while preserving entries
+#'
+#' @param matrix the MxMatrix to resize
+#' @param dimnames desired dimnames for the new matrix
+#' @return a resized MxMatrix
+#' @examples
+#' m1 <- mxMatrix(values=1:9, nrow=3, ncol=3,
+#'                dimnames=list(paste0('r',1:3), paste0('c',1:3)))
+#' 
+#' imxGentleResize(m1, dimnames=list(paste0('r',c(1,3,5)),
+#'                                   paste0('c',c(2,4,6))))
+imxGentleResize <- function(matrix, dimnames) {
+	if (identical(dimnames(matrix), dimnames)) return(matrix)
+
+	nm <- new(class(matrix))
+	nm@name <- matrix@name
+	nm@joinKey <- matrix@joinKey
+	nm@joinModel <- matrix@joinModel
+	nm@.condenseSlots <- matrix@.condenseSlots
+	rn <- dimnames[[1]]
+	cn <- dimnames[[2]]
+	sharedRn <- intersect(rn, rownames(matrix))
+	sharedCn <- intersect(cn, colnames(matrix))
+	for (layer in c('values', 'labels', 'free', 'lbound', 'ubound')) {
+		l1 <- slot(matrix, layer)
+		if (matrix@.condenseSlots && all(dim(l1) == 1) && is.null(dimnames(l1))) {
+			nm <- l1
+		} else {
+			if (layer == 'free')        { val <- FALSE }
+			else if (layer == 'labels') { val <- as.character(NA) }
+			else if (layer == 'values') { val <- 0.0 }
+			else                        { val <- as.numeric(NA) }
+			l2 <- matrix(val, length(rn), length(cn), dimnames=dimnames)
+			l2[sharedRn, sharedCn] <- l1[sharedRn, sharedCn]
+		}
+		slot(nm, layer) <- l2
+	}
+	imxVerifyMatrix(nm)
+	return(nm)
+}
+
 displayMatrix <- function(mxMatrix) {
 	type <- class(mxMatrix)[[1]]
 	cat(type, omxQuotes(mxMatrix@name), '\n')
@@ -794,6 +845,12 @@ displayMatrix <- function(mxMatrix) {
 		cat("\n")
 	} else {
 		cat("$ubound: No upper bounds assigned.\n\n")
+	}
+	if (.hasSlot(mxMatrix, 'joinModel') && !is.na(mxMatrix@joinModel)) {
+		cat("$joinModel : ", omxQuotes(mxMatrix@joinModel), fill=TRUE)
+	}
+	if (.hasSlot(mxMatrix, 'joinKey') && !is.na(mxMatrix@joinKey)) {
+		cat("$joinKey : ", omxQuotes(mxMatrix@joinKey), fill=TRUE)
 	}
 }
 

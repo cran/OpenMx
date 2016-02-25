@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ typedef struct {
 } omxNormalExpectation;
 
 void omxInitNormalExpectation(omxExpectation* oo);
-omxMatrix* omxGetNormalExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component);
+omxMatrix* omxGetNormalExpectationComponent(omxExpectation* ox, const char* component);
 // void omxProcessThresholds();
 
 #endif /* _OMX_NORMAL_EXPECTATION_H_ */

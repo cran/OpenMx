@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 
 \usage{
    mxData(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=NA,
-          thresholds=NA, ..., sort=TRUE)
+          thresholds=NA, ..., sort=NA, primaryKey = as.character(NA))
 }
 
 \arguments{
@@ -36,7 +36,9 @@
    \item{fullWeight}{Full asymptotic covariance matrix of observed, means, and thresholds.  Used for weighted least squares in standard error and quasi-chi-squared calculation.}
    \item{thresholds}{Observed thresholds.  Used for weighted least squares with ordinal data.}
    \item{...}{Not used. Forces remaining arguments to be specified by name.}
-   \item{sort}{Whether to sort raw data prior to use (default TRUE)}
+   \item{sort}{Whether to sort raw data prior to use (default NA)}
+   \item{primaryKey}{The column name of the primary key used to uniquely
+   identify rows (default NA)}
 }
 
 \details{
@@ -49,7 +51,7 @@ The mxData function creates \link{MxData} objects, which can be used as argument
 
 \item{cor}{The contents of the \sQuote{observed} argument are treated as a correlation matrix. The \sQuote{means} argument is not required, but may be included for estimations involving means. The \sQuote{numObs} argument is required, which should reflect the number of observations or rows in the data described by the covariance matrix. Data of this type may use the fit functions such as \link{mxFitFunctionML} functions, depending on the specified model.}
 
-\item{acov}{The contents of the \sQuote{observed} argument are treated as the polychoric correlation matrix of the ordinal variables. The \sQuote{means} argument is not required, but may be included for estimations involving means.  The \sQuote{thresholds} argument is not required, but may be included for estimations involving thresholds and ordinal variables. The \sQuote{numObs} argument is required, which should reflect the number of observations or rows in the data described by the polychoric correlation matrix. Data of this type may use the fit functions such as \link{mxFitFunctionWLS} functions, depending on the specified model.}
+\item{acov}{The best way to have data of the type is to use the \link{mxDataWLS} function.  The contents of the \sQuote{observed} argument are treated as the polychoric correlation matrix of the ordinal variables. The \sQuote{means} argument is not required, but may be included for estimations involving means.  The \sQuote{thresholds} argument is not required, but may be included for estimation involving thresholds and ordinal variables. The \sQuote{numObs} argument is required, which should reflect the number of observations or rows in the data described by the polychoric correlation matrix. Data of this type almost certainly use the \link{mxFitFunctionWLS} function, but may depend on the specified model.}
 }
 
 MxData objects may not be included in \link{MxAlgebra} objects or use the \link{mxFitFunctionAlgebra} function. If these capabilities are desired, data should be appropriately input or transformed using the \link{mxMatrix} and \link{mxAlgebra} functions.
@@ -60,7 +62,7 @@ The mxData function does not currently place restrictions on the size, shape, or
 
 OpenMx uses the names of variables to map them onto the expectation functions and other elements associated with your model. For data.frames, ensure you have set the names(). For matrices set names using, for instance, row.names=c(\dQuote{your}, \dQuote{columns}). Covariance and correlation matrices need to have both the row and column names set and these must be identical, for instance by using dimnames=list(varNames, varNames).
 
-
+When a primary key is provided, sorting is disabled. Otherwise, sort defaults to TRUE.
 }
 
 \value{

@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "omxExpectation.h"
 #include "omxFIMLFitFunction.h"
 #include "omxRAMExpectation.h"
+#include "RAMInternal.h"
 #include "omxBuffer.h"
 #include "matrix.h"
 
@@ -59,7 +60,7 @@ static void calcExtraLikelihoods(omxFitFunction *oo, double *saturated_out, doub
 	omxMatrix* cov = state->observedCov;
 	int ncols = state->observedCov->cols;
 
-	*saturated_out = (state->logDetObserved + ncols) * (state->n - 1);
+	*saturated_out = (state->logDetObserved * state->n) + ncols * (state->n - 1);
 
 	// Independence model assumes all-zero manifest covariances.
 	// (det(expected) + tr(observed * expected^-1)) * (n - 1);
@@ -75,7 +76,7 @@ static void calcExtraLikelihoods(omxFitFunction *oo, double *saturated_out, doub
 	}
 	if(OMX_DEBUG) { omxPrint(cov, "Observed:"); }
 
-	*independence_out = (ncols + det) * (state->n - 1);
+	*independence_out = ncols * (state->n - 1) + det * state->n;
 }
 
 static void addOutput(omxFitFunction *oo, MxRList *out)
@@ -136,7 +137,7 @@ struct multi_normal_deriv {
 			++xx;
 		}
 
-		return stan::prob::multi_normal_sufficient_log(omo->n, obMeans, obCov, exMeans, exCov);
+		return stan::prob::multi_normal_sufficient_log<true>(omo->n, obMeans, obCov, exMeans, exCov);
 	}
 };
 
@@ -147,7 +148,7 @@ static void omxCallMLFitFunction(omxFitFunction *oo, int want, FitContext *fc)
 	if (want & (FF_COMPUTE_PARAMFLAVOR)) return;
 
 	omxExpectation* expectation = oo->expectation;
-	omxExpectationCompute(expectation, NULL);
+	omxExpectationCompute(fc, expectation, NULL);
 
 	if ((want & FF_COMPUTE_FIT) &&
 	    !(want & (FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO))) {
@@ -165,12 +166,14 @@ static void omxCallMLFitFunction(omxFitFunction *oo, int want, FitContext *fc)
 				Eigen::VectorXd obMeans = obMeansAdapter;
 				EigenVectorAdaptor exMeansAdapter(omo->expectedMeans);
 				Eigen::VectorXd exMeans = exMeansAdapter;
-				fit = stan::prob::multi_normal_sufficient_log(omo->n, obMeans, obCov, exMeans, exCov);
+				fit = stan::prob::multi_normal_sufficient_log<false>(omo->n, obMeans, obCov, exMeans, exCov);
 			} else {
 				Eigen::VectorXd means(obCov.rows());
 				means.setZero();
-				fit = stan::prob::multi_normal_sufficient_log(omo->n, means, obCov, means, exCov);
+				fit = stan::prob::multi_normal_sufficient_log<false>(omo->n, means, obCov, means, exCov);
 			}
+			using stan::math::LOG_TWO_PI;
+			fit += .5 * omo->n * obCov.rows() * LOG_TWO_PI;
 		} catch (const std::exception& e) {
 			fit = NA_REAL;
 			if (fc) fc->recordIterationError("%s: %s", oo->name(), e.what());
@@ -301,13 +304,50 @@ void omxInitMLFitFunction(omxFitFunction* oo)
 	oo->computeFun = omxCallMLFitFunction;
 	oo->destructFun = omxDestroyMLFitFunction;
 	oo->addOutput = addOutput;
-	oo->populateAttrFun = omxPopulateMLAttributes;
 
 	omxData* dataMat = oo->expectation->data;
 
-	if(strEQ(omxDataType(dataMat), "raw")) {
-		if(OMX_DEBUG) { mxLog("Raw Data: Converting from multivariate Normal ML to FIML"); }
-		omxChangeFitType(oo, "imxFitFunctionFIML");
+	ProtectedSEXP Rfellner(R_do_slot(oo->rObj, Rf_install("fellner")));
+	int wantRowwiseLikelihood = Rf_asInteger(R_do_slot(oo->rObj, Rf_install("vector")));
+
+	bool fellnerPossible = (strEQ(omxDataType(dataMat), "raw") && expectation->numOrdinal == 0 &&
+				strEQ(oo->expectation->expType, "MxExpectationRAM") && !wantRowwiseLikelihood);
+
+	if (Rf_asLogical(Rfellner) == 1 && !fellnerPossible) {
+		Rf_error("%s: fellner requires raw data (have %s), "
+			 "all continuous indicators (%d are ordinal), "
+			 "MxExpectationRAM (have %s), and no row-wise likelihoods (want %d)",
+			 oo->name(), dataMat->getType(), expectation->numOrdinal,
+			 wantRowwiseLikelihood, expectation->name);
+	}
+
+	if (strEQ(omxDataType(dataMat), "raw")) {
+		int useFellner = Rf_asLogical(Rfellner);
+		if (strEQ(oo->expectation->expType, "MxExpectationRAM")) {
+			omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+			if (ram->between.size()) {
+				if (useFellner == 0) {
+					Rf_error("%s: fellner=TRUE is required for %s",
+						 oo->name(), expectation->name);
+				}
+				useFellner = 1;
+			}
+		}
+
+		// Cannot enable unconditionally because performance
+		// suffers with models that make heavy use of defvars
+		// such as continuous time models.
+		//
+		//if (useFellner == NA_LOGICAL && fellnerPossible) useFellner = 1;
+
+		const char *to;
+		if (useFellner == 1) {
+			to = "imxFitFunctionFellner";
+		} else {
+			to = "imxFitFunctionFIML";
+		}
+		if(OMX_DEBUG) { mxLog("Raw Data: Converting from %s to %s", oo->fitType, to); }
+		omxChangeFitType(oo, to);
 		omxCompleteFitFunction(oo->matrix);
 		return;
 	}
@@ -319,6 +359,7 @@ void omxInitMLFitFunction(omxFitFunction* oo)
 
 	MLFitState *newObj = new MLFitState;
 	oo->argStruct = (void*)newObj;
+	oo->populateAttrFun = omxPopulateMLAttributes;
 
 	if(OMX_DEBUG) { mxLog("Processing Observed Covariance."); }
 	newObj->observedCov = omxDataCovariance(dataMat);
@@ -328,8 +369,8 @@ void omxInitMLFitFunction(omxFitFunction* oo)
 	if(OMX_DEBUG) { mxLog("Processing n."); }
 	newObj->n = omxDataNumObs(dataMat);
 
-	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, oo, "cov");
-	newObj->expectedMeans = omxGetExpectationComponent(oo->expectation, oo, "means");
+	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
+	newObj->expectedMeans = omxGetExpectationComponent(oo->expectation, "means");
 
 	if(newObj->expectedCov == NULL) {
 		omxRaiseError("Developer Error in ML-based fit function object: ML's expectation must specify a model-implied covariance matrix.\nIf you are not developing a new expectation type, you should probably post this to the OpenMx forums.");

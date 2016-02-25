@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 
 
 require(OpenMx)
+
+"%&%" <- OpenMx::"%&%"  # ensure we don't use the %&% from Matrix
 
 A <- mxMatrix(values = runif(25), nrow = 5, ncol = 5, name = 'A')
 B <- mxMatrix(values = runif(25), nrow = 5, ncol = 5, name = 'B')
@@ -250,6 +252,30 @@ model <- mxModel(model, mxAlgebra(omxSelectRowsAndCols(t(O),t(N)%x%5), name='tes
 model <- mxModel(model, mxAlgebra(logm(A), name = 'test68a'))
 model <- mxModel(model, mxAlgebra(logm(B), name = 'test68b'))
 model <- mxModel(model, mxAlgebra(logm(I), name = 'test68c'))
+model <- mxModel(model, mxAlgebra(asin(A),name="test69a"))
+model <- mxModel(model, mxAlgebra(acos(A),name="test69b"))
+model <- mxModel(model, mxAlgebra(atan(A),name="test69c"))
+model <- mxModel(model, mxAlgebra(lgamma(A),name="test70"))
+model <- mxModel(model, mxAlgebra(p2z(A),name="test71a"))
+model <- mxModel(model, mxAlgebra(asinh(A),name="test72a"))
+model <- mxModel(model, mxAlgebra(acosh(D),name="test72b"))
+model <- mxModel(model, mxAlgebra(atanh(A),name="test72c"))
+model <- mxModel(model, mxAlgebra(lgamma1p(A),name="test73"))
+model <- mxModel(model, mxAlgebra(logp2z(log(A)),name="test71b"))
+model <- mxModel(model, mxAlgebra(dbeta(A,A,A,A,A),name="test74a"))
+model <- mxModel(model, mxAlgebra(pbeta(A,A,A,A,A,A),name="test75a"))
+model <- mxModel(model, mxAlgebra(dbeta(A,1,1,-1,0),name="test74b"))
+model <- mxModel(model, mxAlgebra(pbeta(A,1,1,-1,1,0),name="test75b"))
+model <- mxModel(model, mxAlgebra(dbeta(C,D,D,-1,0),name="test74c"))
+model <- mxModel(model, mxAlgebra(pbeta(C,D,D,-1,1,0),name="test75c"))
+model <- mxModel(model, mxAlgebra(besselI(A,A,A),name="test76a"))
+model <- mxModel(model, mxAlgebra(besselI(C,D,0),name="test76b"))
+model <- mxModel(model, mxAlgebra(besselJ(A,A),name="test77a"))
+model <- mxModel(model, mxAlgebra(besselJ(C,D),name="test77b"))
+model <- mxModel(model, mxAlgebra(besselK(A,A,A),name="test78a"))
+model <- mxModel(model, mxAlgebra(besselK(C,D,0),name="test78b"))
+model <- mxModel(model, mxAlgebra(besselY(A,A),name="test79a"))
+model <- mxModel(model, mxAlgebra(besselY(C,D),name="test79b"))
 model <- mxRun(model)
 
 # Check passing tests
@@ -465,3 +491,49 @@ omxCheckCloseEnough(model[['test67f']]$result, mxEval(omxSelectRowsAndCols(t(O),
 omxCheckCloseEnough(model[['test68a']]$result, mxEval(logm(A), model), .001)
 omxCheckCloseEnough(model[['test68b']]$result, mxEval(logm(B), model), .001)
 omxCheckCloseEnough(model[['test68c']]$result, mxEval(logm(I), model), .001)
+omxCheckCloseEnough(model[['test69a']]$result, asin(A$values), .001)
+omxCheckCloseEnough(model[['test69b']]$result, acos(A$values), .001)
+omxCheckCloseEnough(model[['test69c']]$result, atan(A$values), .001)
+omxCheckCloseEnough(model[['test70']]$result, lgamma(A$values), .001)
+omxCheckCloseEnough(model[['test71a']]$result, qnorm(p=(A$values)), .001)
+omxCheckCloseEnough(model[['test72a']]$result, asinh(A$values), .001)
+omxCheckCloseEnough(model[['test72b']]$result, acosh(D$values), .001)
+omxCheckCloseEnough(model[['test72c']]$result, atanh(A$values), .001)
+omxCheckCloseEnough(model[['test73']]$result, lgamma(A$values+1), .001)
+omxCheckCloseEnough(model[['test71b']]$result, qnorm(log(A$values),log.p=T), .001)
+omxCheckCloseEnough(model[['test71b']]$result, mxEval(logp2z(log(A)),model,T), .001)
+omxCheckCloseEnough(model[['test74a']]$result, dbeta(x=A$values,shape1=A$values,shape2=A$values,ncp=A$values,log=T), 
+										.001)
+omxCheckCloseEnough(model[['test74a']]$result, mxEval(dbeta(A,A,A,A,T),model,T), .001)
+omxCheckCloseEnough(model[['test75a']]$result, pbeta(q=A$values,shape1=A$values,shape2=A$values,ncp=A$values,
+																										lower.tail=T,log.p=T),.001)
+omxCheckCloseEnough(model[['test75a']]$result, mxEval(pbeta(A,A,A,A,T,T),model,T), .001)
+omxCheckCloseEnough(model[['test74b']]$result, dbeta(A$values,1,1), .001)
+omxCheckCloseEnough(model[['test75b']]$result, pbeta(A$values,1,1), .001)
+omxCheckCloseEnough(model[['test74c']]$result, dbeta(C$values,D$values,D$values), .001)
+omxCheckCloseEnough(model[['test75c']]$result, pbeta(C$values,D$values,D$values), .001)
+omxCheckCloseEnough(model[['test76a']]$result, besselI(A$values,A$values,A$values), .001)
+omxCheckCloseEnough(model[['test76b']]$result, besselI(C$values,D$values,0), .001)
+omxCheckCloseEnough(model[['test77a']]$result, besselJ(A$values,A$values), .001)
+omxCheckCloseEnough(model[['test77b']]$result, besselJ(C$values,D$values), .001)
+omxCheckCloseEnough(model[['test78a']]$result, besselK(A$values,A$values,A$values), .001)
+omxCheckCloseEnough(model[['test78b']]$result, besselK(C$values,D$values,0), .001)
+omxCheckCloseEnough(model[['test79a']]$result, besselY(A$values,A$values), .001)
+omxCheckCloseEnough(model[['test79b']]$result, besselY(C$values,D$values), .001)
+
+# Check internal function for definition variables
+m0 <- mxModel()
+omxCheckTrue(!imxHasDefinitionVariable(m0))
+m1 <- mxModel(mxMatrix('Full', 1, 1, labels='data.blah'))
+omxCheckTrue(!imxHasDefinitionVariable(m1)) # still has no data
+m2 <- mxModel(m1, mxData(matrix(0, 1, 1), 'raw'))
+omxCheckTrue(imxHasDefinitionVariable(m2))
+m3 <- mxModel(name='b', m1)
+omxCheckTrue(!imxHasDefinitionVariable(m3)) # submodel behavior
+m3 <- mxModel(name='b', m2)
+omxCheckTrue(imxHasDefinitionVariable(m3))
+m4 <- mxModel(mxAlgebra(data.x1 %x% V, name='bob'), mxData(matrix(0, 1, 1), 'raw'))
+omxCheckTrue(imxHasDefinitionVariable(m4)) # algebra
+
+# ensure model$output is correctly populated
+omxCheckCloseEnough(dim(model$output$algebras[['model.test0']]), c(5,5), 1)

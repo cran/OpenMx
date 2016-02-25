@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -56,6 +56,15 @@ The \sQuote{filteredDataRow} is populated in a row-by-row fashion with all the n
 
 \value{
 Returns a new MxFitFunctionRow object. Only one MxFitFunction object should be included in each model.  There is no need for an MxExpectation object when using mxFitFunctionRow.
+}
+
+\seealso{
+Other fit functions:
+\code{\link{mxFitFunctionMultigroup}}, \code{\link{mxFitFunctionML}}, 
+\code{\link{mxFitFunctionWLS}}, \code{\link{mxFitFunctionAlgebra}}, 
+\code{\link{mxFitFunctionGREML}}, \code{\link{mxFitFunctionR}} 
+
+More information about the OpenMx package may be found \link[=OpenMx]{here}. 
 }
 
 \references{

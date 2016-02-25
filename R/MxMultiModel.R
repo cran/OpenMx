@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -213,13 +213,6 @@ collectExpectationsHelper <- function(model, namespace, defaultData) {
 	if (length(model@submodels) > 0) {
 		submodel_expectations <- lapply(model@submodels, collectExpectationsHelper, namespace, defaultData)		
 		submodel_expectations <- unlist(submodel_expectations, recursive = FALSE, use.names = FALSE)
-		submodel_expectations <- lapply(submodel_expectations, function (e) {
-			e@container <- container
-			e
-		})
-		if (!is.null(expectation)) {
-			expectation@submodels <- unlist(sapply(submodel_expectations, function(e) e@name))
-		}
 	}
 	return(c(expectation, submodel_expectations))
 }

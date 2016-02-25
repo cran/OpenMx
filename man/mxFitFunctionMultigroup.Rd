@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ The mxFitFunctionMultigroup creates a fit function consisting of the sum of the 
 statistics from a list of submodels provided.  Thus, it aggregates fit statistics from multiple submodels.
 
 This is conceptually similar to creating an \link{mxAlgebra} consisting of the sum of 
-the subModel objectives and also creating an algebra fit function to optimize the
+the subModel objectives and also creating an \link{mxFitFunctionAlgebra} to optimize the
 model based on this aggregate value.
 
 This call to mxFitFunctionMultigroup:
@@ -64,6 +64,16 @@ as:
 
     \code{modelName.fitfunction}
 
+}
+
+\seealso{
+Other fit functions:
+\code{\link{mxFitFunctionML}}, 
+\code{\link{mxFitFunctionWLS}}, \code{\link{mxFitFunctionAlgebra}}, 
+\code{\link{mxFitFunctionGREML}}, \code{\link{mxFitFunctionR}}, 
+\code{\link{mxFitFunctionRow}}
+
+More information about the OpenMx package may be found \link[=OpenMx]{here}. 
 }
 
 

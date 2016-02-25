@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -76,8 +76,6 @@ void omxDuplicateAlgebra(omxMatrix* tgt, omxMatrix* src, omxState* newState) {
 
     if(src->algebra != NULL) {
 	    omxFillMatrixFromMxAlgebra(tgt, src->algebra->sexpAlgebra, src->nameStr, NULL);
-	    tgt->algebra->rownames = src->algebra->rownames;
-	    tgt->algebra->colnames = src->algebra->colnames;
     } else if(src->fitFunction != NULL) {
         omxDuplicateFitMatrix(tgt, src, newState);
     }
@@ -96,9 +94,38 @@ void omxFreeAlgebraArgs(omxAlgebra *oa) {
 	oa->matrix = NULL;
 }
 
-void omxAlgebraRecompute(omxAlgebra *oa, FitContext *fc)
+void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 {
-	for(int j = 0; j < oa->numArgs; j++) omxRecompute(oa->algArgs[j], fc);
+	omxAlgebra *oa = mat->algebra;
+
+	if (want & FF_COMPUTE_INITIAL_FIT) {
+		bool fvDep = false;
+		bool dvDep = false;
+		for(int j = 0; j < oa->numArgs; j++) {
+			if (oa->algArgs[j]->dependsOnParameters()) {
+				if (OMX_DEBUG && !fvDep) {
+					mxLog("Algebra %s depends on free parameters "
+					      "because of argument[%d] %s",
+					      mat->name(), j, oa->algArgs[j]->name());
+				}
+				fvDep = true;
+			}
+			if (oa->algArgs[j]->dependsOnDefinitionVariables()) {
+				if (OMX_DEBUG && !dvDep) {
+					mxLog("Algebra %s depends on definition variables "
+					      "because of argument[%d] %s",
+					      mat->name(), j, oa->algArgs[j]->name());
+				}
+				dvDep = true;
+			}
+		}
+		if (fvDep) mat->setDependsOnParameters();
+		if (dvDep) mat->setDependsOnDefinitionVariables();
+	}
+
+	for(int j = 0; j < oa->numArgs; j++) {
+		omxRecompute(oa->algArgs[j], fc);
+	}
 	if (isErrorRaised()) return;
 
 	if(oa->funWrapper == NULL) {
@@ -213,38 +240,7 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 	}
 	om->nameStr     = name;
 	oa->sexpAlgebra = algebra;
-
-	if (dimnames && !Rf_isNull(dimnames)) {
-		SEXP names;
-		if (Rf_length(dimnames) >= 1) {
-			ScopedProtect p1(names, VECTOR_ELT(dimnames, 0));
-			if (!Rf_isNull(names) && !Rf_isString(names)) {
-				Rf_warning("rownames for algebra '%s' is of "
-					   "type '%s' instead of a string vector (ignored)",
-					   name.c_str(), Rf_type2char(TYPEOF(names)));
-			} else {
-				int nlen = Rf_length(names);
-				oa->rownames.resize(nlen);
-				for (int nx=0; nx < nlen; ++nx) {
-					oa->rownames[nx] = CHAR(STRING_ELT(names, nx));
-				}
-			}
-		}
-		if (Rf_length(dimnames) >= 2) {
-			ScopedProtect p1(names, VECTOR_ELT(dimnames, 1));
-			if (!Rf_isNull(names) && !Rf_isString(names)) {
-				Rf_warning("colnames for algebra '%s' is of "
-					   "type '%s' instead of a string vector (ignored)",
-					   name.c_str(), Rf_type2char(TYPEOF(names)));
-			} else {
-				int nlen = Rf_length(names);
-				oa->colnames.resize(nlen);
-				for (int nx=0; nx < nlen; ++nx) {
-					oa->colnames[nx] = CHAR(STRING_ELT(names, nx));
-				}
-			}
-		}
-	}
+	om->loadDimnames(dimnames);
 }
 
 void omxAlgebraPrint(omxAlgebra* oa, const char* d) {
@@ -253,8 +249,8 @@ void omxAlgebraPrint(omxAlgebra* oa, const char* d) {
 
 omxMatrix* omxMatrixLookupFromState1(SEXP matrix, omxState* os) {
 	int value = 0;
-	omxMatrix* output = NULL;
 
+	if (Rf_length(matrix) == 0) return NULL;
 	if (Rf_isInteger(matrix)) {
 		value = Rf_asInteger(matrix);
 		if(value == NA_INTEGER) {
@@ -269,13 +265,8 @@ omxMatrix* omxMatrixLookupFromState1(SEXP matrix, omxState* os) {
 	} else {
 		Rf_error("Internal Rf_error: unknown type passed to omxMatrixLookupFromState1");
 	}		
-	if (value >= 0) {
-		output = os->algebraList[value];
-	} else {
-		output = os->matrixList[~value];
-	}
-	
-	return output;
+
+	return os->getMatrixFromIndex(value);
 }
 
 omxMatrix* omxNewAlgebraFromOperatorAndArgs(int opCode, omxMatrix* args[], int numArgs, omxState* os) {

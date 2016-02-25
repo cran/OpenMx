@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ setMethod("initialize", "MxExpectationNormal",
 )
 
 setMethod("qualifyNames", signature("MxExpectationNormal"), 
-	function(.Object, modelname, namespace) {
+	  function(.Object, modelname, namespace) {
 		.Object@name <- imxIdentifier(modelname, .Object@name)
 		.Object@covariance <- imxConvertIdentifier(.Object@covariance, 
 			modelname, namespace)
@@ -236,25 +236,55 @@ setMethod("genericGenerateData", signature("MxExpectationNormal"),
 })
 
 generateNormalData <- function(model, nrows){
-	#use generic functions and mvtnorm::rmvnorm() to generate data
-	theMeans <- imxGetExpectationComponent(model, "means")
-	theCov <- imxGetExpectationComponent(model, "covariance")
-	theThresh <- imxGetExpectationComponent(model, "thresholds")
-	data <- mvtnorm::rmvnorm(nrows, theMeans, theCov)
-	colnames(data) <- colnames(theCov)
-	if( prod(dim(theThresh)) != 0){
+	# Check for definition variables
+	if(imxHasDefinitionVariable(model)){
+		if(nrows == nrow(model@data@observed)){
+			# Generate data row by row
+			theCov <- imxGetExpectationComponent(model, "covariance")
+			data <- matrix(NA, nrow=nrows, ncol=ncol(theCov))
+			colnames(data) <- colnames(theCov)
+			data <- as.data.frame(data)
+			for(i in 1:nrows){
+				theMeans <- imxGetExpectationComponent(model, "means", defvar.row=i)
+				theCov <- imxGetExpectationComponent(model, "covariance", defvar.row=i)
+				theThresh <- imxGetExpectationComponent(model, "thresholds", defvar.row=i)
+				data[i,] <- mvtnorm::rmvnorm(1, theMeans, theCov)
+				data[i,] <- ordinalizeDataHelper(data[i,], theThresh)
+			}
+			data <- ordinalizeDataHelper(data, theThresh, cut=FALSE)
+		} else{
+			stop("Definition variable(s) found, but the number of rows in the data do not match the number of rows requested for data generation.")
+		}
+	} else{
+		#use generic functions and mvtnorm::rmvnorm() to generate data
+		theMeans <- imxGetExpectationComponent(model, "means")
+		theCov <- imxGetExpectationComponent(model, "covariance")
+		theThresh <- imxGetExpectationComponent(model, "thresholds")
+		data <- mvtnorm::rmvnorm(nrows, theMeans, theCov)
+		colnames(data) <- colnames(theCov)
 		data <- as.data.frame(data)
-		ordvars <- colnames(theThresh)
+		data <- ordinalizeDataHelper(data, theThresh)
+	}
+	return(data)
+}
+
+ordinalizeDataHelper <- function(data, thresh, cut=TRUE){
+	if( prod(dim(thresh)) != 0){
+		ordvars <- colnames(thresh)
 		for(avar in ordvars){
-			delthr <- theThresh[,avar]
+			delthr <- thresh[,avar]
 			usethr <- !is.na(delthr)
 			delthr <- delthr[usethr]
-			if(!is.null(rownames(theThresh))){
-				levthr <- rownames(theThresh)[usethr]
+			if(!is.null(rownames(thresh))){
+				levthr <- rownames(thresh)[usethr]
 			} else {
 				levthr <- 1:(sum(usethr)+1)
 			}
-			delvar <- cut(as.vector(data[,avar]), c(-Inf, delthr, Inf), labels=levthr)
+			if(cut==TRUE){
+				delvar <- cut(as.vector(data[,avar]), c(-Inf, delthr, Inf), labels=levthr)
+			} else{
+				delvar <- data[,avar]
+			}
 			data[,avar] <- mxFactor(delvar, levels=levthr)
 		}
 	}
@@ -263,7 +293,7 @@ generateNormalData <- function(model, nrows){
 
 mxGenerateData <- function(model, nrows){
 	data <- genericGenerateData(model$expectation, model, nrows)
-	return(data)
+	as.data.frame(data)
 }
 
 verifyExpectedObservedNames <- function(data, covName, flatModel, modelname, objectiveName) {
@@ -429,7 +459,8 @@ verifyObservedNames <- function(data, means, type, flatModel, modelname, expecta
 
 generateDataColumns <- function(flatModel, covNames, dataName) {
 	retval <- c()
-	dataColumnNames <- dimnames(flatModel@datasets[[dataName]]@observed)[[2]]
+	if (length(covNames) == 0) return(retval)
+	dataColumnNames <- colnames(flatModel@datasets[[dataName]]@observed)
 	for(i in 1:length(covNames)) {
 		targetName <- covNames[[i]]
 		index <- match(targetName, dataColumnNames)

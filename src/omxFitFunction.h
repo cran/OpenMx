@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -90,6 +90,7 @@ struct omxFitFunction {					// A fit function
 	bool gradientAvailable;
 	bool hessianAvailable;
 	FitStatisticUnits units;
+	bool canDuplicate;
 
 	void setUnitsFromName(const char *name);
 	const char *name() const { return matrix->name(); }
@@ -126,6 +127,7 @@ void omxInitRFitFunction(omxFitFunction *off);
 void omxInitFitFunctionBA81(omxFitFunction* oo);
 void ba81SetFreeVarGroup(omxFitFunction *oo, FreeVarGroup *fvg);
 void omxInitGREMLFitFunction(omxFitFunction *oo);
+void InitFellnerFitFunction(omxFitFunction *oo);
 
 void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext *fc);
 void loglikelihoodCIFun(omxFitFunction* oo, int ffcompute, FitContext *fc);

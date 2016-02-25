@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2015 The OpenMx Project
+#   Copyright 2007-2016 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -14,25 +14,59 @@
 #   limitations under the License.
 
 
+extractJoinModel <- function(model, matList) {
+	if (length(matList) == 0) return(NULL)
+	rawJoinModel <- sapply(matList, function(x) ifelse(.hasSlot(x, 'joinModel'), x@joinModel, NA))
+	joinModel <- match(paste0(rawJoinModel, imxSeparatorChar, 'expectation'),
+			   names(model@expectations))
+	mismatch <- !is.na(rawJoinModel) & is.na(joinModel)
+	if (any(mismatch)) {
+		matNames <- names(matList)
+		msg <- paste("The references", omxQuotes(rawJoinModel[mismatch]), "do not exist.",
+			     "It is used by", matNames[mismatch])
+		stop(msg, call. = FALSE)
+	}
+	joinModel
+}
+
+extractJoinKey <- function(model, matList) {
+	sapply(matList, function(x) {
+		if (!.hasSlot(x, 'joinKey') || is.na(x@joinKey)) return(NA_integer_)
+		modelName <- unlist(strsplit(x@name, imxSeparatorChar, fixed = TRUE))[1]
+		dataName <- paste0(modelName, imxSeparatorChar, 'data')
+		data <- model@datasets[[ dataName ]]
+		fkCol <- match(x@joinKey, colnames(data@observed))
+		if (is.na(fkCol)) {
+			msg <- paste("Foreign key", omxQuotes(x@joinKey), "not found in ", dataName)
+			stop(msg, call. = FALSE)
+		}
+		fkCol
+	})
+}
+
 generateMatrixList <- function(model) {
 	matvalues <- lapply(model@matrices, generateMatrixValuesHelper)
-	matnames  <- names(model@matrices)
-	names(matvalues) <- matnames
+	if (!length(matvalues)) return(NULL)
+	names(matvalues) <- names(model@matrices)
+	joinModel <- extractJoinModel(model, model@matrices)
+	joinKey <- extractJoinKey(model, model@matrices)
 	references <- generateMatrixReferences(model)
-	retval <- mapply(function(x,y) { c(list(x), y) }, 
-			matvalues, references, SIMPLIFY = FALSE)
+	retval <- mapply(function(x1,x2,x3,x4) { c(list(x1), x2, x3, x4) }, 
+			matvalues, joinModel, joinKey, references, SIMPLIFY = FALSE)
 	return(retval)
 }
 
 generateAlgebraList <- function(model) {
+	joinModel <- extractJoinModel(model, model@algebras)
+	joinKey <- extractJoinKey(model, model@algebras)
 	mNames <- names(model@matrices)
 	aNames <- append(names(model@algebras), names(model@fitfunctions))	
 	mNumbers <- as.list(as.integer(-1 : (-length(mNames))))
 	aNumbers <- as.list(as.integer(0 : (length(aNames) - 1)))
 	names(mNumbers) <- mNames
 	names(aNumbers) <- aNames
-	retval <- lapply(model@algebras, generateAlgebraHelper, 
-		mNumbers, aNumbers)
+	retval <- mapply(generateAlgebraHelper, model@algebras, joinModel, joinKey,
+			 MoreArgs=list(mNumbers, aNumbers), SIMPLIFY=FALSE, USE.NAMES=TRUE)
     return(retval)
 }
 
@@ -246,6 +280,7 @@ updateModelAlgebras <- function(model, flatModel, values) {
 }
 
 updateModelExpectations <- function(model, flatModel, values) {
+	if (length(values) == 0) return(model)
 	eNames <- names(flatModel@expectations)
 	if (length(eNames) != length(values)) {
 		stop(paste("This model has", length(eNames),
@@ -356,6 +391,7 @@ clearModifiedSinceRunRecursive <- function(model) {
 ##' @param referant referant
 imxLocateIndex <- function(model, name, referant) {
 	if (length(name) == 0) return(name)
+#	if (length(name) > 1) browser()
 	if (is.na(name)) { return(as.integer(name)) }
 	mNames <- names(model@matrices)
 	aNames <- names(model@algebras)

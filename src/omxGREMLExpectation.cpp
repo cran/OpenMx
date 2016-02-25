@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ void omxInitGREMLExpectation(omxExpectation* ox){
     casesToDrop_intptr = INTEGER(casesToDrop);
     oge->dropcase.assign(oge->cov->rows,0);
     for(i=0; i < Rf_length(casesToDrop); i++){
-      if(casesToDrop_intptr[i] >= oge->cov->rows){
+      if(casesToDrop_intptr[i] > oge->cov->rows){
         Rf_warning("casesToDrop vector in GREML expectation contains indices greater than the number of datapoints");
         oge->numcases2drop--; 
       }
@@ -156,9 +156,9 @@ void omxInitGREMLExpectation(omxExpectation* ox){
 }
 
 
-void omxComputeGREMLExpectation(omxExpectation* ox, const char *, const char *) {
+void omxComputeGREMLExpectation(omxExpectation* ox, FitContext *fc, const char *, const char *) {
   omxGREMLExpectation* oge = (omxGREMLExpectation*) (ox->argStruct);
-	omxRecompute(oge->cov, NULL);
+	omxRecompute(oge->cov, fc);
   int i=0;
   oge->cholV_fail_om->data[0] = 0;
   oge->cholquadX_fail = 0;
@@ -268,7 +268,7 @@ void omxPopulateGREMLAttributes(omxExpectation *ox, SEXP algebra) {
   
 }
 
-omxMatrix* omxGetGREMLExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component){
+omxMatrix* omxGetGREMLExpectationComponent(omxExpectation* ox, const char* component){
 /* Return appropriate parts of Expectation to the Fit Function */
   if(OMX_DEBUG) { mxLog("GREML expectation: %s requested--", component); }
 
@@ -334,6 +334,9 @@ void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std:
   if(num2drop < 1){ return; }
   
   omxEnsureColumnMajor(om);
+
+  om->originalRows = om->rows;
+  om->originalCols = om->cols;
   
   if(om->algebra == NULL){ //i.e., if omxMatrix is from a frontend MxMatrix
   

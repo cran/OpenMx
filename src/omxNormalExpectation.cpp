@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #include "omxDefines.h"
 #include "omxNormalExpectation.h"
 
-void omxComputeNormalExpectation(omxExpectation* ox, const char *, const char *) {
+void omxComputeNormalExpectation(omxExpectation* ox, FitContext *fc, const char *, const char *) {
 	omxNormalExpectation* one = (omxNormalExpectation*) (ox->argStruct);
 
-	omxRecompute(one->cov, NULL);
+	omxRecompute(one->cov, fc);
 	if(one->means != NULL)
-	    omxRecompute(one->means, NULL);
-	if (one->thresholds) omxRecompute(one->thresholds, NULL);
+	    omxRecompute(one->means, fc);
+	if (one->thresholds) omxRecompute(one->thresholds, fc);
 }
 
 void omxDestroyNormalExpectation(omxExpectation* ox) {
@@ -100,7 +100,7 @@ void omxInitNormalExpectation(omxExpectation* ox) {
 	one->thresholds = omxNewMatrixFromSlot(rObj, currentState, "thresholds");
 }
 
-omxMatrix* omxGetNormalExpectationComponent(omxExpectation* ox, omxFitFunction* off, const char* component){
+omxMatrix* omxGetNormalExpectationComponent(omxExpectation* ox, const char* component){
 /* Return appropriate parts of Expectation to the Fit Function */
 	if(OMX_DEBUG) { mxLog("Normal expectation: %s requested--", component); }
 

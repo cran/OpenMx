@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ void omxDestroyWLSFitFunction(omxFitFunction *oo) {
     omxFreeMatrix(owo->P);
 }
 
-static void omxCallWLSFitFunction(omxFitFunction *oo, int want, FitContext *) {
+static void omxCallWLSFitFunction(omxFitFunction *oo, int want, FitContext *fc) {
 	if (want & (FF_COMPUTE_PREOPTIMIZE)) return;
 
 	if(OMX_DEBUG) { mxLog("Beginning WLS Evaluation.");}
@@ -86,7 +86,7 @@ static void omxCallWLSFitFunction(omxFitFunction *oo, int want, FitContext *) {
 
     /* Recompute and recopy */
 	if(OMX_DEBUG) { mxLog("WLSFitFunction Computing expectation"); }
-	omxExpectationCompute(expectation, NULL);
+	omxExpectationCompute(fc, expectation, NULL);
 
     // TODO: Flatten data only once.
 	flattenDataToVector(oCov, oMeans, oThresh, oFlat);
@@ -216,8 +216,8 @@ void omxInitWLSFitFunction(omxFitFunction* oo) {
 	oo->units = FIT_UNITS_SQUARED_RESIDUAL;
 	
     /* Get Expectation Elements */
-	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, oo, "cov");
-	newObj->expectedMeans = omxGetExpectationComponent(oo->expectation, oo, "means");
+	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
+	newObj->expectedMeans = omxGetExpectationComponent(oo->expectation, "means");
 
     // FIXME: threshold structure should be asked for by omxGetExpectationComponent
 

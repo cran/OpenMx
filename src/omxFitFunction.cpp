@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ static const omxFitFunctionTableEntry omxFitFunctionSymbolTable[] = {
 	{"MxFitFunctionR",					&omxInitRFitFunction, defaultSetFreeVarGroup},
 	{"MxFitFunctionMultigroup", &initFitMultigroup, mgSetFreeVarGroup},
 	{"MxFitFunctionGREML", &omxInitGREMLFitFunction, defaultSetFreeVarGroup},
+	{"imxFitFunctionFellner", &InitFellnerFitFunction, defaultSetFreeVarGroup},
 };
 
 void omxFitFunction::setUnitsFromName(const char *name)

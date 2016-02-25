@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -225,6 +225,17 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 				CSOLNPOpt_minIter(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "Function precision_CSOLNP")) {
 				CSOLNPOpt_FuncPrecision(nextOptionValue);
+			} else if (matchCaseInsensitive(nextOptionName, "RAM Inverse Optimization")) {
+				friendlyStringToLogical(nextOptionName, nextOptionValue, &Global->RAMInverseOpt);
+				//mxLog("inv opt = %s %d", nextOptionValue, Global->RAMInverseOpt);
+			} else if (matchCaseInsensitive(nextOptionName, "RAM Max Depth")) {
+				if (strEQ(nextOptionValue, "NA")) {
+					Global->RAMMaxDepth = NA_INTEGER;
+				} else {
+					Global->RAMMaxDepth = atoi(nextOptionValue);
+				}
+				//mxLog("ram max depth = %s %d", nextOptionValue, Global->RAMMaxDepth);
+			} else if (matchCaseInsensitive(nextOptionName, "Function precision_CSOLNP")) {
 			} else {
 				// ignore
 			}
@@ -348,7 +359,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	std::vector<double> startingValues;
-	omxProcessFreeVarList(varList, &startingValues);
+	globalState->omxProcessFreeVarList(varList, &startingValues);
 	FitContext *fc = new FitContext(globalState, startingValues);
 	Global->fc = fc;
 	fc->copyParamToModelClean();
@@ -369,7 +380,10 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	}
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	omxInitialMatrixAlgebraCompute(globalState, NULL);
+	globalState->omxInitialMatrixAlgebraCompute(fc);
+	if (isErrorRaised()) {
+		Rf_error(Global->getBads());
+	}
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	globalState->omxCompleteMxExpectationEntities();

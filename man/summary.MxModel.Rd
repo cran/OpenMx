@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2015 The OpenMx Project
+%   Copyright 2007-2016 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -13,9 +13,8 @@
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
-\name{summary-MxModel}
-\alias{summary,MxModel-method}
-\alias{summary}
+\name{summary.MxModel}
+\alias{summary.MxModel}
 \alias{mxSummary}
 
 \title{Model Summary}
@@ -26,12 +25,13 @@
 
 
 \usage{
-summary(object, ...)
+\S3method{summary}{MxModel}(object, ..., verbose=FALSE)
 }
 
 \arguments{
    \item{object}{A MxModel object.}
    \item{...}{Any number of named arguments (see below).}
+   \item{verbose}{Whether to include extra diagnostic information.}
 }
 
 \details{

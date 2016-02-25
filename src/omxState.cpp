@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2015 The OpenMx Project
+ *  Copyright 2007-2016 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -83,6 +83,18 @@ int FreeVarGroup::lookupVar(const char *name)
 	return -1;
 }
 
+/* might be useful?
+int FreeVarGroup::lookupVar(int id)
+{
+	std::vector<int>::iterator low =
+		std::lower_bound(vars.begin(), vars.end(), id);
+	if (low == vars.end()) return -1;
+	int got = low - vars.begin();
+	if (vars[got]->id == id) return got;
+	return -1;
+}
+*/
+
 void FreeVarGroup::cacheDependencies(omxState *os)
 {
 	size_t numMats = os->matrixList.size();
@@ -105,7 +117,7 @@ void FreeVarGroup::cacheDependencies(omxState *os)
 
 	for(size_t i = 0; i < numMats; i++) {
 		if (!locations[i]) continue;
-		os->matrixList[i]->setNotConstant();
+		os->matrixList[i]->unshareMemroyWithR();
 	}
 
 	// Everything is set up. This is a good place to log.
@@ -208,6 +220,9 @@ omxGlobal::omxGlobal()
 	gradientTolerance = 1e-6;
 	boundsUpdated = false;
 
+	RAMInverseOpt = true;
+	RAMMaxDepth = 30;
+
 	FreeVarGroup *fvg = new FreeVarGroup;
 	fvg->id.push_back(FREEVARGROUP_ALL);   // all variables
 	freeGroup.push_back(fvg);
@@ -217,9 +232,9 @@ omxGlobal::omxGlobal()
 	freeGroup.push_back(fvg);
 }
 
-const char *omxState::matrixToName(int matnum)
+omxMatrix *omxState::getMatrixFromIndex(int matnum) const
 {
-	return matnum<0? matrixList[~matnum]->name() : algebraList[matnum]->name();
+	return matnum<0? matrixList[~matnum] : algebraList[matnum];
 }
 
 void omxState::setWantStage(int stage)
@@ -324,13 +339,11 @@ void omxState::loadDefinitionVariables(bool start)
 				}
 			}
 		}
-		Eigen::VectorXd oldDefs(e1->defVars.size());
-		oldDefs.setConstant(NA_REAL);
-		e1->handleDefinitionVarList(this, row, oldDefs.data());
+		e1->handleDefinitionVarList(this, row);
 	}
 }
 
-omxState::omxState(omxState *src)
+omxState::omxState(omxState *src, FitContext *fc)
 {
 	init();
 
@@ -355,7 +368,7 @@ omxState::omxState(omxState *src)
 		omxDuplicateAlgebra(algebraList[j], src->algebraList[j], this);
 	}
 
-	omxInitialMatrixAlgebraCompute(this, NULL); // pass in FC TODO
+	omxInitialMatrixAlgebraCompute(fc);
 
 	for(size_t j = 0; j < src->expectationList.size(); j++) {
 		// TODO: Smarter inference for which expectations to duplicate
@@ -748,3 +761,35 @@ const omxFreeVarLocation *omxFreeVar::getLocation(int matrix) const
 
 const omxFreeVarLocation *omxFreeVar::getLocation(omxMatrix *mat) const
 { return getLocation(~mat->matrixNumber); }
+
+const omxFreeVarLocation *omxFreeVar::getOnlyOneLocation(int matrix, bool &moreThanOne) const
+{
+	moreThanOne = false;
+	const omxFreeVarLocation *result = NULL;
+	for (size_t lx=0; lx < locations.size(); lx++) {
+		const omxFreeVarLocation &loc = locations[lx];
+		if (loc.matrix == matrix) {
+			if (result) { moreThanOne = true; return NULL; }
+			result = &loc;
+		}
+	}
+	return result;
+}
+
+const omxFreeVarLocation *omxFreeVar::getOnlyOneLocation(omxMatrix *mat, bool &moreThanOne) const
+{ return getOnlyOneLocation(~mat->matrixNumber, moreThanOne); }
+
+void omxFreeVar::copyToState(omxState *os, double val)
+{
+	for(size_t l = 0; l < locations.size(); l++) {
+		omxFreeVarLocation *loc = &locations[l];
+		omxMatrix *matrix = os->matrixList[loc->matrix];
+		int row = loc->row;
+		int col = loc->col;
+		omxSetMatrixElement(matrix, row, col, val);
+		if (OMX_DEBUG_MATRIX) {
+			mxLog("free var %s, matrix %s[%d, %d] = %f",
+			      name, matrix->name(), row, col, val);
+		}
+	}
+}

@@ -1,7 +1,7 @@
 6b05be98626f05e7106ef2e61cfff381 *CHANGES
-c102b39369e06d98aad06f0db9a66ba3 *DESCRIPTION
+e24ef871f1242722610f51cabe020842 *DESCRIPTION
 7741bbf644cd58098b86d0e2bf5cb4a6 *NAMESPACE
-6a9c2ef672af8d6758276d8511b43e2c *NEWS
+3420f6e856c5bd2c3615bd7cb225b4ec *NEWS
 0c6d1bc7695498fab5eea4544e4bf0b3 *R/0ClassUnion.R
 c5c65a1e2474d23cd65135cc03ea8ab8 *R/DefinitionVars.R
 107993faa2973f475f317db9ce911ff2 *R/DiagMatrix.R
@@ -34,7 +34,7 @@ c5bbc2f999b205b69d338aafc61514a8 *R/MxErrorHandling.R
 b10ecbc52d172c6375d607ab0572325b *R/MxExpectationBA81.R
 4c19daf04912984cd38781e2266dd479 *R/MxExpectationGREML.R
 d0f1818755d362bae982088311437178 *R/MxExpectationLISREL.R
-508f9528bd484e51957338ba31359b33 *R/MxExpectationNormal.R
+a3ca6e54a60a573af03aff726c12197c *R/MxExpectationNormal.R
 093795ab103604fbc4b7b303f0e48aba *R/MxExpectationRAM.R
 5417adbd2c13ec1ca01630f770787968 *R/MxExpectationStateSpace.R
 cd3b333846141b570a10f5dbfd6e5f73 *R/MxExponential.R
@@ -91,7 +91,7 @@ f7116c53a7c8577a0ad72e2772a283e2 *R/MxSquareBracket.R
 2b8a6e638509ffeab4a8a56fa67d6bc9 *R/MxTypes.R
 4ab0cc029ab4137b790af44ce3cb7a53 *R/MxUnitTesting.R
 cdca3cb9e9c462ee37ab5190639f6eb2 *R/MxUntitled.R
-8500d55de4423682401a238372b10253 *R/MxVersion.R
+ad6d75b065d57462e130411a773d9ab5 *R/MxVersion.R
 34345ac1d788efd1ad539e6804b50be5 *R/MxVersion.R.in
 66929df3c576ce067077a401e3944d3c *R/OriginalMx.R
 571ae782e7d58c0ba9b1826d50623961 *R/SdiagMatrix.R
@@ -211,7 +211,7 @@ d1b5f52bbc21bdb65ef1ccf28b0986fd *demo/UnivariateTwinAnalysis_PathRaw.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 ec949d8d3f505ea5d93de216b7df8e2c *demo/mxThreshold.R
 a3de1e047d79314d702b5bed5fd85b6d *demo/omxConstrainMLThresholds.R
-ed1176095fb01ffa90f49be7c120b05a *inst/CITATION
+45e3a4387f28350f9fa9ec9e3122597c *inst/CITATION
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R
 d0455e6008f4dc52746e5418d900b9a8 *inst/models/enormous/RAM-3Factor-192Indicators-covdata-a.R
 e9693b978a952f211eda225973bc8c68 *inst/models/enormous/RAM-3Factor-192Indicators-rawdata-a.R
@@ -226,6 +226,7 @@ ef066cf821288756dddf6c0fe3074ecd *inst/models/enormous/ifa-cyh2011-sim1.R
 7d8e1a088b0e7361a7ff625a2b5dfe4d *inst/models/enormous/invert.R
 0d5550101d142f3263f5cd083feb1861 *inst/models/enormous/lib/stderrlib.R
 428eaa7c5bf33593c1e067388a811f52 *inst/models/enormous/ot2kSim.R
+db523942aa58d2b0d627f2da9f0d78d2 *inst/models/enormous/rampart.R
 7a18e38d3a452ef33bc9711b6fa9743b *inst/models/failing/AlgebraComputeFailing.R
 87098e0be9e52d1e1594cabf81e80cd8 *inst/models/failing/BivariateSaturated_WLSMatrixCov.R
 460c48bc6cf3bb4b38d3d563dbeb4d47 *inst/models/failing/CSOLNPmtcars.R
@@ -436,7 +437,7 @@ f4b23ccdd94fcc96c2d80d2dc0af4469 *inst/models/passing/OrdinalTest.R
 486890681fd9c1091111d5cfd82e4ef3 *inst/models/passing/RAM-FIML-defvars.R
 0ee484719ad3a82118245600e7584dae *inst/models/passing/RAMInverseTest.R
 4fd7c045a20850be60856144dc4cbf60 *inst/models/passing/RAMObjectiveErrors.R
-1e2a3751074386cd5f9808b9209c1533 *inst/models/passing/Rampart1.R
+7bd7169585dccac34478a553a8afde41 *inst/models/passing/Rampart1.R
 6a2a80d35ed3b8db844391efe581a397 *inst/models/passing/RawCov.R
 caac58f78074b5678eafc770f297babe *inst/models/passing/RemoveEntriesTest.R
 8467efebfc58ba9ded9836b3e62804b5 *inst/models/passing/RenameAndSummary.R
@@ -496,6 +497,7 @@ fb4af98e838714fd1d742a32504314f0 *inst/models/passing/fm-example2-2.R
 03506ad799240d2f5f4ed970b066b546 *inst/models/passing/ifa-drm-mg2.R
 0d1bcbe1bd2daa9efc835e823cc55f0c *inst/models/passing/ifa-drm1.R
 c7c2aa4c65fd2f54ff06ab10c77bfc76 *inst/models/passing/ifa-grm1.R
+bb19d64b48931e4d7db76cf41ac92b5e *inst/models/passing/ifa-lmp.R
 7d5c8bd374a2e6d2238c926542ba3907 *inst/models/passing/ifa-missingdata.R
 0ad55ec9a37eb17d62c10c02558f33b8 *inst/models/passing/jointFactorModelsTest.R
 63cf729867a0a967f226746278129bc8 *inst/models/passing/lmer-1.R
@@ -749,7 +751,7 @@ a5a745b6016a6558233fc2aa3975f8ce *man/mxFactorScores.Rd
 8f3ef6262aa1cf66656e54240106f684 *man/mxFitFunctionRow.Rd
 12618c7605e8c1753b45cc405d4794f4 *man/mxFitFunctionWLS.Rd
 70c784f4130514424f099475b05f72a6 *man/mxGREMLDataHandler.Rd
-37a359dd89d683ec17f362531b4035e1 *man/mxGenerateData.Rd
+6cd3812f677c11f4b6c8896077621f2b *man/mxGenerateData.Rd
 d0af534c193585adff37fd1630269be9 *man/mxGetExpected.Rd
 cb6364d40e2b0c07d2aeab1c78996be7 *man/mxKalmanScores.Rd
 824aab375ee8d40986cb25ecf9c3d209 *man/mxLISRELObjective.Rd
@@ -825,7 +827,7 @@ c93f7b98b1e03183e5bd782740b9d522 *man/omxSapply.Rd
 b93ddc4b9f466cd893b018789169db16 *man/omxSymbolTable.Rd
 0205262c7df0ea850e56fb0e0e342f8a *man/ordinalTwinData.Rd
 ef74c3386e4b6d6b631b1690ac72f762 *man/rvectorize.Rd
-51c2354c08df50efbf6f2f9b8641e2b6 *man/summary.MxModel.Rd
+2bb1f3f2a9667bbd0dafaec2c0c9f2f5 *man/summary.MxModel.Rd
 e68e3d978e9f89c7f4c52346c8127af7 *man/tr.Rd
 4f88739a03ff7ec9f0d906d14e85ff2c *man/twinData.Rd
 f67b062a9c419ef9538e2d2071ce4717 *man/twin_NA_dot_data.Rd
@@ -907,7 +909,7 @@ ed69d7bbf93f0d041d57f3f7dd92b8b2 *src/omxLISRELExpectation.h
 7b1571eabc270df19501545f14d6ecd5 *src/omxNPSOLSpecific.h
 b66e5c0779d1b0b81d15b90908c84e28 *src/omxNormalExpectation.cpp
 66f6d91924424a0eb74c5c70ecfb2cff *src/omxNormalExpectation.h
-5cd2ac485a52e218c2945c98fd728f97 *src/omxRAMExpectation.cpp
+5d829999a89dc61c588a7a970f9b3b9c *src/omxRAMExpectation.cpp
 166a13c668040c71a14c068206729455 *src/omxRAMExpectation.h
 34ff76fb5a0b02ce68bddb66e058b293 *src/omxRFitFunction.cpp
 0a9c8a364efe2023b29c54688468a612 *src/omxRFitFunction.h

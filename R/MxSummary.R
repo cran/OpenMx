@@ -158,6 +158,10 @@ computeFValue <- function(datalist, likelihood, chi) {
 
 computeFitStatistics <- function(likelihood, DoF, chi, chiDoF, numObs,
 				 independence, indDoF, saturated=0, satDoF=0) {
+	if (!is.na(independence) && !is.na(likelihood) && independence < likelihood) {
+		warning(paste("Your model may be mis-specified (and fit worse than an independence model),",
+			      "or you may be using the wrong independence model, see ?mxRefModels"))
+	}
 	CFI <- (independence - indDoF - likelihood + DoF)/(independence - indDoF - saturated + satDoF)
 	TLI <- 1
 	rmseaSquared <- 0
@@ -522,6 +526,9 @@ print.summary.mxmodel <- function(x,...) {
 			cat("condition number of the information matrix: ", x$conditionNumber, "\n")
 		}
 	}
+	if (x$verbose==TRUE && !is.null(x$maxAbsGradient)) {
+		cat("maximum absolute gradient: ", x$maxAbsGradient, " (",names(x$maxAbsGradient),")\n")
+	}
 	#
 	# Chi-square goodness of fit test
 	if(x$verbose==TRUE || !is.na(x$Chi)){
@@ -802,6 +809,10 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 	retval$GREMLfixeff <- GREMLFixEffList(model)
 	retval$infoDefinite <- model@output$infoDefinite
 	retval$conditionNumber <- model@output$conditionNumber
+	if (length(model@output$gradient)) {
+		agrad <- abs(model@output$gradient)
+		retval$maxAbsGradient <- agrad[ order(-agrad)[1] ]
+	}
 	retval <- boundsMet(model, retval)
 	retval <- setLikelihoods(model, saturatedLikelihood, independenceLikelihood, retval)
 	retval <- setNumberObservations(numObs, model@runstate$datalist, model@runstate$fitfunctions, retval)

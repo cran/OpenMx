@@ -14,8 +14,8 @@
  *  limitations under the License.
  */
 
-#ifndef _NPSOLWRAP_H
-#define _NPSOLWRAP_H
+#ifndef _GLUE_H
+#define _GLUE_H
 
 #include <exception>
 #include <string>
@@ -47,14 +47,14 @@ class omxManageProtectInsanity {
 	}
 };
 
-typedef std::vector< std::pair<const char *, SEXP> > MxRListBase;
+typedef std::vector< std::pair<SEXP, SEXP> > MxRListBase;
 class MxRList : private MxRListBase {
  public:
 	size_t size() const { return MxRListBase::size(); }
 	SEXP asR();
 	void add(const char *key, SEXP val) {
 		Rf_protect(val);
-		push_back(std::make_pair(key, val));
+		push_back(std::make_pair(Rf_mkChar(key), val));
 	};
 };
 
@@ -107,4 +107,8 @@ void getMatrixDims(SEXP r_theta, int *rows, int *cols);
 
 void markAsDataFrame(SEXP list);
 
-#endif // #define _NPSOLWRAP_H
+#ifndef M_LN_2PI
+#define M_LN_2PI        1.837877066409345483560659472811        /* log(2*pi) */
+#endif
+
+#endif // #define _GLUE_H

@@ -65,8 +65,6 @@ parameters and the number of constraints, and return a numeric value as output.
 OpenMx options
 
 \tabular{rcl}{
-Number of Threads \tab \var{i}          \tab the number of processor cores to use. Use \code{\link[parallel]{detectCores}}()
- to find how many are available. \cr
 Calculate Hessian \tab [Yes | No]       \tab calculate the Hessian explicitly after optimization. \cr
 Standard Errors   \tab [Yes | No]       \tab return standard error estimates from the explicitly calculate hessian. \cr
 Default optimizer \tab [NPSOL | SLSQP | CSOLNP] \tab the gradient-descent optimizer to use \cr
@@ -77,6 +75,8 @@ Gradient algorithm \tab see list \tab finite difference method, either 'forward'
 Gradient iterations \tab 1:4 \tab the number of Richardson extrapolation iterations\cr
 Analytic Gradients \tab [Yes | No] \tab should the optimizer use analytic gradients (if available)?\cr
 loglikelihoodScale \tab \var{i} \tab factor by which the loglikelihood is scaled. \cr
+Parallel diagnostics \tab [Yes | No] \tab whether to issue diagnostic
+messages about use of multiple threads \cr
 }
 
 

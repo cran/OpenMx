@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2016-02-28
+Date: 2016-06-22
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -14,7 +14,11 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"),
     person(c("Robert", "M."), "Kirkpatrick", role="aut"),
     person(c("Yang"), "Wang", role="ctb"),
-    person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"))
+    person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"),
+    person("Massachusetts Institute of Technology", role="cph"),
+    person("S. G.", "Johnson", role="cph"),
+    person("Association for Computing Machinery", role="cph"),
+    person("Dieter", "Kraft", role="cph"))
 URL: http://openmx.psyc.virginia.edu, https://github.com/OpenMx/OpenMx
 BugReports: http://openmx.psyc.virginia.edu/forums
 Description: Facilitates treatment of statistical model specifications as things
@@ -26,7 +30,7 @@ Description: Facilitates treatment of statistical model specifications as things
     group, mixture distribution, categorical threshold, modern test theory,
     differential equations, state space, and many others.
 SystemRequirements: GNU make
-License: GPL (>= 3)
+License: Apache License (== 2.0)
 LinkingTo: Rcpp, RcppEigen, StanHeaders (>= 2.7), BH, rpf (>= 0.45)
 Depends: R (>= 3.0.2), digest, MASS, methods, Matrix, Rcpp, parallel
 Suggests: mvtnorm, numDeriv, roxygen2 (>= 3.1), Rmpi, rpf (>= 0.45),
@@ -64,10 +68,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
         'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
         'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'zzz.R'
-Version: 2.5.2
-RoxygenNote: 5.0.0
+Version: 2.6.7
+RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-02-28 21:13:58 UTC; joshua
+Packaged: 2016-06-22 10:22:28 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -87,7 +91,11 @@ Author: Steven M. Boker [aut],
   Mahsa Zahery [aut],
   Robert M. Kirkpatrick [aut],
   Yang Wang [ctb],
-  Charles Driver [ctb]
+  Charles Driver [ctb],
+  Massachusetts Institute of Technology [cph],
+  S. G. Johnson [cph],
+  Association for Computing Machinery [cph],
+  Dieter Kraft [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2016-02-29 11:04:14
+Date/Publication: 2016-06-23 00:35:57

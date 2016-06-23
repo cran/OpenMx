@@ -62,6 +62,14 @@ raw.fit <- mxRun(raw)
 
 sat.fit <- mxRefModels(raw, run=TRUE)
 
+cmp <- mxCompare(sat.fit[['Saturated']], raw.fit)
+omxCheckCloseEnough(cmp$diffLL[2], 49.764, 1e-2)
+omxCheckCloseEnough(cmp$diffdf[2], 34)
+omxCheckCloseEnough(cmp$p[2], 0.03961044, 1e-3)
+
+cmp <- omxCheckWarning(mxCompare(raw.fit, sat.fit[['Saturated']]),
+		       "Model 'Raw Test Model to Check MxSummary' has more degrees of freedom than Saturated Raw Test Model to Check MxSummary which means that either the models need to be compared in the oppposite order or the models are not nested and should not be compared with the likelihood ratio test")
+omxCheckTrue(is.na(cmp$p[2]))
 
 #------------------------------------------------------------------------------
 # Specify a multiple group model
@@ -102,6 +110,12 @@ omxCheckEquals(dim(mxEval(satCov, mg.sat[[1]]$`Saturated OneFactor`))[1], 5)
 omxCheckEquals(dim(mxEval(satCov, mg.sat[[1]]$`Saturated OneFactorLess`))[1], 4)
 # the saturated model for OneFactorLess should be only on the variables used x2:x5, not all the variables x1:x5.
 
+refStats <- lapply(mg.sat, function(model) {
+	list(model$output$Minus2LogLikelihood, summary(model)$degreesOfFreedom)
+})
+refStats$Independence[[1]] <- mg.fit$output$fit - 100
+ign <- omxCheckWarning(summary(mg.fit, refModels=refStats),
+		"Your model may be mis-specified (and fit worse than an independence model), or you may be using the wrong independence model, see ?mxRefModels")
 
 #------------------------------------------------------------------------------
 # Specify a multiple group cov model

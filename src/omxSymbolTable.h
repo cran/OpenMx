@@ -90,5 +90,9 @@ void omxElementBesselI(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementBesselJ(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementBesselK(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementBesselY(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementDpois(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementPpois(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementDnbinom(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementPnbinom(omxMatrix** args, int numArgs, omxMatrix* result);
 extern const omxAlgebraTableEntry omxAlgebraSymbolTable[];
 #endif

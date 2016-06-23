@@ -120,10 +120,13 @@ class FitContext {
 	void testMerge();
 
 	std::string IterationError;
+	int computeCount;
 
  public:
 	FreeVarGroup *varGroup;
 	omxState *state;
+	omxState *getParentState() const { return parent->state; };
+	bool isClone() const;
 	size_t numParam;               // change to int type TODO
 	std::vector<int> mapToParent;
 	double mac;
@@ -152,6 +155,7 @@ class FitContext {
 
 	FitContext(omxState *_state, std::vector<double> &startingValues);
 	FitContext(FitContext *parent, FreeVarGroup *group);
+	bool openmpUser;  // whether some fitfunction/expectation uses OpenMP
 	void createChildren();
 	void destroyChildren();
 	void allocStderrs();
@@ -200,6 +204,8 @@ class FitContext {
 	void postInfo();
 	void resetIterationError();
 	void recordIterationError(const char* msg, ...) __attribute__((format (printf, 2, 3)));
+	int getComputeCount(); //approximate
+	void incrComputeCount() { ++computeCount; };
 
 	// If !std::isfinite(fit) then IterationError.size() should be nonzero but not all of
 	// the code is audited to ensure that this condition is true.
@@ -263,6 +269,7 @@ class GradientOptimizerContext {
 	int prevMode;
 	void *extraData;
 	omxMatrix *fitMatrix;
+	int numOptimizerThreads;
 	int maxMajorIterations;
 
 	int ControlMajorLimit;
@@ -304,6 +311,7 @@ class GradientOptimizerContext {
 	void setupAllBounds();             // NPSOL style
 
 	double solFun(double *myPars, int* mode);
+	double evalFit(double *myPars, int thrId, int *mode);
 	double recordFit(double *myPars, int* mode);
 	void solEqBFun();
 	void myineqFun();
@@ -311,7 +319,8 @@ class GradientOptimizerContext {
 	template <typename T1> void checkActiveBoxConstraints(Eigen::MatrixBase<T1> &nextEst);
 	void useBestFit();
 	void copyToOptimizer(double *myPars);
-	void copyFromOptimizer(double *myPars);
+	void copyFromOptimizer(double *myPars, FitContext *fc2);
+	void copyFromOptimizer(double *myPars) { copyFromOptimizer(myPars, fc); };
 	void finish();
 	double getFit() const { return fc->fit; };
 	int getIteration() const { return fc->iterations; };
@@ -376,6 +385,40 @@ void printSparse(Eigen::SparseMatrixBase<T> &sm) {
 		buf += "\n";
 	}
 	mxLogBig(buf);
+}
+
+template <typename T1, typename T2, typename T3>
+void omxStandardizeCovMatrix(Eigen::MatrixBase<T1> &cov, Eigen::MatrixBase<T2> &corList,
+			     Eigen::MatrixBase<T3> &stddev, FitContext *fc)
+{
+	int rows = cov.rows();
+
+	corList.derived().resize(triangleLoc1(rows));
+
+	stddev.derived() = cov.diagonal().array().sqrt();
+
+	for(int i = 1; i < rows; i++) {
+		for(int j = 0; j < i; j++) {
+			double val = cov(i, j) / (stddev[i] * stddev[j]);
+			if (fabs(val) > 1.0) {
+				if (fc) {
+					fc->recordIterationError("Found correlation with absolute value"
+								 " greater than 1 (r=%.2f)", val);
+				} else {
+					cov(0, 0) = NA_REAL;  // Signal disaster
+				}
+			}
+			corList[((i*(i-1))/2) + j] = val;
+		}
+	}
+}
+
+template <typename T2, typename T3>
+void omxStandardizeCovMatrix(omxMatrix *cov, Eigen::MatrixBase<T2> &corList,
+			     Eigen::MatrixBase<T3> &stddev, FitContext *fc)
+{
+	EigenMatrixAdaptor eCov(cov);
+	omxStandardizeCovMatrix(eCov, corList, stddev, fc);
 }
 
 #endif

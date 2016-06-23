@@ -205,6 +205,14 @@ omxMatrix* omxDuplicateMatrix(omxMatrix* src, omxState* newState) {
     return newMat;    
 }
 
+void omxMatrix::copyAttr(omxMatrix *src)
+{
+	joinKey = src->joinKey;
+	if (src->joinModel) {
+		joinModel = omxExpectationFromIndex(src->joinModel->expNum, currentState);
+	}
+}
+
 void omxResizeMatrix(omxMatrix *om, int nrows, int ncols)
 {
 	// Always Recompute() before you Resize().
@@ -634,7 +642,7 @@ void omxMatrixLeadingLagging(omxMatrix *om) {
 	om->lagging = (om->colMajor?om->cols:om->rows);
 }
 
-static bool omxNeedsUpdate(omxMatrix *matrix)
+bool omxNeedsUpdate(omxMatrix *matrix)
 {
 	bool yes;
 	if (matrix->hasMatrixNumber && omxMatrixIsClean(matrix)) {
@@ -786,31 +794,6 @@ void checkIncreasing(omxMatrix* om, int column, int count, FitContext *fc)
 	}
 	if(threshCrossCount > 0) {
 		fc->recordIterationError("Found %d thresholds out of order in column %d.", threshCrossCount, column+1);
-	}
-}
-
-void omxStandardizeCovMatrix(omxMatrix* cov, double* corList, double* weights, FitContext* fc) {
-	// Maybe coerce this into an algebra or sequence of algebras?
-
-	if(OMX_DEBUG) { mxLog("Standardizing matrix."); }
-
-	int rows = cov->rows;
-
-	for(int i = 0; i < rows; i++) {
-		weights[i] = sqrt(omxMatrixElement(cov, i, i));
-	}
-
-	for(int i = 0; i < rows; i++) {
-		for(int j = 0; j < i; j++) {
-			corList[((i*(i-1))/2) + j] = omxMatrixElement(cov, i, j) / (weights[i] * weights[j]);
-			if(fabs(corList[((i*(i-1))/2) + j]) > 1.0) {
-				if(fc){
-					fc->recordIterationError("Found correlation with absolute value greater than 1 (r=%.2f).", corList[((i*(i-1))/2) + j]);
-				} else {
-					omxSetMatrixElement(cov, 0, 0, NA_REAL);
-				}
-			}
-		}
 	}
 }
 

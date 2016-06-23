@@ -143,10 +143,10 @@ SEXP MxRList::asR()
 	Rf_protect(names = Rf_allocVector(STRSXP, len));
 	Rf_protect(ans = Rf_allocVector(VECSXP, len));
 	for (int lx=0; lx < len; ++lx) {
-		const char *p1 = (*this)[lx].first;
+		SEXP p1 = (*this)[lx].first;
 		SEXP p2 = (*this)[lx].second;
 		if (!p1 || !p2) Rf_error("Attempt to return NULL pointer to R");
-		SET_STRING_ELT(names, lx, Rf_mkChar(p1));
+		SET_STRING_ELT(names, lx, p1);
 		SET_VECTOR_ELT(ans,   lx, p2);
 	}
 	Rf_namesgets(ans, names);
@@ -199,6 +199,8 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 					*numThreads = 1;
 				}
 #endif
+			} else if(matchCaseInsensitive(nextOptionName, "Parallel diagnostics")) {
+				friendlyStringToLogical(nextOptionName, nextOptionValue, &Global->parallelDiag);
 			} else if(matchCaseInsensitive(nextOptionName, "mvnMaxPointsA")) {
 				Global->maxptsa = atof(nextOptionValue);
 			} else if(matchCaseInsensitive(nextOptionName, "mvnMaxPointsB")) {
@@ -438,12 +440,12 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	SEXP evaluations;
 	Rf_protect(evaluations = Rf_allocVector(REALSXP,1));
 
-	REAL(evaluations)[0] = Global->computeCount;
+	REAL(evaluations)[0] = fc->getComputeCount();
 
 	MxRList result;
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	globalState->omxExportResults(&result);
+	globalState->omxExportResults(&result, fc);
 
 	if (topCompute && !isErrorRaised()) {
 		LocalComputeResult cResult;

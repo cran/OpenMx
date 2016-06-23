@@ -31,7 +31,6 @@
 **********************************************************/
 
 #include "omxExpectation.h"
-#include "omxBLAS.h"
 #include "omxFIMLFitFunction.h"
 #include "omxStateSpaceExpectation.h"
 #include <Eigen/Core>
@@ -172,7 +171,7 @@ void omxPopulateSSMAttributes(omxExpectation *ox, SEXP algebra) {
 		}
 		
 		// handle definition variables
-		ox->data->handleDefinitionVarList(ox->currentState, row-1);
+		ox->loadDefVars(row-1);
 		
 		/* Run Kalman prediction */
 		if(ose->t == NULL){
@@ -265,8 +264,7 @@ void omxPopulateSSMAttributes(omxExpectation *ox, SEXP algebra) {
 	// loop backwars through all data
 	if(OMX_DEBUG_ALGEBRA) { mxLog("Beginning backward loop ..."); }
 	for(row = nt-1; row > -1; row--){
-		// handle definition variables
-		ox->data->handleDefinitionVarList(ox->currentState, row);
+		ox->loadDefVars(row);
 		
 		// Copy Z = updated P from pupda
 		counter = 0;
@@ -551,7 +549,7 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	
 	/* x = x + K r */
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallr, "....State Space Check Residual: r"); }
-	omxDGEMV(TRUE, 1.0, smallK, smallr, 1.0, x); // x = K r + x
+	omxDGEMV(true, 1.0, smallK, smallr, 1.0, x); // x = K r + x
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(x, "....State Space: x = K r + x"); }
 	
 	/* P = (I - K C) P */
@@ -804,7 +802,7 @@ void omxInitStateSpaceExpectation(omxExpectation* ox) {
 	ox->mutateFun = omxSetStateSpaceExpectationComponent;
 	ox->populateAttrFun = omxPopulateSSMAttributes;
 	ox->argStruct = (void*) SSMexp;
-	ox->canDuplicate = false;
+	ox->canDuplicate = true;
 	
 	/* Set up expectation structures */
 	if(OMX_DEBUG) { mxLog("Initializing State Space Meta Data for expectation."); }

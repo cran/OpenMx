@@ -58,11 +58,6 @@ void omxFreeExpectationArgs(omxExpectation *ox) {
 
 void omxExpectationRecompute(FitContext *fc, omxExpectation *ox)
 {
-	for(int i = 0; i < int(ox->thresholds.size()); i++) {
-		if (!ox->thresholds[i].matrix) continue;
-		omxRecompute(ox->thresholds[i].matrix, fc);
-	}
-
 	omxExpectationCompute(fc, ox, NULL);
 }
 
@@ -112,10 +107,6 @@ static void omxExpectationProcessDataStructures(omxExpectation* ox, SEXP rObj)
 	
 	if(rObj == NULL) return;
 
-	if(OMX_DEBUG) {
-		mxLog("Accessing variable mapping structure.");
-	}
-
 	if (R_has_slot(rObj, Rf_install("dataColumns"))) {
 		{ScopedProtect p1(nextMatrix, R_do_slot(rObj, Rf_install("dataColumns")));
 		ox->dataColumns = omxNewMatrixFromRPrimitive(nextMatrix, ox->currentState, 0, 0);
@@ -138,6 +129,8 @@ static void omxExpectationProcessDataStructures(omxExpectation* ox, SEXP rObj)
 					mxLog("Accessing Threshold Mappings.");
 				}
         
+				ox->thresholdsMat = omxMatrixLookupFromState1(threshMatrix, ox->currentState);
+
 				/* Process the data and threshold mapping structures */
 				/* if (threshMatrix == NA_INTEGER), then we could ignore the slot "thresholdColumns"
 				 * and fill all the thresholds with {NULL, 0, 0}.
@@ -159,7 +152,6 @@ static void omxExpectationProcessDataStructures(omxExpectation* ox, SEXP rObj)
 						ox->thresholds.push_back(col);
 					} else {
 						omxThresholdColumn col;
-						col.matrix = omxMatrixLookupFromState1(threshMatrix, ox->currentState);
 						col.column = thresholdColumn[index];
 						col.numThresholds = thresholdNumber[index];
 						ox->thresholds.push_back(col);
@@ -231,10 +223,8 @@ void omxCompleteExpectation(omxExpectation *ox) {
 		for (int dx=0; dx < int(od->defVars.size()); ++dx) {
 			omxDefinitionVar &dv = od->defVars[dx];
 			msg += string_snprintf("[%d] column '%s' ->", dx, omxDataColumnName(od, dv.column));
-			for (int lx=0; lx < dv.numLocations; ++lx) {
-				msg += string_snprintf(" %s[%d,%d]", state->matrixToName(~dv.matrices[lx]),
-						       dv.rows[lx], dv.cols[lx]);
-			}
+			msg += string_snprintf(" %s[%d,%d]", state->matrixToName(~dv.matrix),
+					       dv.row, dv.col);
 			msg += "\n  dirty:";
 			for (int mx=0; mx < dv.numDeps; ++mx) {
 				msg += string_snprintf(" %s", state->matrixToName(dv.deps[mx]));
@@ -302,3 +292,17 @@ void complainAboutMissingMeans(omxExpectation *off)
 		       " to = manifests) to your model.", off->name);
 }
 
+bool omxExpectation::loadDefVars(int row)
+{
+	bool changed = false;
+	for (int k=0; k < int(data->defVars.size()); ++k) {
+		omxDefinitionVar &dv = data->defVars[k];
+		double newDefVar = omxDoubleDataElement(data, row, dv.column);
+		if(ISNA(newDefVar)) {
+			Rf_error("Error: NA value for a definition variable is Not Yet Implemented.");
+		}
+		changed |= dv.loadData(currentState, newDefVar);
+	}
+	if (changed && OMX_DEBUG_ROWS(row)) { mxLog("%s: loading definition vars for row %d", name, row); }
+	return changed;
+}

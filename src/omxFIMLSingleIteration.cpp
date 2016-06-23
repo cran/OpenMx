@@ -87,7 +87,7 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 	omxMatrix *ordMeans, *ordCov, *ordRow, *contRow;
 	omxMatrix *halfCov, *reduceCov, *ordContCov;
 	omxData* data;
-	double *lThresh, *uThresh, *corList, *weights;
+	double *lThresh, *uThresh;
 	int *Infin;
 	
 	// Locals, for readability.  Compiler should cut through this.
@@ -109,8 +109,6 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 	dataColumns	= ofo->dataColumns;
 	int numDefs = data->defVars.size();
 	
-	corList 	= ofo->corList;
-	weights		= ofo->weights;
 	lThresh		= ofo->lThresh;
 	uThresh		= ofo->uThresh;
 	returnRowLikelihoods = ofo->returnRowLikelihoods;
@@ -119,6 +117,7 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 	
 	Infin			= ofo->Infin;
 	omxExpectation* expectation = localobj->expectation;
+	omxMatrix *thresholdsMat = expectation->thresholdsMat;
 	std::vector< omxThresholdColumn > &thresholdCols = expectation->thresholds;
 	
 	Eigen::VectorXi ordRemove(cov->cols);
@@ -165,13 +164,13 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 		// set the y attribute of the state space expectation to smallRow.
 		
 		if(numIdenticalDefs <= 0 || numIdenticalContinuousMissingness <= 0 || numIdenticalOrdinalMissingness <= 0 || 
-			firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {  // If we're keeping covariance from the previous row, do not populate 
+		   firstRow || ofo->isStateSpace) {  // If we're keeping covariance from the previous row, do not populate 
 			// Handle Definition Variables.
-			if((numDefs && numIdenticalDefs <= 0) || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {
+			if((numDefs && numIdenticalDefs <= 0) || firstRow || ofo->isStateSpace) {
 				if(OMX_DEBUG_ROWS(row)) { mxLog("Handling Definition Vars."); }
-				bool numVarsFilled = data->handleDefinitionVarList(localobj->matrix->currentState, row);
-				if (numVarsFilled || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {
-					if(row == 0 && !strcmp(expectation->expType, "MxExpectationStateSpace") ) {
+				bool numVarsFilled = expectation->loadDefVars(row);
+				if (numVarsFilled || firstRow || ofo->isStateSpace) {
+					if(row == 0 && ofo->isStateSpace) {
 						if(OMX_DEBUG){ mxLog("Resetting State Space state (x) and error cov (P)."); }
 						omxSetExpectationComponent(expectation, localobj, "Reset", NULL);
 					}
@@ -218,11 +217,11 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 				      dataColumns->cols - numOrdinal, dataColumns->cols - numContinuous, dataColumns->cols);
 			}
 
+			if (thresholdsMat) omxRecompute(thresholdsMat, fc);
 			for(int j=0; j < dataColumns->cols; j++) {
 				int var = omxVectorElement(dataColumns, j);
 				if(!omxDataColumnIsFactor(data, var) || j >= int(thresholdCols.size()) || thresholdCols[j].numThresholds == 0) continue;
-				omxRecompute(thresholdCols[j].matrix, fc); // Only one of these--save time by only doing this once
-				checkIncreasing(thresholdCols[j].matrix, thresholdCols[j].column, thresholdCols[j].numThresholds, fc);
+				checkIncreasing(thresholdsMat, thresholdCols[j].column, thresholdCols[j].numThresholds, fc);
 			}
 			
 			}
@@ -287,18 +286,18 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 					// These values pass through directly without modification by continuous variables
 					
 					// Calculate correlation matrix, correlation list, and weights from covariance
-					omxStandardizeCovMatrix(ordCov, corList, weights, fc);
+					omxStandardizeCovMatrix(ordCov, ofo->corList, ofo->weights, fc);
 				}
 			} 
-			else if( numIdenticalDefs <= 0 || numIdenticalContinuousRows <= 0 || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {
+			else if( numIdenticalDefs <= 0 || numIdenticalContinuousRows <= 0 || firstRow || ofo->isStateSpace) {
 				
 				/* Reset and Resample rows if necessary. */
 				// First Cov and Means (if they've changed)
-				if( numIdenticalDefs <= 0 || numIdenticalContinuousMissingness <= 0 || firstRow || !strcmp(expectation->expType, "MxExpectationStateSpace")) {
+				if( numIdenticalDefs <= 0 || numIdenticalContinuousMissingness <= 0 || firstRow || ofo->isStateSpace) {
 					if(OMX_DEBUG_ROWS(row)) { mxLog("Beginning to recompute inverse cov for standard models"); }
 					
 					/* If it's a state space expectation, extract the inverse rather than recompute it */
-					if(!strcmp(expectation->expType, "MxExpectationStateSpace")) {
+					if(ofo->isStateSpace) {
 						smallMeans = omxGetExpectationComponent(expectation, "means");
 						omxRemoveElements(smallMeans, contRemove.data());
 						if(OMX_DEBUG_ROWS(row)) { mxLog("Beginning to extract inverse cov for state space models"); }
@@ -474,7 +473,7 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 				// Calculate correlation matrix, correlation list, and weights from covariance
 				if(numIdenticalDefs <=0 || numIdenticalContinuousMissingness <= 0 || numIdenticalOrdinalMissingness <= 0 || firstRow) {
 					// if(OMX_DEBUG_ROWS(row)) {omxPrint(ordCov, "Ordinal cov matrix for standardization."); } //:::DEBUG:::
-					omxStandardizeCovMatrix(ordCov, corList, weights, fc);
+					omxStandardizeCovMatrix(ordCov, ofo->corList, ofo->weights, fc);
 				}
 				
 				omxCopyMatrix(ordRow, smallRow);
@@ -496,16 +495,16 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 					double offset;
 					if(means == NULL) offset = 0;
 					else offset = omxVectorElement(ordMeans, count);
-					double weight = weights[count];
+					double weight = ofo->weights[count];
 					if(value == 0) { 									// Lowest threshold = -Inf
-					lThresh[count] = (omxMatrixElement(thresholdCols[j].matrix, 0, thresholdCols[j].column) - offset) / weight;
+					lThresh[count] = (omxMatrixElement(thresholdsMat, 0, thresholdCols[j].column) - offset) / weight;
 					uThresh[count] = lThresh[count];
 					Infin[count] = 0;
 					} 
 					else {
-						lThresh[count] = (omxMatrixElement(thresholdCols[j].matrix, value-1, thresholdCols[j].column) - offset) / weight;
+						lThresh[count] = (omxMatrixElement(thresholdsMat, value-1, thresholdCols[j].column) - offset) / weight;
 						if(thresholdCols[j].numThresholds > value) {	// Highest threshold = Inf
-						double tmp = (omxMatrixElement(thresholdCols[j].matrix, value, thresholdCols[j].column) - offset) / weight;
+						double tmp = (omxMatrixElement(thresholdsMat, value, thresholdCols[j].column) - offset) / weight;
 						uThresh[count] = tmp;
 						Infin[count] = 2;
 						} 
@@ -525,15 +524,15 @@ bool omxFIMLSingleIterationJoint(FitContext *fc, omxFitFunction *localobj, omxFi
 						if (0) {
 							// This diagnostic triggers an omxMatrixElement by models/passing/JointFIMLTest.R
 							mxLog("       Thresholds were %f -> %f, scaled by weight %f and shifted by mean %f and total offset %f.",
-							omxMatrixElement(thresholdCols[j].matrix, (Infin[count]==0?0:value-1), thresholdCols[j].column), 
-							omxMatrixElement(thresholdCols[j].matrix, (Infin[count]==1?value-1:value), thresholdCols[j].column), 
+							omxMatrixElement(thresholdsMat, (Infin[count]==0?0:value-1), thresholdCols[j].column), 
+							omxMatrixElement(thresholdsMat, (Infin[count]==1?value-1:value), thresholdCols[j].column), 
 							weight, (means==NULL?0:omxVectorElement(ordMeans, count)), offset);
 						}
 					}
 					count++;
 				}
 				
-				omxSadmvnWrapper(localobj, cov, ordCov, corList, lThresh, uThresh, Infin, &likelihood, &inform);
+				omxSadmvnWrapper(ordCov->rows, ofo->corList.data(), lThresh, uThresh, Infin, &likelihood, &inform);
 				
 				if(inform == 2) {
 					if(!returnRowLikelihoods) {

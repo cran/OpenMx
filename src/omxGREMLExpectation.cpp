@@ -44,6 +44,7 @@ void omxInitGREMLExpectation(omxExpectation* ox){
   
     /* Set up expectation structures */
   //y:
+  if(OMX_DEBUG) { mxLog("Processing y."); }
   oge->y = new omxData();
   {ScopedProtect p1(Rmtx, R_do_slot(rObj, Rf_install("y")));
 	  oge->y->newDataStatic(currentState, Rmtx);
@@ -72,6 +73,9 @@ void omxInitGREMLExpectation(omxExpectation* ox){
   oge->cholV_fail_om->data[0] = 0;
   //quadXinv:
   oge->quadXinv.setZero(oge->X->cols, oge->X->cols);
+  //original dimensions of V:
+  oge->origVdim_om = omxInitMatrix(1, 1, 1, currentState);
+  oge->origVdim_om->data[0] = double(oge->cov->rows);
 
 
   //Deal with missing data:
@@ -120,8 +124,8 @@ void omxInitGREMLExpectation(omxExpectation* ox){
   quadX.setZero(oge->X->cols, oge->X->cols);
   Eigen::LLT< Eigen::MatrixXd > cholV(Eigy.rows());
   Eigen::LLT< Eigen::MatrixXd > cholquadX(oge->X->cols);
-  if( oge->numcases2drop ){
-    dropCasesAndEigenize(oge->cov, EigV, oge->numcases2drop, oge->dropcase, 1);
+  if( oge->numcases2drop && (oge->cov->rows > Eigy.rows()) ){
+    dropCasesAndEigenize(oge->cov, EigV, oge->numcases2drop, oge->dropcase, 1, int(oge->origVdim_om->data[0]));
   }
   else{EigV = Eigen::Map< Eigen::MatrixXd >(omxMatrixDataColumnMajor(oge->cov), oge->cov->rows, oge->cov->cols);}
   //invcov:
@@ -173,8 +177,8 @@ void omxComputeGREMLExpectation(omxExpectation* ox, FitContext *fc, const char *
   quadX.setZero(oge->X->cols, oge->X->cols);
   Eigen::LLT< Eigen::MatrixXd > cholV(oge->y->dataMat->rows);
   Eigen::LLT< Eigen::MatrixXd > cholquadX(oge->X->cols);
-  if( oge->numcases2drop ){
-    dropCasesAndEigenize(oge->cov, EigV, oge->numcases2drop, oge->dropcase, 1);
+  if( oge->numcases2drop && (oge->cov->rows > Eigy.rows()) ){
+    dropCasesAndEigenize(oge->cov, EigV, oge->numcases2drop, oge->dropcase, 1, int(oge->origVdim_om->data[0]));
   }
   else{EigV = Eigen::Map< Eigen::MatrixXd >(omxMatrixDataColumnMajor(oge->cov), oge->cov->rows, oge->cov->cols);}
   cholV.compute(EigV.selfadjointView<Eigen::Lower>());
@@ -221,6 +225,7 @@ void omxDestroyGREMLExpectation(omxExpectation* ox) {
   omxFreeMatrix(argStruct->invcov);
   omxFreeMatrix(argStruct->logdetV_om);
   omxFreeMatrix(argStruct->cholV_fail_om);
+  omxFreeMatrix(argStruct->origVdim_om);
 }
 
 
@@ -296,7 +301,10 @@ omxMatrix* omxGetGREMLExpectationComponent(omxExpectation* ox, const char* compo
 	} 
   else if(strEQ("X", component)) {
 		retval = oge->X;
-	} 
+	}
+  else if(strEQ("origVdim_om", component)) {
+  	retval = oge->origVdim_om;
+  }
   
 	if (retval) omxRecompute(retval, NULL);
 	
@@ -305,29 +313,22 @@ omxMatrix* omxGetGREMLExpectationComponent(omxExpectation* ox, const char* compo
 
 
 
-static double omxAliasedMatrixElement(omxMatrix *om, int row, int col)
+static double omxAliasedMatrixElement(omxMatrix *om, int row, int col, int origDim)
 {
   int index = 0;
-  if(row >= om->originalRows || col >= om->originalCols) {
-  	char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Requested improper value (%d, %d) from (%d, %d) matrix.", 
-			row + 1, col + 1, om->originalRows, om->originalCols);
-		Rf_error(errstr);
-		free(errstr);  // TODO not reached
-        return (NA_REAL);
+  if(row >= origDim || col >= origDim){
+		Rf_error("Requested improper value (%d, %d) from (%d x %d) matrix %s", 
+           row + 1, col + 1, origDim, origDim, om->name());
+		return (NA_REAL);
 	}
-	if(om->colMajor) {
-		index = col * om->originalRows + row;
-	} else {
-		index = row * om->originalCols + col;
-	}
+	index = col * origDim + row; //<--om should always be column-major by this point.
 	return om->data[index];
 }
 
 
 
 void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std::vector< int > todrop,
-	int symmetric){
+	int symmetric, int origDim){
   
   if(OMX_DEBUG) { mxLog("Trimming out cases with missing data..."); }
   
@@ -335,9 +336,6 @@ void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std:
   
   omxEnsureColumnMajor(om);
 
-  om->originalRows = om->rows;
-  om->originalCols = om->cols;
-  
   if(om->algebra == NULL){ //i.e., if omxMatrix is from a frontend MxMatrix
   
     em.setZero(om->rows - num2drop, om->cols - num2drop);
@@ -350,7 +348,7 @@ void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std:
   		nextRow = (symmetric ? nextCol : 0);
   		for(int k = (symmetric ? j : 0); k < om->rows; k++) {
   			if(todrop[k]) continue;
-  			em(nextRow,nextCol) = omxAliasedMatrixElement(om, k, j);
+  			em(nextRow,nextCol) = omxAliasedMatrixElement(om, k, j, origDim);
   			nextRow++;
   		}
   		nextCol++;
@@ -358,33 +356,37 @@ void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std:
   }
   else{ /*If the omxMatrix is from an algebra, then copying is not necessary; it can be resized directly
   and Eigen-mapped, since the algebra will be recalculated back to its original dimensions anyhow.*/
-    if(om->originalRows == 0 || om->originalCols == 0) Rf_error("Not allocated");
-    if (om->rows != om->originalRows || om->cols != om->originalCols) {
-      // Feasible, but the code is currently not robust to this case
-      Rf_error("Can only omxRemoveRowsAndColumns once");
+    if(origDim==0){Rf_error("Memory not allocated for algebra %s at downsize time",
+       om->name());}
+    if(om->rows != origDim || om->cols != origDim){
+      //Not sure if there are cases where this should be allowed
+      Rf_error("More than one attempt made to downsize algebra %s", om->name());
+    	//return;
     }
     
-    int oldRows = om->originalRows;
-    int oldCols = om->originalCols;
+    //int oldRows = om->originalRows;
+    //int oldCols = om->originalCols;
     
     int nextCol = 0;
     int nextRow = 0;
     
-    om->rows = oldRows - num2drop;
-    om->cols = oldCols - num2drop;
+    om->rows = origDim - num2drop;
+    om->cols = origDim - num2drop;
     
-    for(int j = 0; j < oldCols; j++) {
+    for(int j = 0; j < origDim; j++){ //<--j indexes columns
       if(todrop[j]) continue;
       nextRow = (symmetric ? nextCol : 0);
-      for(int k = (symmetric ? j : 0); k < oldRows; k++) {
+      for(int k = (symmetric ? j : 0); k < origDim; k++){ //<--k indexes rows
         if(todrop[k]) continue;
-        omxSetMatrixElement(om, nextRow, nextCol, omxAliasedMatrixElement(om, k, j));
+        omxSetMatrixElement(om, nextRow, nextCol, omxAliasedMatrixElement(om, k, j, origDim));
         nextRow++;
       }
       nextCol++;
     }
     em = Eigen::Map< Eigen::MatrixXd >(om->data, om->rows, om->cols);
-    omxMarkDirty(om); //<--Need to mark it dirty so that it gets recalculated back to original dimensions.
+    omxMarkDirty(om); //<--Need to mark it dirty so that it eventually gets recalculated back to original dimensions.
+    //^^^Algebras that do not depend upon free parameters, and upon which V does not depend, will not be
+    //recalculated back to full size until optimization is complete (the GREML fitfunction is smart about that).
   }
   if(OMX_DEBUG) { mxLog("Finished trimming out cases with missing data..."); }
 }

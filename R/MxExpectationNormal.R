@@ -194,6 +194,9 @@ mxCheckIdentification <- function(model, details=TRUE){
 		msg <- paste("Identification check is not possible for models with", omxQuotes(notAllowedFits), 'fit functions.\n', "If you have a multigroup model, use mxFitFunctionMultigroup.")
 		stop(msg, call.=FALSE)
 	}
+	if(imxHasConstraint(model)){
+		stop("Whoa Nelly.  I found an MxConstraint in your model.  I just cannot work under these conditions. I will be in my trailer until you reparameterize your model without using mxConstraint().")
+	}
 	eps <- 1e-17
 	theParams <- omxGetParameters(model)
 	jac <- omxManifestModelByParameterJacobian(model)
@@ -310,11 +313,12 @@ generateRelationalData <- function(model, returnModel) {
 	fmt <- paste0('g%0', ceiling(log10(ed$numGroups)), 'd')
 	for (gx in 1:ed$numGroups) {
 		groupName <- sprintf(fmt, gx)
-		numCopies <- length(unique(layout[layout$group == gx, 'copy']))
-		cxLength <- length(ed[[groupName]]$mean) / numCopies
+		clumpSize <- ed[[groupName]]$clumpSize
+		numCopies <- nrow(layout[layout$group == gx,]) %/% clumpSize
+		cxLength <- length(ed[[groupName]]$mean) %/% numCopies
 		groupTodo <- ed$layout[ed[[groupName]]$layout[,'aIndex'],]
 		for (cx in 1:numCopies) {
-			todo <- groupTodo[groupTodo$copy == cx,]
+			todo <- groupTodo[seq(1+(cx-1)*clumpSize, cx*clumpSize),]
 			repl1 <- mvtnorm::rmvnorm(1, ed[[groupName]]$mean[seq(1+(cx-1)*cxLength, cx*cxLength)],
 						  sigma=as.matrix(ed[[groupName]]$covariance))
 			dx <- 1
@@ -361,8 +365,7 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE) {
 		if (missing(nrows)) nrows <- nrow(model@data@observed)
 		data <- genericGenerateData(model$expectation, model, nrows)
 		if (returnModel) {
-			model@data@observed <- as.data.frame(data)
-			model
+			mxModel(model, mxData(as.data.frame(data), "raw"))
 		} else {
 			as.data.frame(data)
 		}

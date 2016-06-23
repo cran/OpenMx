@@ -211,7 +211,6 @@ omxGlobal::omxGlobal()
 	analyticGradients = 0;
 	llScale = -2.0;
 	debugProtectStack = OMX_DEBUG;
-	computeCount = 0;
 	anonAlgebra = 0;
 	rowLikelihoodsWarning = false;
 	unpackedConfidenceIntervals = false;
@@ -243,11 +242,16 @@ void omxState::setWantStage(int stage)
 	if (OMX_DEBUG) mxLog("wantStage set to 0x%x", stage);
 }
 
+omxMatrix *omxConfidenceInterval::getMatrix(omxState *st) const
+{
+	return st->getMatrixFromIndex(matrixNumber);
+}
+
 struct ciCmp {
 	bool operator() (const omxConfidenceInterval* x, const omxConfidenceInterval* y) const
 	{
-		if (x->matrix->matrixNumber != y->matrix->matrixNumber) {
-			return x->matrix->matrixNumber < y->matrix->matrixNumber;
+		if (x->matrixNumber != y->matrixNumber) {
+			return x->matrixNumber < y->matrixNumber;
 		} else if (x->row != y->row) {
 			return x->row < y->row;
 		} else {
@@ -256,7 +260,7 @@ struct ciCmp {
 	}
 };
 
-void omxGlobal::unpackConfidenceIntervals()
+void omxGlobal::unpackConfidenceIntervals(omxState *currentState)
 {
 	if (unpackedConfidenceIntervals) return;
 	unpackedConfidenceIntervals = true;
@@ -275,7 +279,7 @@ void omxGlobal::unpackConfidenceIntervals()
 			}
 			continue;
 		}
-		omxMatrix *mat = ci->matrix;
+		omxMatrix *mat = ci->getMatrix(currentState);
 		for (int cx=0; cx < mat->cols; ++cx) {
 			for (int rx=0; rx < mat->rows; ++rx) {
 				omxConfidenceInterval *cell = new omxConfidenceInterval(*ci);
@@ -331,6 +335,7 @@ void omxState::loadDefinitionVariables(bool start)
 				continue;
 			}
 		} else {
+			// find row=0 in the unsorted data
 			int obs = omxDataNumObs(e1);
 			for (int dx=0; dx < obs; ++dx) {
 				if (omxDataIndex(e1, dx) == 0) {
@@ -339,13 +344,14 @@ void omxState::loadDefinitionVariables(bool start)
 				}
 			}
 		}
-		e1->handleDefinitionVarList(this, row);
+		e1->loadDefVars(this, row);
 	}
 }
 
 omxState::omxState(omxState *src, FitContext *fc)
 {
 	init();
+	clone = true;
 
 	dataList			= src->dataList;
 		
@@ -366,6 +372,11 @@ omxState::omxState(omxState *src, FitContext *fc)
 
 	for(size_t j = 0; j < algebraList.size(); j++) {
 		omxDuplicateAlgebra(algebraList[j], src->algebraList[j], this);
+	}
+
+	for(size_t mx = 0; mx < src->matrixList.size(); mx++) {
+		// TODO: Smarter inference for which matrices to duplicate
+		matrixList[mx]->copyAttr(src->matrixList[mx]);
 	}
 
 	omxInitialMatrixAlgebraCompute(fc);
@@ -489,6 +500,24 @@ static const int mxLogCurrentRow = -1;
 void mxLogSetCurrentRow(int row) {}
 #endif
 
+static ssize_t mxLogWriteSynchronous(const char *outBuf, int len)
+{
+	int maxRetries = 20;
+	ssize_t wrote = 0;
+	ssize_t got;
+#pragma omp critical
+	{
+		while (--maxRetries > 0) {
+			got = write(2, outBuf + wrote, len - wrote);
+			if (got == -EINTR) continue;
+			if (got < 0) break;
+			wrote += got;
+			if (wrote == len) break;
+		}
+	}
+	return wrote;
+}
+
 void mxLogBig(const std::string &str)   // thread-safe
 {
 	ssize_t len = ssize_t(str.size());
@@ -503,22 +532,9 @@ void mxLogBig(const std::string &str)   // thread-safe
 	fullstr += str;
 	len = ssize_t(fullstr.size());
 	
-	ssize_t wrote = 0;
-	int maxRetries = 20;
-	ssize_t got;
 	const char *outBuf = fullstr.c_str();
-#pragma omp critical(stderp)
-	{
-		while (--maxRetries > 0) {
-			got = write(2, outBuf + wrote, len - wrote);
-			if (got == -EINTR) continue;
-			if (got < 0) break;
-			wrote += got;
-			if (wrote == len) break;
-		}
-	}
+	ssize_t wrote = mxLogWriteSynchronous(outBuf, len);
 	if (wrote != len) Rf_error("mxLogBig only wrote %d/%d, errno %d", wrote, len, errno);
-
 }
 
 void mxLog(const char* msg, ...)   // thread-safe
@@ -539,20 +555,32 @@ void mxLog(const char* msg, ...)   // thread-safe
 		len = snprintf(buf2, maxLen, "[%d@%d] %s\n", omx_absolute_thread_num(), mxLogCurrentRow, buf1);
 	}
 
-	int maxRetries = 20;
-	ssize_t wrote = 0;
-	ssize_t got = 0;
-#pragma omp critical(stderp)
-	{
-		while (--maxRetries > 0) {
-			got = write(2, buf2 + wrote, len - wrote);
-			if (got == -EINTR) continue;
-			if (got <= 0) break;
-			wrote += got;
-			if (wrote == len) break;
-		}
+	ssize_t wrote = mxLogWriteSynchronous(buf2, len);
+	if (wrote != len) Rf_error("mxLog only wrote %d/%d, errno=%d", wrote, len, errno);
+}
+
+void diagParallel(int verbose, const char* msg, ...)
+{
+	if (!verbose && !Global->parallelDiag) return;
+
+	const int maxLen = 240;
+	char buf1[maxLen];
+
+	va_list ap;
+	va_start(ap, msg);
+	vsnprintf(buf1, maxLen, msg, ap);
+	va_end(ap);
+
+	if (verbose) {
+		mxLog("%s", buf1);
+	} else if (Global->parallelDiag) {
+		ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 2));
+		SETCAR(theCall, Rf_install("message"));
+		ProtectedSEXP Rmsg(Rf_allocVector(STRSXP, 1));
+		SET_STRING_ELT(Rmsg, 0, Rf_mkChar(buf1));
+		SETCADR(theCall, Rmsg);
+		Rf_eval(theCall, R_GlobalEnv);
 	}
-	if (got <= 0) Rf_error("mxLog(%s) failed with errno=%d", buf2, got);
 }
 
 void _omxRaiseError()
@@ -623,17 +651,10 @@ void omxGlobal::checkpointMessage(FitContext *fc, double *est, const char *fmt, 
 	}
 }
 
-void omxGlobal::checkpointPrefit(const char *callerName, FitContext *fc, double *est, bool force)
+void omxGlobal::checkpointPostfit(const char *callerName, FitContext *fc, double *est, bool force)
 {
 	for(size_t i = 0; i < checkpointList.size(); i++) {
-		checkpointList[i]->prefit(callerName, fc, est, force);
-	}
-}
-
-void omxGlobal::checkpointPostfit(FitContext *fc)
-{
-	for(size_t i = 0; i < checkpointList.size(); i++) {
-		checkpointList[i]->postfit(fc);
+		checkpointList[i]->postfit(callerName, fc, est, force);
 	}
 }
 
@@ -664,7 +685,7 @@ void UserConstraint::refresh(FitContext *fc)
 }
 
 omxCheckpoint::omxCheckpoint() : wroteHeader(false), lastCheckpoint(0), lastIterations(0),
-				 lastEvaluation(0), fitPending(false),
+				 lastEvaluation(0),
 				 timePerCheckpoint(0), iterPerCheckpoint(0), evalsPerCheckpoint(0), file(NULL)
 {}
 
@@ -694,60 +715,49 @@ void omxCheckpoint::omxWriteCheckpointHeader()
  
 void omxCheckpoint::message(FitContext *fc, double *est, const char *msg)
 {
-	_prefit(fc, est, true, msg);
-	postfit(fc);
+	postfit(msg, fc, est, true);
 }
 
-void omxCheckpoint::_prefit(FitContext *fc, double *est, bool force, const char *context)
+void omxCheckpoint::postfit(const char *context, FitContext *fc, double *est, bool force)
 {
 	const int timeBufSize = 32;
 	char timeBuf[timeBufSize];
 	time_t now = time(NULL); // avoid checking unless we need it
+	int curEval = fc->getComputeCount();
 
 	bool doit = force;
 	if ((timePerCheckpoint && timePerCheckpoint <= now - lastCheckpoint) ||
 	    (iterPerCheckpoint && iterPerCheckpoint <= fc->iterations - lastIterations) ||
-	    (evalsPerCheckpoint && evalsPerCheckpoint <= Global->computeCount - lastEvaluation)) {
+	    (evalsPerCheckpoint && evalsPerCheckpoint <= curEval - lastEvaluation)) {
 		doit = true;
 	}
 	if (!doit) return;
 
-	omxWriteCheckpointHeader();
+#pragma omp critical
+	{
+		omxWriteCheckpointHeader();
 
-	std::vector< omxFreeVar* > &vars = fc->varGroup->vars;
-	struct tm *nowTime = localtime(&now);
-	strftime(timeBuf, timeBufSize, "%b %d %Y %I:%M:%S %p", nowTime);
-	fprintf(file, "%s\t%d\t%d\t%d\t%s", context, int(vars.size()), lastEvaluation, lastIterations, timeBuf);
+		std::vector< omxFreeVar* > &vars = fc->varGroup->vars;
+		struct tm *nowTime = localtime(&now);
+		strftime(timeBuf, timeBufSize, "%b %d %Y %I:%M:%S %p", nowTime);
+		fprintf(file, "%s\t%d\t%d\t%d\t%s", context, int(vars.size()), lastEvaluation, lastIterations, timeBuf);
 
-	size_t lx=0;
-	size_t numParam = Global->findVarGroup(FREEVARGROUP_ALL)->vars.size();
-	for (size_t px=0; px < numParam; ++px) {
-		if (lx < vars.size() && vars[lx]->id == (int)px) {
-			fprintf(file, "\t%.10g", est[lx]);
-			++lx;
-		} else {
-			fprintf(file, "\tNA");
+		size_t lx=0;
+		size_t numParam = Global->findVarGroup(FREEVARGROUP_ALL)->vars.size();
+		for (size_t px=0; px < numParam; ++px) {
+			if (lx < vars.size() && vars[lx]->id == (int)px) {
+				fprintf(file, "\t%.10g", est[lx]);
+				++lx;
+			} else {
+				fprintf(file, "\tNA");
+			}
 		}
+		fprintf(file, "\t%.10g\n", fc->fit);
+		fflush(file);
+		lastCheckpoint = now;
+		lastIterations = fc->iterations;
+		lastEvaluation = curEval;
 	}
-	fflush(file);
-	if (fitPending) Rf_error("Checkpoint not reentrant");
-	fitPending = true;
-	lastCheckpoint = now;
-	lastIterations = fc->iterations;
-	lastEvaluation = Global->computeCount;
-}
-
-void omxCheckpoint::prefit(const char *callerName, FitContext *fc, double *est, bool force)
-{
-	_prefit(fc, est, force, callerName);
-}
-
-void omxCheckpoint::postfit(FitContext *fc)
-{
-	if (!fitPending) return;
-	fprintf(file, "\t%.10g\n", fc->fit);
-	fflush(file);
-	fitPending = false;
 }
 
 const omxFreeVarLocation *omxFreeVar::getLocation(int matrix) const

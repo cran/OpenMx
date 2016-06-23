@@ -14,25 +14,31 @@ if (is.factor(Orthodont$Subject)) {
     Orthodont$Subject <- as.integer(unclass(Orthodont$Subject))
 }
 
-bySubj <- mxModel(model="subj", type="RAM",
-                  latentVars = c('intercept', paste0(c("age", 'nsex', "nsexage"), "L")),
-                  mxData(data.frame(Subject=unique(Orthodont$Subject)),
-                                    type="raw", primaryKey="Subject"),
-                  mxPath(c('intercept', 'ageL'), c('intercept', 'ageL'),
-                         arrows=2, "unique.pairs", values=c(1,.1,1), labels=c('subjInt', 'subjIntAge', 'subjAge')),
-                  mxPath(c('nsexL', 'nsexageL'), arrows=2, values=1))
+bySubj <- mxModel(
+    model="subj", type="RAM",
+    latentVars = c('intercept', paste0(c("age", 'nsex', "nsexage"), "L")),
+    mxData(data.frame(Subject=unique(Orthodont$Subject)),
+	   type="raw", primaryKey="Subject"),
+    mxPath(from=c('intercept', 'ageL'), to=c('intercept', 'ageL'),
+	   arrows=2, "unique.pairs", values=c(1,.1,1),
+	   labels=c('subjInt', 'subjIntAge', 'subjAge')),
+    mxPath(from=c('nsexL', 'nsexageL'), arrows=2, values=1))
 
-ortho <- mxModel(model="ortho", bySubj, type="RAM", manifestVars=c("distance"),
-              latentVars = c("ageL"),
-              mxData(type="raw", observed=Orthodont[,c('distance', 'age', 'Subject', 'nsex', "nsexage")], sort = FALSE),
-              mxPath(c("one"), "distance"),
-              mxPath(c("one"), "ageL", free=FALSE, labels="data.age"),
-              mxPath("ageL", "distance"),
-              mxPath("distance", arrows=2, values=1),
-              mxPath("subj.intercept", "distance", values=1, free=FALSE, joinKey="Subject"),
-              mxPath("subj.ageL", "distance", labels="data.age", free=FALSE, joinKey="Subject"),
-              mxPath("subj.nsexL", "distance", labels="data.nsex", free=FALSE, joinKey="Subject"),
-		 mxPath("subj.nsexageL", "distance", labels="data.nsexage", free=FALSE, joinKey="Subject"))
+ortho <- mxModel(
+    model="ortho", bySubj, type="RAM", manifestVars=c("distance"),
+    latentVars = c("ageL"),
+    mxData(type="raw", observed=Orthodont[,c('distance', 'age',
+			   'Subject', 'nsex', "nsexage")], sort = FALSE),
+    mxPath(from=c("one"), to="distance"),
+    mxPath(from=c("one"), to="ageL", free=FALSE, labels="data.age"),
+    mxPath(from="ageL", to="distance"),
+    mxPath(from="distance", arrows=2, values=1),
+    mxPath(from="subj.intercept", to="distance", values=1, free=FALSE,
+	   joinKey="Subject"),
+    mxPath(from=paste0("subj.", c("ageL", "nsexL", "nsexageL")),
+	   to="distance",
+           labels=paste0("data.", c("age", "nsex", "nsexage")),
+           free=FALSE, joinKey="Subject"))
 
 if (1) {
   # load lme4's parameters

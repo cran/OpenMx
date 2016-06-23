@@ -32,7 +32,6 @@
 #include <Rmath.h>
 #include "omxMatrix.h"
 #include "merge.h"
-#include "omxBLAS.h"
 #include "omxSadmvnWrapper.h"
 #include "matrix.h"
 #include "omxState.h"
@@ -1320,12 +1319,161 @@ static void omxElementPbeta(FitContext *fc, omxMatrix** matList, int numArgs, om
 	
 	double* data = result->data;
 	for(int j = 0; j < inMatDataSize; j++) {
-		//data[j] = Rf_pbeta(data[j],a->data[j],b->data[j],lower_tail_arg,give_log_arg);
 		if( Rf_sign(ncp->data[j%ncpDataSize]) == -1 ){
 			data[j] = Rf_pbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],lower_tail_arg,give_log_arg);
 		}
 		else{
 			data[j] = Rf_pnbeta(data[j],a->data[j%aDataSize],b->data[j%bDataSize],ncp->data[j%ncpDataSize],lower_tail_arg,give_log_arg);
+		}
+	}
+}
+
+static void omxElementDpois(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *lambda = matList[1];
+	omxMatrix *give_log = matList[2];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(lambda);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int lambdaDataSize = lambda->rows * lambda->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_dpois(data[j],lambda->data[j%lambdaDataSize],give_log_arg);
+	}
+}
+
+static void omxElementPpois(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *lambda = matList[1];
+	omxMatrix *lower_tail = matList[2];
+	omxMatrix *give_log = matList[3];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(lambda);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int lambdaDataSize = lambda->rows * lambda->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_ppois(data[j],lambda->data[j%lambdaDataSize],lower_tail_arg,give_log_arg);
+	}
+}
+
+static void omxElementDnbinom(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *size = matList[1];
+	omxMatrix *prob = matList[2];
+	omxMatrix *mu = matList[3];
+	omxMatrix *give_log = matList[4];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(size);
+	omxEnsureColumnMajor(prob);
+	omxEnsureColumnMajor(mu);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int sizeDataSize = size->rows * size->cols;
+	int probDataSize = prob->rows * prob->cols;
+	int muDataSize = mu->rows * mu->cols;
+	int isSizeNeg=0, isProbNeg=0, isMuNeg=0, jumpVal=0;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	double sizecurr=0, probcurr=0, mucurr=0;
+	
+	for(int j = 0; j < inMatDataSize; j++) {
+		sizecurr = size->data[j%sizeDataSize];
+		probcurr = prob->data[j%probDataSize];
+		mucurr = mu->data[j%muDataSize];
+		isSizeNeg = (Rf_sign(sizecurr) == -1) ? 1L : 0L ;
+		isProbNeg = (Rf_sign(probcurr) == -1) ? 3L : 0L ;
+		isMuNeg = (Rf_sign(mucurr) == -1) ? 5L : 0L ;
+		jumpVal = isSizeNeg + isProbNeg + isMuNeg;
+		switch(jumpVal){
+		case 1:
+			data[j] = Rf_dnbinom(data[j],mucurr*probcurr/(1-probcurr),probcurr,give_log_arg);
+			break;
+		case 3:
+			data[j] = Rf_dnbinom_mu(data[j],sizecurr,mucurr,give_log_arg);
+			break;
+		case 5:
+			data[j] = Rf_dnbinom(data[j],sizecurr,probcurr,give_log_arg);
+			break;
+		default:
+			Rf_warning("exactly one of arguments 'size', 'prob', and 'mu' must be negative (and therefore ignored)\n");
+			data[j] = Rf_dnbinom(data[j],sizecurr,probcurr,give_log_arg); //let the R API handle bad inputs
+		}
+	}
+}
+
+static void omxElementPnbinom(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *size = matList[1];
+	omxMatrix *prob = matList[2];
+	omxMatrix *mu = matList[3];
+	omxMatrix *lower_tail = matList[4];
+	omxMatrix *give_log = matList[5];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(size);
+	omxEnsureColumnMajor(prob);
+	omxEnsureColumnMajor(mu);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int sizeDataSize = size->rows * size->cols;
+	int probDataSize = prob->rows * prob->cols;
+	int muDataSize = mu->rows * mu->cols;
+	int isSizeNeg=0, isProbNeg=0, isMuNeg=0, jumpVal=0;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	double sizecurr=0, probcurr=0, mucurr=0;
+	
+	for(int j = 0; j < inMatDataSize; j++) {
+		sizecurr = size->data[j%sizeDataSize];
+		probcurr = prob->data[j%probDataSize];
+		mucurr = mu->data[j%muDataSize];
+		isSizeNeg = (Rf_sign(sizecurr) == -1) ? 1L : 0L ;
+		isProbNeg = (Rf_sign(probcurr) == -1) ? 3L : 0L ;
+		isMuNeg = (Rf_sign(mucurr) == -1) ? 5L : 0L ;
+		jumpVal = isSizeNeg + isProbNeg + isMuNeg;
+		switch(jumpVal){
+		case 1:
+			data[j] = Rf_pnbinom(data[j],mucurr*probcurr/(1-probcurr),probcurr,lower_tail_arg,give_log_arg);
+			break;
+		case 3:
+			data[j] = Rf_pnbinom_mu(data[j],sizecurr,mucurr,lower_tail_arg,give_log_arg);
+			break;
+		case 5:
+			data[j] = Rf_pnbinom(data[j],sizecurr,probcurr,lower_tail_arg,give_log_arg);
+			break;
+		default:
+			Rf_warning("exactly one of arguments 'size', 'prob', and 'mu' must be negative (and therefore ignored)\n");
+			data[j] = Rf_pnbinom(data[j],sizecurr,probcurr,lower_tail_arg,give_log_arg); //let the R API handle bad inputs
 		}
 	}
 }
@@ -1622,21 +1770,14 @@ static void omxMultivariateNormalIntegration(FitContext *fc, omxMatrix** matList
 
 	int nElements = (cov->cols > 1) ? cov->cols : cov->rows;
 	double *lBounds, *uBounds;
-	double *weights;
-	double *corList;
+	Eigen::VectorXd weights;
+	Eigen::VectorXd corList;
 	lBounds = (double*) malloc(nElements * sizeof(double));
 	uBounds = (double*) malloc(nElements * sizeof(double));
-	weights = (double*) malloc(nElements * sizeof(double));
-	corList = (double*) malloc((nElements * (nElements + 1) / 2) * sizeof(double));
 
 	omxStandardizeCovMatrix(cov, corList, weights, fc);
+
 	if(!R_finite(omxMatrixElement(cov, 0, 0))) {
-		/*char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Found correlation greater than 1.");
-		omxRaiseErrorf(errstr);
-		free(errstr);*/
-		free(corList);
-		free(weights);
 		free(uBounds);
 		free(lBounds);
 		omxSetMatrixElement(result, 0, 0, NA_REAL);
@@ -1674,8 +1815,6 @@ static void omxMultivariateNormalIntegration(FitContext *fc, omxMatrix** matList
 			sprintf(errstr, "Thresholds are not strictly increasing: %3.3f >= %3.3f.", lBounds[i], uBounds[i]);
 			omxRaiseError(errstr);
 			free(errstr);
-			free(corList);
-			free(weights);
 			free(uBounds);
 			free(lBounds);
 			return;
@@ -1695,7 +1834,7 @@ static void omxMultivariateNormalIntegration(FitContext *fc, omxMatrix** matList
 	double absEps = Global->absEps;
 	double relEps = Global->relEps;
 	int MaxPts = Global->maxptsa + Global->maxptsb * cov->rows + Global->maxptsc * cov->rows * cov->rows;
-	F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin.data(), corList, 
+	F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin.data(), corList.data(),
 		&MaxPts, &absEps, &relEps, &Error, &likelihood, &inform, &fortranThreadId);
 
 	if(OMX_DEBUG_ALGEBRA) { mxLog("Output of sadmvn is %f, %f, %d.", Error, likelihood, inform); }
@@ -1705,15 +1844,11 @@ static void omxMultivariateNormalIntegration(FitContext *fc, omxMatrix** matList
 		sprintf(errstr, "Improper input to sadmvn.");
 		omxRaiseError(errstr);
 		free(errstr);
-		free(corList);
-		free(weights);
 		free(uBounds);
 		free(lBounds);
 		return;
 	}
 
-	free(corList);
-	free(weights);
 	free(uBounds);
 	free(lBounds);
 
@@ -1794,10 +1929,10 @@ static void omxAllIntegrationNorms(FitContext *fc, omxMatrix** matList, int numA
 	/* Conformance checks: */
 	if(result->rows != totalLevels || result->cols != 1) omxResizeMatrix(result, totalLevels, 1);
 
-	double *weights = (double*) malloc(nCols * sizeof(double));
-	double *corList = (double*) malloc((nCols * (nCols + 1) / 2) * sizeof(double));
+	Eigen::VectorXd weights;
+	Eigen::VectorXd corList;
 
-	omxStandardizeCovMatrix(cov, &(*corList), &(*weights), fc);
+	omxStandardizeCovMatrix(cov, corList, weights, fc);
 
 	// SADMVN calls Alan Genz's sadmvn.f--see appropriate file for licensing info.
 	// TODO: Check with Genz: should we be using sadmvn or sadmvn?
@@ -1844,7 +1979,7 @@ static void omxAllIntegrationNorms(FitContext *fc, omxMatrix** matList, int numA
 	double absEps = Global->absEps;
 	double relEps = Global->relEps;
 	int MaxPts = Global->maxptsa + Global->maxptsb * cov->rows + Global->maxptsc * cov->rows * cov->rows;
-	F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin, corList, 
+	F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin, corList.data(), 
 		&MaxPts, &absEps, &relEps, &Error, &likelihood, &inform, &fortranThreadId);
 
 	if(OMX_DEBUG_ALGEBRA) { mxLog("Output of sadmvn is %f, %f, %d.", Error, likelihood, inform); }
@@ -1888,7 +2023,7 @@ static void omxAllIntegrationNorms(FitContext *fc, omxMatrix** matList, int numA
 
 		}
 
-		F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin, corList,
+		F77_CALL(sadmvn)(&numVars, &(lBounds[0]), &(*uBounds), Infin, corList.data(),
 			&MaxPts, &absEps, &relEps, &Error, &likelihood, &inform, &fortranThreadId);
 
 		if(OMX_DEBUG_ALGEBRA) { mxLog("Output of sadmvn is %f, %f, %d.", Error, likelihood, inform); }
@@ -1908,8 +2043,6 @@ AllIntCleanup:
 	free(Infin);
 	free(lBounds);
 	free(uBounds);
-	free(weights);
-	free(corList);
 	free(thresholdMats);
 	free(numThresholds);
 	free(matNums);

@@ -29,6 +29,13 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 				       "trouble then please recreate your model with the ",
 				       "current version of OpenMx."))
 		}
+	} else {
+		curV <- packageVersion('OpenMx')
+		warning(paste0("You are using OpenMx version ", curV,
+			       " with a model created by an old version of OpenMx. ",
+			       "This may work fine (fingers crossed), but if you run into ",
+			       "trouble then please recreate your model with the ",
+			       "current version of OpenMx."))
 	}
 
 	if (is.null(intervals)) {
@@ -124,8 +131,8 @@ runHelper <- function(model, frontendStart,
 			if (length(intervals) && intervals) {
 				ciOpt <- mxComputeGradientDescent(
 				    fitfunction=fitNum, nudgeZeroStarts=FALSE, maxMajorIter=150)
-				cType <- 'ineq'
-				if (ciOpt$engine == "NPSOL") cType <- 'none'
+				if (ciOpt$engine == "SLSQP") cType <- 'ineq'
+				else cType <- 'none'
 				steps <- c(steps, CI=mxComputeConfidenceInterval(
 				    fitfunction=fitNum, constraintType=cType, plan=ciOpt))
 			}
@@ -266,9 +273,12 @@ runHelper <- function(model, frontendStart,
 		model@output$chi <- wlsChi$Chi
 		model@output$chiDoF <- wlsChi$ChiDoF
 	}
-	if (model@output$status$code < 5 && !is.null(model@output[['infoDefinite']]) &&
-	    !is.na(model@output[['infoDefinite']]) && !model@output[['infoDefinite']]) {
-		model@output$status$code <- 5
+	if (is.na(model@output$status$code) ||
+	    (!is.na(model@output$status$code) && model@output$status$code < 5)) {
+		if (!is.null(model@output[['infoDefinite']]) &&
+		    !is.na(model@output[['infoDefinite']]) && !model@output[['infoDefinite']]) {
+			model@output$status$code <- 5   # INFORM_NOT_CONVEX
+		}
 	}
 
 	# Currently runstate preserves the pre-backend state of the model.

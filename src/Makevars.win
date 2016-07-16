@@ -1,4 +1,6 @@
 NPSOL_LIBS=
+CXX_STD = CXX11
+
 PKG_LIBS=$(FLIBS) $(BLAS_LIBS) $(LAPACK_LIBS) $(NPSOL_LIBS)
 
 # Uncomment one of the following lines to turn on all debugging output in the backend

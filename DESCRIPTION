@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2016-06-22
+Date: 2016-07-15
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -68,10 +68,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
         'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
         'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'zzz.R'
-Version: 2.6.7
+Version: 2.6.8
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-06-22 10:22:28 UTC; joshua
+Packaged: 2016-07-16 19:12:05 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -98,4 +98,4 @@ Author: Steven M. Boker [aut],
   Dieter Kraft [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2016-06-23 00:35:57
+Date/Publication: 2016-07-16 23:06:59

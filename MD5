@@ -1,5 +1,5 @@
 6b05be98626f05e7106ef2e61cfff381 *CHANGES
-845a99a9f4f9ddea2af305a6e7232b82 *DESCRIPTION
+4ea86e857a214b43e1def2c82d5b2497 *DESCRIPTION
 7741bbf644cd58098b86d0e2bf5cb4a6 *NAMESPACE
 005fb800d8006c3ad5aa8fd0a398206a *NEWS
 0c6d1bc7695498fab5eea4544e4bf0b3 *R/0ClassUnion.R
@@ -91,7 +91,7 @@ dbc1cdec1c65074711492fd8028666b6 *R/MxTryHard.R
 2b8a6e638509ffeab4a8a56fa67d6bc9 *R/MxTypes.R
 4ab0cc029ab4137b790af44ce3cb7a53 *R/MxUnitTesting.R
 cdca3cb9e9c462ee37ab5190639f6eb2 *R/MxUntitled.R
-f6bf3acc7ac56831e9b2724bee6a2372 *R/MxVersion.R
+8eb5d44ab9c706938c2b78b30715378c *R/MxVersion.R
 34345ac1d788efd1ad539e6804b50be5 *R/MxVersion.R.in
 66929df3c576ce067077a401e3944d3c *R/OriginalMx.R
 571ae782e7d58c0ba9b1826d50623961 *R/SdiagMatrix.R
@@ -211,7 +211,7 @@ d1b5f52bbc21bdb65ef1ccf28b0986fd *demo/UnivariateTwinAnalysis_PathRaw.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 ec949d8d3f505ea5d93de216b7df8e2c *demo/mxThreshold.R
 a3de1e047d79314d702b5bed5fd85b6d *demo/omxConstrainMLThresholds.R
-8dcba914b17f1392cfd89f4ca4ca7027 *inst/CITATION
+cdecf9c53c6a3c18b93809840768a53b *inst/CITATION
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R
 d0455e6008f4dc52746e5418d900b9a8 *inst/models/enormous/RAM-3Factor-192Indicators-covdata-a.R
 e9693b978a952f211eda225973bc8c68 *inst/models/enormous/RAM-3Factor-192Indicators-rawdata-a.R
@@ -929,7 +929,7 @@ b533183cd9f22e81499bf9fc61e0bc8a *src/omxImportFrontendState.cpp
 506b66b6d3a0a843cbf48bce0aceaa3f *src/omxImportFrontendState.h
 347df6ff66977f4b97a9023d6270701f *src/omxLISRELExpectation.cpp
 ed69d7bbf93f0d041d57f3f7dd92b8b2 *src/omxLISRELExpectation.h
-d939b3afd1b510c1b4b57500d9407962 *src/omxMLFitFunction.cpp
+4a312f6bbce41a9824a3c4af7cb01e21 *src/omxMLFitFunction.cpp
 8c7ce6b3f85e2a11e3c621f507b28848 *src/omxMatrix.cpp
 37c65a0b2466a18b312881ee2f9465f1 *src/omxMatrix.h
 45363cef8926afbd730ef2506888dd55 *src/omxNPSOLSpecific.cpp

@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,4 +32,5 @@ void omxPopulateGREMLAttributes(omxExpectation *ox, SEXP algebra);
 void dropCasesAndEigenize(omxMatrix* om, Eigen::MatrixXd &em, int num2drop, std::vector< int > todrop, 
 	int symmetric, int origDim);
 omxMatrix* omxGetGREMLExpectationComponent(omxExpectation* ox, const char* component);
+void dropCasesFromAlgdV(omxMatrix* om, int num2drop, std::vector< int > todrop, int symmetric, int origDim);
 

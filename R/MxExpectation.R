@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -34,7 +34,8 @@
 ##' @rdname MxBaseExpectation-class
 setClass(Class = "MxBaseExpectation", 
 	 representation = representation(
-	   data = "MxCharOrNumber",      # filled in during flattening
+		 data = "MxCharOrNumber",      # filled in during flattening
+		 dataColumns = "integer",      # subset and permutation of data columns
 	     .runDims = "character",
 	     output = "list",
 	     debug = "list",
@@ -93,6 +94,11 @@ setGeneric("genericGetExpectedVector",
 	return(standardGeneric("genericGetExpectedVector"))
 })
 
+setGeneric("genericGetExpectedStandVector",
+	function(.Object, model, defvar.row) {
+	return(standardGeneric("genericGetExpectedStandVector"))
+})
+
 setMethod("genericExpAddEntities", "MxBaseExpectation",
 	function(.Object, job, flatJob, labelsData) {
 		return(job)
@@ -135,13 +141,16 @@ setMethod("genericExpRename", "NULL",
 
 setMethod("genericExpGetPrecision", "MxBaseExpectation",
 	function(.Object) {
-		return(list(stepSize=0.0001, iterations=4L))
+		return(list(stepSize=mxOption(NULL, "Gradient step size"), iterations=4L))
 })
 
 setMethod("genericGetExpected", "MxBaseExpectation",
 	function(.Object, model, what, defvar.row) stop("Not implemented"))
 
 setMethod("genericGetExpectedVector", "MxBaseExpectation",
+	function(.Object, model, defvar.row) stop("Not implemented"))
+
+setMethod("genericGetExpectedStandVector", "MxBaseExpectation",
 	function(.Object, model, defvar.row) stop("Not implemented"))
 
 setMethod("$", "MxBaseExpectation", imxExtractSlot)

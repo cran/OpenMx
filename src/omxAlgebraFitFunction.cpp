@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@
 #include "matrix.h"
 #include "omxBuffer.h"
 #include <algorithm>
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 struct AlgebraFitFunction {
 	omxFitFunction *ff;
@@ -132,7 +136,7 @@ void AlgebraFitFunction::compute(FitContext *fc, int want)
 		buildParamMap(fc->varGroup);
 	}
 
-	if (want & (FF_COMPUTE_FIT | FF_COMPUTE_INITIAL_FIT)) {
+	if (want & (FF_COMPUTE_FIT | FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) {
 		if (algebra) {
 			omxRecompute(algebra, fc);
 			ff->matrix->data[0] = algebra->data[0];

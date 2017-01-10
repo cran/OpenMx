@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ The state space expectation is defined by the following model equations.
 \deqn{y_t = C x_t + D u_t + r_t}{y[t] = C x[t] + D u[t] + r[t]}
 with \eqn{q(t)} and \eqn{r_t}{r[t]} both independently and identically distributed random Gaussian (normal) variables with mean zero and covariance matrices \eqn{Q} and \eqn{R}, respectively.  Subscripts or square brackets indicate discrete indices; parentheses indicate continuous indices.  The derivative of \eqn{x(t)} with respect to \eqn{t} is \eqn{\frac{d}{dt} x(t)}{dx(t)/dt}.
 
-The first equation is called the state equation.  It describes how the latent states change over time with a first-order linear differential equation.
+The first equation is called the state equation.  It describes how the latent states change over time with a first-order linear differential equation. Unlike some other programs, we do not require that the continuous time \eqn{A} matrix has an inverse. This allows zero dynamics (i.e. no growth models) and many other important kinds of processes.
 
 The second equation is called the output equation.  It describes how the latent states relate to the observed states at a single point in time.  The output equation shows how the observed output is produced by the latent states.  Also, the output equation in state space modeling is directly analogous to the measurement model in LISREL structural equation modeling.
 
@@ -133,7 +133,7 @@ R.E. Kalman and R.S. Bucy  (1961).  New Results in Linear Filtering and Predicti
 
 G. Petris  (2010).  An R Package for Dynamic Linear Models.  \emph{Journal of Statistical Software, 36}, 1-16.
 
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 
 \examples{

@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2016-07-28
+Date: 2017-01-09
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -18,9 +18,11 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Massachusetts Institute of Technology", role="cph"),
     person("S. G.", "Johnson", role="cph"),
     person("Association for Computing Machinery", role="cph"),
-    person("Dieter", "Kraft", role="cph"))
-URL: http://openmx.psyc.virginia.edu, https://github.com/OpenMx/OpenMx
-BugReports: http://openmx.psyc.virginia.edu/forums
+    person("Dieter", "Kraft", role="cph"),
+    person("Stefan", "Wilhelm", role="cph"),
+    person("Manjunath B G", role="cph"))
+URL: http://openmx.ssri.psu.edu, https://github.com/OpenMx/OpenMx
+BugReports: http://openmx.ssri.psu.edu/forums
 Description: Facilitates treatment of statistical model specifications as things
     that can be generated and manipulated programmatically. Structural equation
     models may be specified with reticular action model matrices or paths, linear
@@ -31,7 +33,8 @@ Description: Facilitates treatment of statistical model specifications as things
     differential equations, state space, and many others.
 SystemRequirements: GNU make
 License: Apache License (== 2.0)
-LinkingTo: Rcpp, RcppEigen, StanHeaders (>= 2.7), BH, rpf (>= 0.45)
+LinkingTo: Rcpp, RcppEigen, StanHeaders (>= 2.10.0.2), BH (>= 1.60),
+        rpf (>= 0.45)
 Depends: R (>= 3.0.2), digest, MASS, methods, Matrix, Rcpp, parallel
 Suggests: mvtnorm, numDeriv, roxygen2 (>= 3.1), Rmpi, rpf (>= 0.45),
         snowfall, lme4
@@ -67,11 +70,12 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxFitFunctionR.R' 'MxRObjective.R' 'MxExpectationStateSpace.R'
         'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
         'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
-        'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'zzz.R'
-Version: 2.6.9
+        'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'MxSE.R'
+        'zzz.R'
+Version: 2.7.2
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-07-28 14:35:40 UTC; joshua
+Packaged: 2017-01-09 17:08:32 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -95,7 +99,9 @@ Author: Steven M. Boker [aut],
   Massachusetts Institute of Technology [cph],
   S. G. Johnson [cph],
   Association for Computing Machinery [cph],
-  Dieter Kraft [cph]
+  Dieter Kraft [cph],
+  Stefan Wilhelm [cph],
+  Manjunath B G [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2016-07-28 19:46:18
+Date/Publication: 2017-01-10 19:05:16

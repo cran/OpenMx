@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2016 Joshua Nathaniel Pritikin and contributors
+ * Copyright 2012-2017 Joshua Nathaniel Pritikin and contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@
 #include "dmvnorm.h"
 #include "omxBuffer.h"
 #include "matrix.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 #define USE_EXTERNAL_LIBRPF 1
 
@@ -162,9 +166,9 @@ void BA81Estep<T>::recordTable(class ifaGroup *state)
 	state->quad.prepExpectedTable();
 }
 
-static int getLatentVersion(BA81Expect *state)
+static unsigned getLatentVersion(BA81Expect *state)
 {
-	int vv = 1;  // to ensure it doesn't match on the first test
+	unsigned vv = 1;  // to ensure it doesn't match on the first test
 	if (state->_latentMeanOut) vv += omxGetMatrixVersion(state->_latentMeanOut);
 	if (state->_latentCovOut) vv += omxGetMatrixVersion(state->_latentCovOut);
 	return vv;
@@ -479,8 +483,8 @@ void omxInitExpectationBA81(omxExpectation* oo) {
 	state->grp.setFactorNames(state->itemParam->rownames);
 
 	{
-		ProtectedSEXP tmp(R_do_slot(rObj, Rf_install(".detectIndependence")));
-		state->grp.detectIndependence = Rf_asLogical(tmp);
+		ProtectedSEXP tmp2(R_do_slot(rObj, Rf_install(".detectIndependence")));
+		state->grp.detectIndependence = Rf_asLogical(tmp2);
 	}
 
 	{ScopedProtect p1(tmp, R_do_slot(rObj, Rf_install("EstepItem")));
@@ -522,7 +526,7 @@ void omxInitExpectationBA81(omxExpectation* oo) {
 		rowMap.resize(data->rows);
 		int numUnique = 0;
 		for (int rx=0; rx < data->rows; ) {
-			int rw = omxDataNumIdenticalRows(state->data, rx);
+			int rw = 1;
 			state->grp.rowWeight[numUnique] = rw;
 			rowMap[numUnique] = rx;
 			rx += rw;
@@ -546,12 +550,7 @@ void omxInitExpectationBA81(omxExpectation* oo) {
 	}
 	// complain about non-integral rowWeights (EAP can't work) TODO
 
-	const double *colMap; // should be integer TODO
-	{
-	ScopedProtect p1(tmp, R_do_slot(rObj, Rf_install("dataColumns")));
-	if (Rf_length(tmp) != numItems) Rf_error("dataColumns must be length %d", numItems);
-	colMap = REAL(tmp);
-	}
+	auto colMap = oo->getDataColumns();
 
 	for (int cx = 0; cx < numItems; cx++) {
 		int *col = omxIntDataColumnUnsafe(data, colMap[cx]);

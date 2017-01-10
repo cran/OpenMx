@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #How can mxTryHard() be improved for ordinal-threshold analyses?
 
 mxTryHard <- function(model, extraTries = 10, greenOK = FALSE, loc = 1, 
-											scale = 0.25,  initialGradientStepSize = .00001, 
+		      scale = 0.25,  initialGradientStepSize = mxOption(NULL, "Gradient step size"), 
 											initialGradientIterations = as.integer(options()$mxOption$'Gradient iterations'),
 											initialTolerance=as.numeric(options()$mxOption$'Optimality tolerance'), 
 											checkHess = TRUE, fit2beat = Inf, paste = TRUE,
@@ -37,11 +37,21 @@ mxTryHard <- function(model, extraTries = 10, greenOK = FALSE, loc = 1,
 	if (!is.null(model@compute) && (!.hasSlot(model@compute, '.persist') || !model@compute@.persist)) {
 		model@compute <- NULL
 	}
+	lackOfConstraints <- verifyNoConstraints(model)
 	defaultComputePlan <- (is.null(model@compute) || is(model@compute, 'MxComputeDefault'))
 	relevantOptions <- list(base::options()$mxOption$"Calculate Hessian", base::options()$mxOption$"Standard Errors",
-													base::options()$mxOption$"Default optimizer")
+													base::options()$mxOption$"Default optimizer", base::options()$mxOption$"Gradient algorithm")
 	if("Calculate Hessian" %in%  names(model@options)){relevantOptions[[1]] <- model@options$"Calculate Hessian"}
 	if("Standard Errors" %in%  names(model@options)){relevantOptions[[2]] <- model@options$"Standard Errors"}
+	if("Gradient algorithm" %in%  names(model@options)){relevantOptions[[4]] <- model@options$"Gradient algorithm"}
+	if(!lackOfConstraints){
+		relevantOptions[[1]] <- "No"
+		relevantOptions[[2]] <- "No"
+		if(checkHess){
+			warning("argument 'checkHess' coerced to FALSE due to presence of MxConstraints")
+			checkHess <- FALSE
+		}
+	}
 	#If the options call for SEs and/or Hessian, there is no custom compute plan, and the Hessian will not be checked
 	#every fit attempt, then computing SEs and/or Hessian can be put off until the MLE is obtained:
 	SElater <- ifelse( (!checkHess && relevantOptions[[2]]=="Yes" && defaultComputePlan), TRUE, FALSE )
@@ -124,7 +134,7 @@ mxTryHard <- function(model, extraTries = 10, greenOK = FALSE, loc = 1,
 			steps <- list(GD=mxComputeGradientDescent(
 				verbose=verbose, gradientStepSize = gradientStepSize, 
 				nudgeZeroStarts=FALSE,   gradientIterations = gradientIterations, tolerance=tolerance, 
-				maxMajorIter=maxMajorIter))
+				maxMajorIter=maxMajorIter, gradientAlgo=relevantOptions[[4]]))
 			if(checkHess){steps <- c(steps,ND=mxComputeNumericDeriv(),SE=mxComputeStandardError())}
 			model <- OpenMx::mxModel(
 				model,
@@ -214,11 +224,11 @@ mxTryHard <- function(model, extraTries = 10, greenOK = FALSE, loc = 1,
 			if(defaultComputePlan){
 				steps <- list()
 				if(doIntervals){
+					ciOpt <- mxComputeGradientDescent(
+						nudgeZeroStarts=FALSE,gradientIterations=gradientIterations,
+						tolerance=tolerance, maxMajorIter=maxMajorIter, gradientAlgo=relevantOptions[[4]])
 					steps <- c(steps,CI=mxComputeConfidenceInterval(
-						plan=mxComputeGradientDescent(
-							nudgeZeroStarts=FALSE,gradientIterations=gradientIterations, tolerance=tolerance, 
-							maxMajorIter=maxMajorIter),
-						constraintType=ifelse(relevantOptions[[3]] == 'SLSQP','ineq','none')))
+								 plan=ciOpt, constraintType=ciOpt$defaultCImethod))
 				}
 				if(Hesslater){steps <- c(steps,ND=mxComputeNumericDeriv())}
 				if(SElater){
@@ -255,11 +265,11 @@ mxTryHard <- function(model, extraTries = 10, greenOK = FALSE, loc = 1,
 				if(defaultComputePlan){
 					steps <- list()
 					if(doIntervals){
+						ciOpt <- mxComputeGradientDescent(
+							nudgeZeroStarts=FALSE,gradientIterations=gradientIterations,
+							tolerance=tolerance, maxMajorIter=maxMajorIter, gradientAlgo=relevantOptions[[4]])
 						steps <- c(steps,CI=mxComputeConfidenceInterval(
-							plan=mxComputeGradientDescent(
-								nudgeZeroStarts=FALSE,gradientIterations=gradientIterations, tolerance=tolerance, 
-								maxMajorIter=maxMajorIter),
-							constraintType=ifelse(relevantOptions[[3]] == 'SLSQP','ineq','none')))
+									 plan=ciOpt, constraintType=ciOpt$defaultCImethod))
 					}
 					if(Hesslater){steps <- c(steps,ND=mxComputeNumericDeriv())}
 					if(SElater){
@@ -422,3 +432,13 @@ mxTryHardOrdinal <- function(model, greenOK = TRUE,	checkHess = FALSE, finetuneG
 									 exhaustive=exhaustive,OKstatuscodes=OKstatuscodes,wtgcsv=wtgcsv,...))
 }
 	
+
+
+verifyNoConstraints <- function(model){
+	#TODO: Still not sure how this should work when there are independent submodels, and some submodels have
+	#MxConstraints whereas others do not...:
+	out <- ifelse((length(model@constraints)), 0, 1)
+	if(length(model@submodels)){out <- prod(out,sapply(model@submodels,verifyNoConstraints))}
+	return(out)
+}
+

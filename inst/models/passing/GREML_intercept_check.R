@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 require(OpenMx)
 require(mvtnorm)
 
@@ -15,7 +31,7 @@ Cmod <- mxModel(
 	"GREMLtest",
 	mxData(observed = Dat, type="raw", sort=FALSE),
 	ge,
-	mxFitFunctionGREML(),
+	mxFitFunctionML(),
 	mxMatrix(type = "Diag", nrow = 104, ncol=104, free=T, values = 0.5, labels = "ve", 
 					 lbound = 0.0001, name = "Ve"),
 	mxMatrix(type="Full",nrow=1,ncol=1,free=T,values=0.5,labels="vc",name="Vc"),

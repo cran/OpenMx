@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,13 +30,10 @@
 #ifndef _OMXDATA_H_
 #define _OMXDATA_H_
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h> 
+#include "omxDefines.h"
 #include <R_ext/Rdynload.h> 
 #include <R_ext/BLAS.h>
 #include <R_ext/Lapack.h> 
-#include "omxDefines.h"
 
 typedef struct omxData omxData;
 typedef struct omxContiguousData omxContiguousData;
@@ -65,11 +62,14 @@ struct omxContiguousData {
 };
 
 struct omxThresholdColumn {
-	int column;				// Which column has the thresholds
+	int dColumn;			// Which column in the matrix/data.frame
+	int column;			// Which column in the thresholds matrix
 	int numThresholds;		// And how many thresholds
 
-	// for continuous variables, this structure is preserved all zero
-	omxThresholdColumn() : column(0), numThresholds(0) {};
+	// for continuous variables, numThresholds=0
+	omxThresholdColumn() : dColumn(-1), column(0), numThresholds(0) {};
+
+	void log() { mxLog("dCol=%d col=%d #thr=%d", dColumn, column, numThresholds); }
 };
 
 enum ColumnDataType {
@@ -99,6 +99,7 @@ class omxData {
 	bool hasPrimaryKey() const { return primaryKey >= 0; };
 	int lookupRowOfKey(int key);
 	int primaryKeyOfRow(int row);
+	void omxPrintData(const char *header, int maxRows, int *permute);
 	void omxPrintData(const char *header, int maxRows);
 	void omxPrintData(const char *header);
 	void assertColumnIsData(int col);
@@ -117,11 +118,7 @@ class omxData {
 	// type=="raw"
 	std::vector<ColumnData> rawCols;
 	int numFactor, numNumeric;			// Number of ordinal and continuous columns
-	bool isSorted;
-	int* indexVector;						// The "official" index into the data set
-	int* identicalDefs;					// Number of consecutive rows with identical def. vars
-	int* identicalMissingness;			// Number of consecutive rows with identical missingness patterns
-	int* identicalRows;					// Number of consecutive rows with identical data
+	bool needSort;
 
 	std::vector<omxDefinitionVar> defVars;
  public:
@@ -140,7 +137,6 @@ class omxData {
 
 	omxData();
 	void newDataStatic(omxState *, SEXP dataObject);
-	SEXP getRowNames();
 	void connectDynamicData(omxState *currentState);
 	void recompute();
 	friend void omxDataKeysCompatible(omxData *upper, omxData *lower, int foreignKey);
@@ -150,14 +146,38 @@ omxData* omxNewDataFromMxData(SEXP dataObject, const char *name);
 
 omxData* omxDataLookupFromState(SEXP dataObject, omxState* state);	// Retrieves a data object from the state
 void omxFreeData(omxData* od);					// Release any held data.
-void omxSetContiguousDataColumns(omxContiguousData* contiguous, omxData* data, omxMatrix* colList);
+
+template <typename T>
+void omxSetContiguousDataColumns(omxContiguousData* contiguous, omxData* data,
+				 Eigen::MatrixBase<T> &colList)
+{
+	contiguous->isContiguous = FALSE;   // Assume not contiguous
+
+	if (data->dataMat == NULL) return; // Data has no matrix elements, so skip.
+
+	omxMatrix* dataMat = data->dataMat;
+	if (dataMat->colMajor) return;      // If data matrix is column-major, there's no continuity
+	
+	int colListLength = colList.size();             // # of columns in the cov matrix
+	double start = colList[0];                      // Data col of first column of the covariance
+	contiguous->start = (int) start;                // That's our starting point.
+	contiguous->length = colListLength;             // And the length is ncol(cov)
+	
+	for(int i = 1; i < colListLength; i++) {        // Make sure that the col list is 
+		double next = colList[i];               // contiguously increasing in column number
+		if (next != (start + i)) return;            // If it isn't, it's not contiguous data
+	}
+	
+	contiguous->isContiguous = TRUE;    // Passed.  This is contiguous.
+}
 
 /* Getters 'n Setters */
-static inline bool omxDataIsSorted(omxData* data) { return data->isSorted; }
 int omxDataGetNumFactorLevels(omxData *od, int col);
 double omxDoubleDataElement(omxData *od, int row, int col);
 double *omxDoubleDataColumn(omxData *od, int col);
 int omxIntDataElement(omxData *od, int row, int col);						// Returns one data object as an integer
+
+bool omxDataElementMissing(omxData *od, int row, int col);
 
 inline int omxKeyDataElement(omxData *od, int row, int col)
 {
@@ -165,6 +185,7 @@ inline int omxKeyDataElement(omxData *od, int row, int col)
 	return cd.intData[row];
 }
 
+inline bool omxDataHasMatrix(omxData *od) { return od->dataMat != 0; }
 omxMatrix* omxDataCovariance(omxData *od);
 omxMatrix* omxDataMeans(omxData *od);
 omxMatrix* omxDataAcov(omxData *od);
@@ -174,7 +195,7 @@ std::vector<omxThresholdColumn> &omxDataThresholds(omxData *od);
 void omxDataRow(omxData *od, int row, omxMatrix* colList, omxMatrix* om);// Populates a matrix with a single data row
 
 template <typename T>
-void omxDataRow(omxData *od, int row, Eigen::MatrixBase<T> &colList, omxMatrix* om)
+void omxDataRow(omxData *od, int row, const Eigen::MatrixBase<T> &colList, omxMatrix* om)
 {
 	if (row >= od->rows) Rf_error("Invalid row");
 
@@ -194,14 +215,6 @@ void omxDataRow(omxData *od, int row, Eigen::MatrixBase<T> &colList, omxMatrix* 
 };
 
 void omxContiguousDataRow(omxData *od, int row, int start, int length, omxMatrix* om);// Populates a matrix with a contiguous data row
-int omxDataIndex(omxData *od, int row);										// Returns the unsorted (original) index of the current row
-int omxDataNumIdenticalRows(omxData *od, int row);							// Returns the number of rows identical to this one in the data set
-int omxDataNumIdenticalMissingness(omxData *od, int row);					// Returns the number of rows with definition variables and missingness identical to this one in the data set
-int omxDataNumIdenticalContinuousRows(omxData *od, int row);                // Number of rows with continuous variables remaining, or Inf if no continous vars
-int omxDataNumIdenticalContinuousMissingness(omxData *od, int row);         // Number of rows with continuous variables remaining, or Inf if no continous vars
-int omxDataNumIdenticalOrdinalRows(omxData *od, int row);
-int omxDataNumIdenticalOrdinalMissingness(omxData *od, int row);
-int omxDataNumIdenticalDefs(omxData *od, int row);							// Returns the number of rows with definition variables identical to this one in the data set
 
 static OMXINLINE int
 omxIntDataElementUnsafe(omxData *od, int row, int col)
@@ -225,12 +238,6 @@ int omxDataNumFactor(omxData *od);                    // Number of factor column
 
 /* Function wrappers that switch based on inclusion of algebras */
 
-void omxPrintData(omxData *od, const char *header, int maxRows);
-void omxPrintData(omxData *od, const char *header);
-
 double omxDataDF(omxData *od);
-
-SEXP findIdenticalRowsData(SEXP data, SEXP missing, SEXP defvars,
-			   SEXP skipMissingness, SEXP skipDefvars);
 
 #endif /* _OMXDATA_H_ */

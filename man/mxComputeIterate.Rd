@@ -6,7 +6,7 @@
 \title{Repeatedly invoke a series of compute objects until change is less than tolerance}
 \usage{
 mxComputeIterate(steps, ..., maxIter = 500L, tolerance = 1e-09,
-  verbose = 0L, freeSet = NA_character_)
+  verbose = 0L, freeSet = NA_character_, maxDuration = as.numeric(NA))
 }
 \arguments{
 \item{steps}{a list of compute objects}
@@ -20,6 +20,8 @@ mxComputeIterate(steps, ..., maxIter = 500L, tolerance = 1e-09,
 \item{verbose}{level of debugging output}
 
 \item{freeSet}{Names of matrices containing free variables.}
+
+\item{maxDuration}{the maximum amount of time (in seconds) to iterate}
 }
 \description{
 One step (typically the last) must compute the fit or maxAbsChange.

@@ -2,6 +2,9 @@
 
 set -o errexit
 
+wwwHome=openmx.psyc.virginia.edu
+#wwwHome=openmx.ssri.psu.edu
+
 isdef() {
     tmp1=/tmp/openmx.$$.cpp
     tmp2=/tmp/openmx.$$.out
@@ -42,6 +45,7 @@ fi
 
 REXEC=${R_HOME}/bin/R
 
+echo 'NOTE: ./configure is not an autoconf generated script.'
 echo 'Change default C/C++ compiler and default compile flags by editing ~/.R/Makevars'
 
 CXX=$($REXEC CMD config CXX)
@@ -58,9 +62,9 @@ fi
 
 if [ "$cxx_type" = gcc ]; then
     cxx_version=$($CXX -dumpversion | awk -F '.' '{print $1 "." $2}')
-    COMPILER_CXXFLAGS="-Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter -Wvla -Wno-unused-local-typedefs"
+    COMPILER_CXXFLAGS="-Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter -Wvla -Wno-unused-local-typedefs -Wno-deprecated-declarations"
     if [ $(compareVersions $cxx_version 4.9) -gt -1 ]; then
-	COMPILER_CXXFLAGS="$COMPILER_CXXFLAGS -fdiagnostics-color=auto"
+	COMPILER_CXXFLAGS="$COMPILER_CXXFLAGS -fdiagnostics-color=auto -DSHADOW_DIAG"
 	COMPILER_LDFLAGS="$COMPILER_LDFLAGS"
 	xcheck_CXXFLAGS="-fsanitize=undefined"
 	xcheck_LDFLAGS="-fsanitize=undefined"
@@ -91,15 +95,22 @@ if [ -r inst/npsol/checksum ]; then
 	*Linux)
 	    omx_os=linux
 	    pick="linux/${omx_arch}/gcc${cxx_version}"
-	    npsol_url="http://openmx.psyc.virginia.edu/packages/npsol/$pick/libnpsol.a"
-	    if [ ! -f src/libnpsol.a ]; then
-		curl -s -o src/libnpsol.a "$npsol_url"
-	    fi
 	    want=$(grep "$pick" inst/npsol/checksum | cut -f1 -d' ')
+	    npsol_url1="http://$wwwHome/packages/npsol/linux/${omx_arch}/$want"
+	    npsol_url2="http://$wwwHome/packages/npsol/$pick/libnpsol.a"
+	    if [ ! -f src/libnpsol.a ]; then
+		curl -s -o src/libnpsol.a "$npsol_url1"
+		if grep -s 'HTML document' src/libnpsol.a; then
+		    curl -s -o src/libnpsol.a "$npsol_url2"
+		fi
+	    fi
 	    got=$(sha1sum src/libnpsol.a | cut -f1 -d' ')
-	    if [ "x$got" != "x$want" ]; then
+	    if [ "x$want" = x ]; then
+		echo "WARNING: Cannot verify correct libnpsol.a version"
+		npsol_library="src"
+	    elif [ "x$got" != "x$want" ]; then
 		rm -f src/libnpsol.a
-		echo "WARNING: Failed to download libnpsol.a from $npsol_url"
+		echo "WARNING: Ignoring bad libnpsol.a from $npsol_url1"
 	    else
 		npsol_library="src"
 	    fi
@@ -117,7 +128,10 @@ if [ -r inst/npsol/checksum ]; then
     esac
 fi
 
-echo "### Generated $(date)" > src/Makevars
+if [ -e src/Makevars ]; then
+    mv -f src/Makevars src/Makevars.old
+fi
+echo "### Generated from Makevars.in" > src/Makevars
 echo >> src/Makevars
 
 if [ ! -e inst/no-npsol -a -n "${npsol_library+1}" ]; then
@@ -160,3 +174,7 @@ echo >> src/Makevars
 echo "# ---- appending Makevars.in ----" >> src/Makevars
 echo >> src/Makevars
 cat src/Makevars.in >> src/Makevars
+
+if [ -e src/Makevars.old ] && cmp -s src/Makevars src/Makevars.old; then
+    mv src/Makevars.old src/Makevars
+fi

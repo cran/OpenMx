@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -45,7 +45,6 @@ setClass(Class = "MxExpectationStateSpace",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
 		definitionVars = "list",
-		dataColumns = "numeric",
 		thresholdColumns = "numeric",
 		thresholdLevels = "numeric",
 		threshnames = "character",
@@ -387,21 +386,6 @@ setMethod("genericExpRename", signature("MxExpectationStateSpace"),
 )
 
 
-#--------------------------------------------------------------------
-# Note: this turns off data sorting for the State Space expectation
-setMethod("genericExpAddEntities", "MxExpectationStateSpace",
-        function(.Object, job, flatJob, labelsData) {
-                #TODO figure out how to handle situation where submodel with state space expectation
-                # inherits its data from parent model.
-                key <- "No Sort Data"
-                #value <- c(job@options[[key]], getModelName(.Object)) #just add the model with the SSM exp to no sort
-                value <- unique(c(job@options[[key]], getAllModelNames(job))) # add every model in the whole tree to to no sort
-                # This is the nuclear option: whenever any model anywhere in the model tree has a SSMexp, don't sort any data.
-                job <- mxOption(job, key, value)
-                return(job)
-        }
-)
-
 getAllModelNames <- function(model){
 	ret <- getModelName(model)
 	if(length(model@submodels) > 0){
@@ -639,6 +623,9 @@ setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
 		xdim <- nrow(A)
 		tx <- matrix(0, xdim, tdim+1)
 		ty <- matrix(0, ydim, tdim)
+		I <- diag(1, nrow=nrow(A))
+		Z <- diag(0, nrow=nrow(A))
+		BLOCK <- matrix(0, nrow=2*nrow(A), ncol=2*ncol(A))
 		
 		tx[,1] <- x0
 		oldT <- 0
@@ -655,22 +642,31 @@ setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
 			}
 			if(continuousTime){
 				#browser()
-				I <- diag(1, nrow=nrow(A))
 				deltaT <- c(newT - oldT)
 				oldT <- newT
-				# If the A matrix is not all zero, do the full analytic integration
-				if(!identical(all.equal(A, matrix(0, nrow(A), ncol(A))), TRUE)){
-					expA <- OpenMx::expm(A * deltaT)
-					intA <- solve(A) %*% (expA - I)
-				} else {
-					# This is the analytic result when A equals a zero matrix
-					intA <- I*deltaT
-				}
-				xp <- expA %*% tx[,i-1] + intA %*% B %*% u
+				# First Block expm for A integral, and expm(A*deltaT)
+				BLOCK[1:(2*nrow(A)), 1:ncol(A)] <- 0
+				BLOCK[1:nrow(A), (nrow(A)+1):(2*nrow(A))] <- I
+				BLOCK[(nrow(A)+1):(2*nrow(A)), (nrow(A)+1):(2*nrow(A))] <- A
+				BLOCK <- OpenMx::expm(BLOCK*deltaT)
+				expA <- BLOCK[(nrow(A)+1):(2*nrow(A)), (nrow(A)+1):(2*nrow(A))]
+				intA <- BLOCK[1:nrow(A), (nrow(A)+1):(2*nrow(A))]
+				# Second Block expm for discretized Q
+				BLOCK[1:(nrow(A)), 1:ncol(A)] <- -t(A)
+				BLOCK[(nrow(A)+1):(2*nrow(A)), 1:ncol(A)] <- 0
+				BLOCK[1:nrow(A), (nrow(A)+1):(2*nrow(A))] <- Q
+				BLOCK[(nrow(A)+1):(2*nrow(A)), (nrow(A)+1):(2*nrow(A))] <- A
+				BLOCK <- OpenMx::expm(BLOCK*deltaT)
+				Ad <- expA
+				Bd <- intA %*% B
+				Qd <- t(Ad) %*% BLOCK[1:nrow(A), (nrow(A)+1):(2*nrow(A))]
 			} else {
-				xp <- A %*% tx[,i-1] + B %*% u
+				Ad <- A
+				Bd <- B
+				Qd <- Q
 			}
-			tx[,i] <- xp + t(mvtnorm::rmvnorm(1, rep(0, xdim), Q))
+			xp <- Ad %*% tx[,i-1] + Bd %*% u
+			tx[,i] <- xp + t(mvtnorm::rmvnorm(1, rep(0, xdim), Qd))
 			ty[,i-1] <- C %*% tx[,i-1] + D %*% u + t(mvtnorm::rmvnorm(1, rep(0, ydim), R))
 		}
 		ret <- t(ty)

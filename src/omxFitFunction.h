@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,14 +29,11 @@
 #ifndef _OMXFITFUNCTION_H_
 #define _OMXFITFUNCTION_H_
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h> 
+#include "omxDefines.h"
 #include <R_ext/Rdynload.h> 
 #include <R_ext/BLAS.h>
 #include <R_ext/Lapack.h>
 
-#include "omxDefines.h"
 #include "omxMatrix.h"
 #include "omxAlgebra.h"
 #include "omxData.h"
@@ -91,16 +88,15 @@ struct omxFitFunction {					// A fit function
 	bool hessianAvailable;
 	FitStatisticUnits units;
 	bool canDuplicate;
-	bool openmpUser; // can decide this in preoptimize
+	bool openmpUser; // can decide this in omxAlgebraPreeval
 
 	void setUnitsFromName(const char *name);
 	const char *name() const { return matrix->name(); }
 };
 
 /* Initialize and Destroy */
-omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitType,
-					  omxExpectation *expect, omxMatrix *matrix, bool rowLik);
-void omxFillMatrixFromMxFitFunction(omxMatrix* om, const char *fitType, int matrixNumber, SEXP rObj);
+void omxFillMatrixFromMxFitFunction(omxMatrix* om, int matrixNumber, SEXP rObj);
+
 void omxChangeFitType(omxFitFunction *oo, const char *fitType);
 void omxCompleteFitFunction(omxMatrix *om);
 void setFreeVarGroup(omxFitFunction *ff, FreeVarGroup *fvg);
@@ -113,8 +109,7 @@ void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc);
 void omxFitFunctionComputeAuto(omxFitFunction *off, int want, FitContext *fc);
 void omxFitFunctionComputeCI(omxFitFunction *off, int want, FitContext *fc);
 	void omxDuplicateFitMatrix(omxMatrix *tgt, const omxMatrix *src, omxState* targetState);
-void omxFitFunctionPreoptimize(omxFitFunction *off, FitContext *fc);
-	
+
 void omxFitFunctionPrint(omxFitFunction *source, const char* d);
 	
 omxMatrix* omxNewMatrixFromSlot(SEXP rObj, omxState* state, const char* slotName);
@@ -129,6 +124,7 @@ void omxInitFitFunctionBA81(omxFitFunction* oo);
 void ba81SetFreeVarGroup(omxFitFunction *oo, FreeVarGroup *fvg);
 void omxInitGREMLFitFunction(omxFitFunction *oo);
 void InitFellnerFitFunction(omxFitFunction *oo);
+void ssMLFitInit(omxFitFunction* oo);
 
 void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext *fc);
 void loglikelihoodCIFun(omxFitFunction* oo, int ffcompute, FitContext *fc);

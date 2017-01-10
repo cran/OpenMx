@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,13 +17,10 @@
 #ifndef _OMXALGEBRA_H_
 #define _OMXALGEBRA_H_
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h> 
+#include "omxDefines.h"
 #include <R_ext/Rdynload.h> 
 #include <R_ext/BLAS.h>
 #include <R_ext/Lapack.h>
-#include "omxDefines.h"
 
 typedef struct omxAlgebra omxAlgebra;
 
@@ -63,6 +60,8 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 																		// NOTE: Duplicates.
 
 void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc);
+
+void omxAlgebraPreeval(omxMatrix *mat, FitContext *fc);
 
 	void omxDuplicateAlgebra(omxMatrix *tgt, omxMatrix* src, omxState* tgtState);
 

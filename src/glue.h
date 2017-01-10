@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,8 +53,10 @@ class MxRList : private MxRListBase {
 	size_t size() const { return MxRListBase::size(); }
 	SEXP asR();
 	void add(const char *key, SEXP val) {
+		SEXP rkey = Rf_mkChar(key);
+		Rf_protect(rkey);
 		Rf_protect(val);
-		push_back(std::make_pair(Rf_mkChar(key), val));
+		push_back(std::make_pair(rkey, val));
 	};
 };
 
@@ -105,7 +107,14 @@ void exception_to_try_Rf_error( const std::exception& ex ) __attribute__ ((noret
 
 void getMatrixDims(SEXP r_theta, int *rows, int *cols);
 
-void markAsDataFrame(SEXP list);
+SEXP makeFactor(SEXP vec, int levels, const char **labels);
+void markAsDataFrame(SEXP list, int rows);
+inline void markAsDataFrame(SEXP list) { markAsDataFrame(list, -1); }
+
+SEXP dtmvnorm_marginal(SEXP xn, SEXP n, SEXP sigma, SEXP lower, SEXP upper);
+SEXP dtmvnorm_marginal2(SEXP Rxq, SEXP Rxr, SEXP Rq, SEXP Rr,
+			SEXP Rsigma, SEXP Rlower, SEXP Rupper);
+SEXP mtmvnorm(SEXP sigma, SEXP lower, SEXP upper);
 
 #ifndef M_LN_2PI
 #define M_LN_2PI        1.837877066409345483560659472811        /* log(2*pi) */

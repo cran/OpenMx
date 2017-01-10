@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ setClass(Class = "MxExpectationGREML",
            numFixEff = "integer",
            dims = "character",
            numStats = "numeric",
-           dataColumns = "numeric",
            name = "character"),
          contains = "MxBaseExpectation")
 
@@ -179,7 +178,7 @@ setMethod("genericExpFunConvert", "MxExpectationGREML",
               .Object@X <- as.matrix(mxDataObject@observed[,-1])
               .Object@yXcolnames <- colnames(mxDataObject@observed)
               .Object@numFixEff <- as.integer(ncol(mxDataObject@observed)-1)
-              .Object@dataColumns <- as.double(0:(nrow(mxDataObject@observed)-1))
+              .Object@dataColumns <- 0:(nrow(mxDataObject@observed)-1L)
             }
             else{
               if(length(.Object@Xvars)){
@@ -207,7 +206,7 @@ setMethod("genericExpFunConvert", "MxExpectationGREML",
               .Object@yXcolnames <- colnames(mm$yX)
               .Object@casesToDrop <- mm$casesToDrop
               .Object@numFixEff <- ncol(.Object@X)
-              .Object@dataColumns <- as.double(0:(nrow(.Object@X)-1))
+              .Object@dataColumns <- 0:(nrow(.Object@X)-1L)
             }
             #Get number of observed statistics BEFORE call to backend, so summary() can use it:
             .Object@numStats <- nrow(.Object@X)

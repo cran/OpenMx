@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,15 +16,15 @@
 
 #include <sys/stat.h>
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h>
-
 #include "omxDefines.h"
 #include "omxState.h"
 #include "omxNPSOLSpecific.h"
 #include "glue.h"
 #include "omxExportBackendState.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 void omxState::omxExportResults(MxRList *out, FitContext *fc)
 {

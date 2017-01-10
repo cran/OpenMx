@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,9 +28,8 @@
 #ifndef _OMXSTATE_H_
 #define _OMXSTATE_H_
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h>
+#include "omxDefines.h"
+
 #include <R_ext/Rdynload.h>
 #include <R_ext/BLAS.h>
 #include <R_ext/Lapack.h>
@@ -41,13 +40,10 @@
 #include <string>
 #include <stdarg.h>
 
-#include "omxDefines.h"
-
 /* Forward declarations for later includes */
 typedef struct omxState omxState;
 typedef struct omxFreeVar omxFreeVar;
-typedef struct omxConstraint omxConstraint;
-typedef struct omxConfidenceInterval omxConfidenceInterval;
+struct ConfidenceInterval;
 
 #include "omxMatrix.h"
 #include "omxAlgebra.h"
@@ -86,7 +82,7 @@ struct omxFreeVar {
 #define FREEVARGROUP_INVALID -2
 
 struct FreeVarGroup {
-	std::vector<int> id;
+	std::vector<int> id;              // see omxGlobal::deduplicateVarGroups
 	std::vector< omxFreeVar* > vars;
 
 	// see cacheDependencies
@@ -119,14 +115,20 @@ class omxConstraint {
 	};
 
 	const char *name;
-	int size;
+	int size, nrows, ncols;
 	enum Type opCode;
+	int linear;
+	omxMatrix* jacobian;
+	std::vector<int> jacMap;
 
-        omxConstraint(const char *name) : name(name) {};
+	//Constraints created by backend for CIs use this, the base-class constructor:
+        omxConstraint(const char *name) : name(name), linear(0), jacobian(NULL) {};
 	virtual ~omxConstraint() {};
 	void refreshAndGrab(FitContext *fc, double *out)
 	{ refreshAndGrab(fc, opCode, out); };
 	virtual void refreshAndGrab(FitContext *fc, Type ineqType, double *out) = 0;
+	virtual omxConstraint *duplicate(omxState *dest)=0;
+	virtual void prep(FitContext *fc) {};
 };
 
 class UserConstraint : public omxConstraint {
@@ -134,19 +136,15 @@ class UserConstraint : public omxConstraint {
 	typedef omxConstraint super;
 	omxMatrix *pad;
 	void refresh(FitContext *fc);
+	UserConstraint(const char *name) : super(name) {};
 
  public:
-	UserConstraint(FitContext *fc, const char *name, omxMatrix *arg1, omxMatrix *arg2);
+ 	//Constraints created from frontend MxConstraints use this, the derived-class constructor:
+	UserConstraint(FitContext *fc, const char *name, omxMatrix *arg1, omxMatrix *arg2, omxMatrix *jac, int lin);
 	virtual ~UserConstraint();
-	virtual void refreshAndGrab(FitContext *fc, Type ineqType, double *out) {
-		refresh(fc);
-
-		for(int k = 0; k < size; k++) {
-			double got = pad->data[k];
-			if (opCode != ineqType) got = -got;
-			out[k] = got;
-		}
-	};
+	virtual void refreshAndGrab(FitContext *fc, Type ineqType, double *out);
+	virtual omxConstraint *duplicate(omxState *dest);
+	virtual void prep(FitContext *fc);
 };
 
 enum omxCheckpointType {
@@ -176,28 +174,36 @@ class omxCheckpoint {
 	~omxCheckpoint();
 };
 
-struct omxConfidenceInterval {		// For Confidence interval request
+struct ConfidenceInterval {
+	enum { Lower=0, Upper=1 };
 	std::string name;
 	int matrixNumber;
-	int row, col;					// Location of element to calculate
+	int row, col;		// Location of element to calculate
+	bool boundAdj;          // Hu & Neale (2012)
 	int varIndex;
-	double ubound;					// Fit-space upper boundary
-	double lbound;					// Fit-space lower boundary
-	double max;						// Value at upper bound
-	double min;						// Value at lower bound
-	int lCode;						// Optimizer code at lower bound
-	int uCode;						// Optimizer code at upper bound
-	omxConfidenceInterval();
+	Eigen::Array<double,2,1> bound;		// distance from reference fit
+	Eigen::Array<double,2,1> val;		// parameter value at bound
+	Eigen::Array<int,2,1>    code;		// optimizer code at bound
+	ConfidenceInterval();
 	bool isWholeAlgebra() const { return row == -1 && col == -1; }
 	omxMatrix *getMatrix(omxState *st) const;
+	bool cmpBoundAndType(const ConfidenceInterval &other) {
+		return (bound != other.bound).any() || boundAdj != other.boundAdj;
+	}
 };
 
 // omxGlobal is for state that is read-only during parallel sections.
 class omxGlobal {
 	bool unpackedConfidenceIntervals;
 	std::vector< FreeVarGroup* > freeGroup;
+	time_t lastProgressReport;
+	int previousReportLength;
+	int previousComputeCount;
+	double previousReportFit;
+	void reportProgressStr(const char *msg);
 
  public:
+	bool silent;
 	int numThreads;
 	int parallelDiag;
 	int analyticGradients;
@@ -210,11 +216,13 @@ class omxGlobal {
 	int majorIterations;
 	bool intervals;
 	double gradientTolerance;
+	int dataTypeWarningCount;
 
 	int maxOrdinalPerBlock;
 	double maxptsa;
 	double maxptsb;
 	double maxptsc;
+	int calcNumIntegrationPoints(int numVars) { return maxptsa + maxptsb * numVars + maxptsc * numVars * numVars; };
 	double absEps;
 	double relEps;
 
@@ -223,7 +231,7 @@ class omxGlobal {
 
 	int maxStackDepth;
 
-	std::vector< omxConfidenceInterval* > intervalList;
+	std::vector< ConfidenceInterval* > intervalList;
 	void unpackConfidenceIntervals(omxState *currentState);
 	void omxProcessConfidenceIntervals(SEXP intervalList, omxState *currentState);
 
@@ -241,7 +249,7 @@ class omxGlobal {
 
 	// Will need revision if multiple optimizers are running in parallel
 	std::vector< omxCheckpoint* > checkpointList;
-	FitContext *fc;
+	FitContext *topFc;
 
 	omxGlobal();
 	void deduplicateVarGroups();
@@ -257,6 +265,7 @@ class omxGlobal {
 	};
 
 	~omxGlobal();
+	void reportProgress(const char *context, FitContext *fc);
 };
 
 // Use a pointer to ensure correct initialization and destruction
@@ -268,7 +277,7 @@ class omxState {
 	void init();
 	static int nextId;
 	int stateId;
-	int wantStage;
+	int wantStage; // hack because omxRecompute doesn't take 'want' as a parameter TODO
 	bool clone;
  public:
 	int getWantStage() const { return wantStage; }
@@ -280,16 +289,15 @@ class omxState {
 	std::vector< omxMatrix* > algebraList;
 	std::vector< omxExpectation* > expectationList;
 	std::vector< omxData* > dataList;
+	std::vector< omxConstraint* > conListX;
 
-	// not copied to sub-states
-	std::vector< omxConstraint* > conList;
-
-	omxState() { init(); clone = false; };
-	omxState(omxState *src, FitContext *fc);
+ 	omxState() : clone(false) { init(); };
+	omxState(omxState *src);
+	void initialRecalc(FitContext *fc);
 	void omxProcessMxMatrixEntities(SEXP matList);
 	void omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues);
 	void omxProcessMxAlgebraEntities(SEXP algList);
-	void omxCompleteMxFitFunction(SEXP algList);
+	void omxCompleteMxFitFunction(SEXP algList, FitContext *fc);
 	void omxProcessConfidenceIntervals(SEXP intervalList);
 	void omxProcessMxExpectationEntities(SEXP expList);
 	void omxCompleteMxExpectationEntities();
@@ -301,20 +309,36 @@ class omxState {
 	void omxExportResults(MxRList *out, FitContext *fc);
 	~omxState();
 
+	omxMatrix *lookupDuplicate(omxMatrix *element) const;
 	omxMatrix *getMatrixFromIndex(int matnum) const; // matrix (2s complement) or algebra
-	omxMatrix *getMatrixFromIndex(omxMatrix *mat) const { return getMatrixFromIndex(mat->matrixNumber); };
+	omxMatrix *getMatrixFromIndex(omxMatrix *mat) const { return lookupDuplicate(mat); };
 	const char *matrixToName(int matnum) const { return getMatrixFromIndex(matnum)->name(); };
 
-	void countNonlinearConstraints(int &equality, int &inequality)
+	void countNonlinearConstraints(int &equality, int &inequality, bool distinguishLinear)
 	{
 		equality = 0;
 		inequality = 0;
-		for(int j = 0; j < int(conList.size()); j++) {
-			omxConstraint *cs = conList[j];
+		for(int j = 0; j < int(conListX.size()); j++) {
+			omxConstraint *cs = conListX[j];
+			if(distinguishLinear && cs->linear){continue;}
 			if (cs->opCode == omxConstraint::EQUALITY) {
 				equality += cs->size;
 			} else {
 				inequality += cs->size;
+			}
+		}
+	};
+	void countLinearConstraints(int &l_equality, int &l_inequality)
+	{
+		l_equality = 0;
+		l_inequality = 0;
+		for(int j = 0; j < int(conListX.size()); j++) {
+			omxConstraint *cs = conListX[j];
+			if(!cs->linear){continue;}
+			if (cs->opCode == omxConstraint::EQUALITY) {
+				l_equality += cs->size;
+			} else {
+				l_inequality += cs->size;
 			}
 		}
 	};
@@ -327,6 +351,7 @@ void omxRaiseErrorf(const char* Rf_errorMsg, ...) __attribute__((format (printf,
 std::string string_vsnprintf(const char *fmt, va_list ap);
 
 void diagParallel(int verbose, const char* msg, ...) __attribute__((format (printf, 2, 3)));
+SEXP enableMxLog();
 
 #endif /* _OMXSTATE_H_ */
 

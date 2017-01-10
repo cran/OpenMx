@@ -153,8 +153,8 @@ namespace FellnerFitFunction {
 		omxExpectation *expectation             = oo->expectation;
 		omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
 
-		if (want & (FF_COMPUTE_PREOPTIMIZE)) {
-			if (fc->isClone()) Rf_error("FF_COMPUTE_PREOPTIMIZE on a clone (thread context)");
+		if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) {
+			if (fc->isClone()) return;
 			
 			setupProfiledParam(oo, fc);
 
@@ -166,7 +166,7 @@ namespace FellnerFitFunction {
 			return;
 		}
 
-		if (!(want & (FF_COMPUTE_FIT | FF_COMPUTE_INITIAL_FIT))) Rf_error("Not implemented");
+		if (!(want & (FF_COMPUTE_FIT))) Rf_error("Not implemented");
 
 		double lpOut = NA_REAL;
 		try {
@@ -254,20 +254,28 @@ namespace FellnerFitFunction {
 							resid.segment(cx*ig.clumpObs, ig.clumpObs));
 					}
 					double cterm = M_LN_2PI * ig.getParent().dataVec.size();
-					if (verbose >= 2) mxLog("log det %f iqf %f cterm %f", logDet, iqf, cterm);
+					if (verbose + !std::isfinite(iqf) >= 2) {
+						mxLog("group[%d] log det %f iqf %f cterm %f",
+						      int(1+gx), logDet, iqf, cterm);
+					}
 					lp += logDet + iqf + cterm;
 				}
-				for (int sx=0; sx < (int)ig.getParent().sufficientSets.size(); ++sx) {
-					RelationalRAMExpectation::sufficientSet &ss = ig.getParent().sufficientSets[sx];
-					Eigen::VectorXd resid =
-						ss.dataMean - ig.expectedVec.segment(ss.start * ig.clumpObs, ig.clumpObs);
-					//mxPrintMat("resid", resid);
-					double iqf = resid.transpose() * iV.selfadjointView<Eigen::Lower>() * resid;
-					double tr1 = (iV.selfadjointView<Eigen::Lower>() * ss.dataCov).trace();
+				if (ig.getParent().sufficientSets.size()) {
 					double logDet = ig.covDecomp.log_determinant();
 					double cterm = M_LN_2PI * ig.clumpObs;
-					if (verbose >= 2) mxLog("iqf %f tr1 %f logDet %f cterm %f", iqf, tr1, logDet, cterm);
-					lp += ss.length * (iqf + logDet + cterm) + (ss.length-1) * tr1;
+					for (int sx=0; sx < (int)ig.getParent().sufficientSets.size(); ++sx) {
+						RelationalRAMExpectation::sufficientSet &ss = ig.getParent().sufficientSets[sx];
+						Eigen::VectorXd resid =
+							ss.dataMean - ig.expectedVec.segment(ss.start * ig.clumpObs, ig.clumpObs);
+						//mxPrintMat("resid", resid);
+						double iqf = resid.transpose() * iV.selfadjointView<Eigen::Lower>() * resid;
+						double tr1 = trace_prod(iV, ss.dataCov);
+						if (verbose + !std::isfinite(iqf) >= 2) {
+							mxLog("group[%d] ss[%d] iqf %f tr1 %f logDet %f cterm %f",
+							      int(1+gx), (1+sx), iqf, tr1, logDet, cterm);
+						}
+						lp += ss.length * (iqf + logDet + cterm) + (ss.length-1) * tr1;
+					}
 				}
 			}
 			lpOut = lp;

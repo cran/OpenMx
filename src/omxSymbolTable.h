@@ -94,5 +94,11 @@ void omxElementDpois(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementPpois(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementDnbinom(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementPnbinom(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementDchisq(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementPchisq(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementDbinom(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementPbinom(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementDcauchy(omxMatrix** args, int numArgs, omxMatrix* result);
+void omxElementPcauchy(omxMatrix** args, int numArgs, omxMatrix* result);
 extern const omxAlgebraTableEntry omxAlgebraSymbolTable[];
 #endif

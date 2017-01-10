@@ -1,4 +1,20 @@
 #
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
+#
 #  OpenMx Mixed Ordinal & Continuous Data Example
 #  Revision history:
 #		Michael Neale 7 Jan 2011
@@ -58,6 +74,25 @@ names(jointData) <- jointNames
 names(continuousData) <- jointNames
 names(ordinalData) <- jointNames 
 
+checkPermutations <- function(model) {
+	model$data$.needSort <- FALSE
+	d1 <- model$data$observed
+	result <- expand.grid(seed=1:10, jointConditionOn=c('ordinal', 'continuous'), fit=NA)
+	for (rx in 1:nrow(result)) {
+		#print(rx)
+		set.seed(result[rx,'seed'])
+		model$data$observed <- d1[sample.int(nrow(d1)),]
+		rownames(model$data$observed) <- 1:nrow(d1)
+		#print(model$data$observed[,model$expectation$dims])
+		model$fitfunction$jointConditionOn <- as.character(result[rx,'jointConditionOn'])
+		#model$fitfunction$verbose <- 3L
+		got <- mxRun(mxModel(model, mxComputeOnce('fitfunction', 'fit')), silent=TRUE)
+		result[rx,'fit'] <- got$output$fit
+	}
+	print(result)
+	omxCheckEquals(length(table(round(result$fit,3))), 1)
+}
+
 # Step 4: Set up actual models, simulation 1
 
 # Model spec for all continuous case
@@ -81,6 +116,7 @@ contModel <- mxModel("contModel",
     mxFitFunctionML(),mxExpectationNormal(covariance="useCov", means="useM", dimnames = continuousNames),
     mxData(observed=jointData, type='raw')
 )
+checkPermutations(contModel)
 
 # Model spec for all ordinal case
 
@@ -103,6 +139,7 @@ ordModel <- mxModel("ordModel",
     mxFitFunctionML(),mxExpectationNormal(covariance="useCov", means="useM", dimnames = ordinalNames, threshnames = ordinalNames[1:nOrdinalVariables], thresholds="thresholdMatrix"),
     mxData(observed=jointData, type='raw')
 )
+checkPermutations(ordModel)
 
 # Model spec for joint independent factors case
 independentModel <- mxModel("independentComboModel",
@@ -122,6 +159,7 @@ independentModel <- mxModel("independentComboModel",
    mxFitFunctionML(),mxExpectationNormal(covariance="impliedCovs", means="M", dimnames = jointNames, threshnames = ordinalNames[1:nOrdinalVariables], thresholds="thresholdMatrix"),
    mxData(observed=jointData, type='raw')
 )
+checkPermutations(independentModel)
 
 # Second Simulation: Continuous and Ordinal Variables no longer uncorrelated.
 # We no longer have separability, so we'll run all-ordinal and all-continuous
@@ -378,7 +416,8 @@ contModel2 <- mxModel("contModel2",
     mxData(continuousData2, type="raw"),
     mxMatrix("Symm", nCont, nCont, values=startCont2, free=useOptimizer, lbound=contBound2, name="Cov"),
     mxMatrix("Full", 1, nCont, values=startMeans2[1:nCont], free=useOptimizer, name="Mean"),
-    mxFitFunctionML(),mxExpectationNormal(covariance="Cov", means="Mean", dimnames = cNames2)
+    mxFitFunctionML(),
+    mxExpectationNormal(covariance="Cov", means="Mean", dimnames = cNames2)
     )
 
 ordModel2 <-     mxModel("ordModel2", 
@@ -386,7 +425,8 @@ ordModel2 <-     mxModel("ordModel2",
     mxMatrix("Symm", nOrd, nOrd, values=startOrd2, free=useOptimizer, lbound=ordBound2, name="Cov"),
     mxMatrix("Full", 1, nCont, values=startMeans2[1:nOrd + nCont], free=useOptimizer, name="Mean"),
     mxMatrix("Full", nThresh, nOrd, values=seq(-1, 1, length.out=nThresh), free=FALSE, name="Thresh"),
-    mxFitFunctionML(),mxExpectationNormal(covariance="Cov", means="Mean", dimnames = oNames2, thresholds="Thresh")
+    mxFitFunctionML(),
+    mxExpectationNormal(covariance="Cov", means="Mean", dimnames = oNames2, thresholds="Thresh")
     )
 
 allModel2 <- mxModel("jointModel2", 
@@ -394,7 +434,8 @@ allModel2 <- mxModel("jointModel2",
     mxMatrix("Symm", nVars, nVars, values=startAll2, free=as.logical(useOptimizer * startAll2), lbound=allBound2, name="Cov"),
     mxMatrix("Full", 1, nVars, values=startMeans2[1:nOrd + nCont], free=useOptimizer, name="Mean"),
     mxMatrix("Full", nThresh, nOrd, values=seq(-1, 1, length.out=nThresh), free=FALSE, name="Thresh"),
-    mxFitFunctionML(),mxExpectationNormal(covariance="Cov", means="Mean", dimnames = allNames2, thresholds="Thresh", threshnames = oNames2)
+    mxFitFunctionML(),
+    mxExpectationNormal(covariance="Cov", means="Mean", dimnames = allNames2, thresholds="Thresh", threshnames = oNames2)
     )
     
 dubData2 <- rbind(allData2, allData2)
@@ -481,8 +522,8 @@ dubSum2  <- summary(dubFit2)
 
 omxCheckCloseEnough(contSum1$Minus2LogLikelihood, contSum1A$Minus2LogLikelihood, .0000001)
 omxCheckCloseEnough(ordSum1$Minus2LogLikelihood, ordSum1A$Minus2LogLikelihood, .0000001)
-omxCheckCloseEnough(contSum2$Minus2LogLikelihood + ordSum2$Minus2LogLikelihood, allSum2$Minus2LogLikelihood, .001)
-omxCheckCloseEnough(2* allSum2$Minus2LogLikelihood, dubSum2$Minus2LogLikelihood, .001)
+omxCheckCloseEnough(contSum2$Minus2LogLikelihood + ordSum2$Minus2LogLikelihood, allSum2$Minus2LogLikelihood, .01)
+omxCheckCloseEnough(2* allSum2$Minus2LogLikelihood, dubSum2$Minus2LogLikelihood, .01)
 
 # Step 13: Tests
 

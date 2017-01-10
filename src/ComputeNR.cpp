@@ -22,6 +22,10 @@
 #include "Compute.h"
 #include "matrix.h"
 
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
 static const char engineName[] = "NnRn";
 
 class ComputeNR : public omxCompute {
@@ -187,7 +191,7 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 	if (iter == 1) {
 		refFit = fc->fit;
 		if (!std::isfinite(refFit)) {
-			fc->inform = INFORM_STARTING_VALUES_INFEASIBLE;
+			fc->setInform(INFORM_STARTING_VALUES_INFEASIBLE);
 			return;
 		}
 	}
@@ -206,7 +210,7 @@ void ComputeNR::lineSearch(FitContext *fc, int iter, double *maxAdj, double *max
 					mxLog("%s=%f is infeasible; try adding bounds", fv->name, fc->est[px]);
 				}
 			}
-			fc->inform = INFORM_BAD_DERIVATIVES;
+			fc->setInform(INFORM_BAD_DERIVATIVES);
 			return;
 		}
 		targetImprovement = 1;
@@ -323,19 +327,11 @@ void ComputeNR::computeImpl(FitContext *fc)
 		return;
 	}
 
-	fc->inform = INFORM_UNINITIALIZED;
-	fc->flavor.assign(numParam, NULL);
+	fc->setInform(INFORM_UNINITIALIZED);
 
-	omxFitFunctionCompute(fitMatrix->fitFunction, FF_COMPUTE_PARAMFLAVOR, fc);
+	omxAlgebraPreeval(fitMatrix, fc);
 
-	// flavor used for debug output only
-	for (size_t px=0; px < numParam; ++px) {
-		if (!fc->flavor[px]) fc->flavor[px] = "?";
-	}
-
-	omxFitFunctionPreoptimize(fitMatrix->fitFunction, fc);
-
-	// omxFitFunctionPreoptimize can change bounds
+	// bounds might have changed
 	lbound.resize(numParam);
 	ubound.resize(numParam);
 	for(int px = 0; px < int(numParam); px++) {
@@ -350,7 +346,6 @@ void ComputeNR::computeImpl(FitContext *fc)
 	double maxAdj = 0;
 	double maxAdjSigned = 0;
 	int maxAdjParam = -1;
-	const char *maxAdjFlavor = "?";
 
 	if (verbose >= 2) {
 		mxLog("Welcome to Newton-Raphson (%d param, tolerance %.3g, max iter %d)",
@@ -369,8 +364,8 @@ void ComputeNR::computeImpl(FitContext *fc)
 			} else {
 				const char *pname = "none";
 				if (maxAdjParam >= 0) pname = fc->varGroup->vars[maxAdjParam]->name;
-				mxLog("%s: iter %d/%d (prev maxAdj %.3g for %s %s)",
-				      name, iter, maxIter, maxAdjSigned, maxAdjFlavor, pname);
+				mxLog("%s: iter %d/%d (prev maxAdj %.3g for %s)",
+				      name, iter, maxIter, maxAdjSigned, pname);
 			}
 		}
 
@@ -380,15 +375,16 @@ void ComputeNR::computeImpl(FitContext *fc)
 		maxAdj = 0;
 		double improvement = 0;
 		lineSearch(fc, iter, &maxAdj, &maxAdjSigned, &maxAdjParam, &improvement);
-		if (fc->inform != INFORM_UNINITIALIZED) {
+		if (fc->getInform() != INFORM_UNINITIALIZED) {
 			if (verbose >= 2) {
-				mxLog("%s: line search failed with code %d", name, fc->inform);
+				mxLog("%s: line search failed with code %d", name, fc->getInform());
 			}
 			return;
 		}
 
+		Global->reportProgress("MxComputeNewtonRaphson", fc);
+
 		converged = relImprovement(improvement) < tolerance;
-		if (maxAdjParam >= 0) maxAdjFlavor = fc->flavor[maxAdjParam];
 
 		fc->copyParamToModel();
 
@@ -409,18 +405,18 @@ void ComputeNR::computeImpl(FitContext *fc)
 			}
 		}
 		if (!localMin) {
-			fc->inform = INFORM_NOT_AT_OPTIMUM;
+			fc->setInform(INFORM_NOT_AT_OPTIMUM);
 		} else {
-			fc->inform = INFORM_CONVERGED_OPTIMUM;
+			fc->setInform(INFORM_CONVERGED_OPTIMUM);
 			fc->wanted |= FF_COMPUTE_BESTFIT;
 		}
 		if (verbose >= 1) {
 			int iter = fc->iterations - startIter;
 			mxLog("%s: converged in %d cycles (%d minor iterations) inform=%d",
-			      name, iter, minorIter, fc->inform);
+			      name, iter, minorIter, fc->getInform());
 		}
 	} else {
-		fc->inform = INFORM_ITERATION_LIMIT;
+		fc->setInform(INFORM_ITERATION_LIMIT);
 		if (verbose >= 1) {
 			int iter = fc->iterations - startIter;
 			mxLog("%s: failed to converge after %d cycles (%d minor iterations)",

@@ -7,7 +7,7 @@
 \usage{
 mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
   verbose = 0L, engine = NULL, fitfunction = "fitfunction",
-  tolerance = NA_real_, constraintType = "ineq")
+  tolerance = NA_real_, constraintType = "none")
 }
 \arguments{
 \item{plan}{compute plan to optimize the model}
@@ -20,38 +20,29 @@ mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
 
 \item{engine}{deprecated}
 
-\item{fitfunction}{The deviance function to constrain with an inequality constraint.}
+\item{fitfunction}{the name of the deviance function}
 
 \item{tolerance}{deprecated}
 
-\item{constraintType}{one of c('ineq', 'eq', 'both', 'none')}
+\item{constraintType}{one of c('ineq', 'none')}
 }
 \description{
-There are various ways to pose an equivalent profile likelihood
-problem. For good performance, it is essential to tailor the
-problem to the abilities of the optimizer. The problem can be
-posed without the use of constraints. This is how the code worked
-in version 2.1 and prior. Although this way of posing the problem
-creates an ill-conditioned Hessian, NPSOL is somehow able to
-isolate the poor conditioning from the rest of the problem and
-optimize it quickly. However, SLSQP is not so clever and exhibits
-very poor performance. For SLSQP, good performance is contingent
-on posing the problem using an inequality constraint on the fit.
-}
-\details{
-Geometrically, SLSQP performs best on smooth likelihood surfaces
-with smooth derivatives. In the profile CI problem, the distance
-limit on the deviance is like a wall. Walls do not have smooth
-derivatives but are more like a step function. The point of
-\link{mxConstraint} is to isolate the parts of a problem that are
-geometrically non-smooth. Constraints are dealt with specially in
-SLSQP to best accommodate their sharp geometry.
-
-For the default compute plan, the choice of constraintType is
-determined by which optimizer is selected.
+There are various equivalent ways to pose the optimization
+problems required to estimate confindence intervals. Most accurate
+solutions are achieved when the problem is posed using non-linear
+constraints. However, the available optimizers (NPSOL, SLSQP, and
+CSOLNP) often have difficulty with non-linear
+constraints.
 }
 \references{
-Pek, J. & Wu, H. (in press). Profile likelihood-based confidence intervals and regions for structural equation models.
-\emph{Psychometrica.}
+Neale, M. C. & Miller M. B. (1997). The use of likelihood based
+confidence intervals in genetic models.  \emph{Behavior Genetics,
+27}(2), 113-120.
+
+Pek, J. & Wu, H. (2015). Profile likelihood-based confidence intervals and regions for structural equation models.
+\emph{Psychometrica, 80}(4), 1123-1145.
+
+Wu, H. & Neale, M. C. (2012). Adjusted confidence intervals for a
+bounded parameter. \emph{Behavior genetics, 42}(6), 886-898.
 }
 

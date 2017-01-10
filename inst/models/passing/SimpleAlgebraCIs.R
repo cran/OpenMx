@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 require(OpenMx)
 data(demoOneFactor)
 
@@ -52,7 +68,11 @@ omxCheckCloseEnough(ci[,'estimate'], c(0.4456, 0.5401, 0.6116, 0.7302, 0.8187), 
 lbound <- c(0.406, 0.485, 0.553, 0.6872, 0.769)
 ubound <- c(0.4747, 0.5754, 0.6516, 0.778, 0.8723)
 
-omxCheckCloseEnough(ci[,'lbound'], lbound, .06)
+if (mxOption(NULL, 'Default optimizer') == "CSOLNP") {
+	omxCheckCloseEnough(ci[,'lbound'], lbound, .06)
+} else {
+	omxCheckCloseEnough(ci[,'lbound'], lbound, .03)
+}
 
 if (mxOption(NULL, 'Default optimizer') != "NPSOL") {
 	# NPSOL needs to get slightly closer to the MLE to nail all of these

@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ Returns a new \link{MxBounds} object. If used as an argument in an \link{MxModel
 }
 
 \references{
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.}
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.}
 
 \seealso{
 \link{MxBounds} for the S4 class created by mxBounds. \link{MxMatrix} and \link{mxMatrix} for free parameter specification. More information about the OpenMx package may be found \link[=OpenMx]{here}. 

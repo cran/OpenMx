@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -111,9 +111,9 @@ imxDetermineDefaultOptimizer <- function() {
 	engine <- Sys.getenv("IMX_OPT_ENGINE")
 	if (!nchar(engine)) {
 		if (imxHasNPSOL()) {
-			engine <- "SLSQP"
+			engine <- "CSOLNP"
 		} else {
-			engine <- "SLSQP"
+			engine <- "CSOLNP"
 		}
 	}
 	engine
@@ -137,9 +137,6 @@ npsolOptions <- list(
     "Step limit" = "2.0",
 	"Hessian" = "Yes",
 # below are not npsol options
-    "Major iteration_CSOLNP" = "400",
-    "Minor iteration_CSOLNP" = "800",
-    "Function precision_CSOLNP" = "1.0e-7",
 	"Calculate Hessian" = "Yes",
 	"Standard Errors" = "Yes",
 	"Analytic Gradients" = "Yes",
@@ -176,6 +173,7 @@ otherOptions <- list(
     "maxStackDepth" = 25000L,   # R_PPSSIZE/2
     "Gradient algorithm" = "central",
     "Gradient iterations" = 1L,
+    "Gradient step size" = 1.0e-7,
     "Parallel diagnostics" = "No"
 )
 

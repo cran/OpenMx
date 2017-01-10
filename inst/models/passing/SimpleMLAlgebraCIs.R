@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 require(OpenMx)
 
 if (mxOption(NULL, "Default optimizer") == "SLSQP") {
@@ -30,7 +46,7 @@ factorSummCI <- summary(factorFitCI)
 ( ci <- factorFitCI$output$confidenceIntervals )
 #cat(deparse(round(ci[,'lbound'], 4)))
 omxCheckCloseEnough(ci[,'estimate'], c(0.4455, 0.54, 0.6115, 0.7302, 0.8186), 1e-3)
-omxCheckCloseEnough(ci[,'lbound'], c(0.4174, 0.5082, 0.5755, 0.6872, 0.7704), 3e-2)
+omxCheckCloseEnough(ci[,'lbound'] - c(0.4174, 0.5082, 0.5755, 0.6872, 0.7704), rep(0,5), 4e-2)
 if (mxOption(NULL, "Default optimizer") != "NPSOL") {
   omxCheckCloseEnough(ci[,'ubound'], c(0.4747, 0.5754, 0.6516, 0.7781, 0.8723), 4e-2)
 }
@@ -45,7 +61,7 @@ factorSummRawCI <- summary(factorFitRawCI)
 
 ci <- factorFitRawCI$output$confidenceIntervals
 omxCheckCloseEnough(ci[,'estimate'], c(0.4455, 0.54, 0.6115, 0.7302, 0.8186), 1e-3)
-omxCheckCloseEnough(ci[,'lbound'], c(0.4193, 0.5082, 0.5755, 0.6872, 0.7704), 1e-3)
+omxCheckCloseEnough(ci[,'lbound'] - c(0.4193, 0.5082, 0.5755, 0.6872, 0.7704), rep(0,5), 1e-3)
 omxCheckCloseEnough(ci[,'ubound'], c(0.4747, 0.5754, 0.6516, 0.7781, 0.8723), 1e-3)
 
 # Compare to original MX Estimates

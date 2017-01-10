@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2016 Joshua Nathaniel Pritikin and contributors
+ * Copyright 2012-2017 Joshua Nathaniel Pritikin and contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,10 @@
 #include "libifa-rpf.h"
 #include "matrix.h"
 #include "omxBuffer.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 struct BA81FitState {
 	//private:
@@ -276,12 +280,12 @@ struct ba81mstepEval {
 	const rpf_dLL1_t dLL1;
 	const double *iparam;
 	double *myDeriv;
-	ba81mstepEval(int ix, const double *spec, BA81Expect *estate,
-		      double *myDeriv) :
-		ix(ix), spec(spec),
-		id(spec[RPF_ISpecID]), dLL1(Glibrpf_model[id].dLL1),
-		iparam(omxMatrixColumn(estate->itemParam, ix)),
-		myDeriv(myDeriv)
+	ba81mstepEval(int _ix, const double *_spec, BA81Expect *_estate,
+		      double *_myDeriv) :
+		ix(_ix), spec(_spec),
+		id(_spec[RPF_ISpecID]), dLL1(Glibrpf_model[id].dLL1),
+		iparam(omxMatrixColumn(_estate->itemParam, ix)),
+		myDeriv(_myDeriv)
 	{};
 	void operator()(double *abscissa, double *outcomeCol, double *iexp)
 	{
@@ -366,11 +370,11 @@ ba81ComputeEMFit(omxFitFunction* oo, int want, FitContext *fc)
 				if (0 && !std::isfinite(deriv0[ox])) {
 					int item = ox / itemParam->rows;
 					mxLog("item parameters:\n");
-					const double *spec = itemSpec[item];
-					int id = spec[RPF_ISpecID];
-					int numParam = (*Glibrpf_model[id].numParam)(spec);
-					double *iparam = omxMatrixColumn(itemParam, item);
-					pda(iparam, numParam, 1);
+					const double *spec2 = itemSpec[item];
+					int id2 = spec2[RPF_ISpecID];
+					int numParam = (*Glibrpf_model[id2].numParam)(spec2);
+					double *iparam2 = omxMatrixColumn(itemParam, item);
+					pda(iparam2, numParam, 1);
 					// Perhaps bounds can be pulled in from librpf? TODO
 					Rf_error("Deriv %d for item %d is %f; are you missing a lbound/ubound?",
 						 ox, item, deriv0[ox]);
@@ -429,12 +433,12 @@ struct ba81sandwichOp {
 	Eigen::ArrayXXd breadG;
 	Eigen::ArrayXXd breadH;
 
-	ba81sandwichOp(int numThreads, BA81Expect *estate, int numParam, BA81FitState *state,
-		       omxMatrix *itemParam, double abScale) :
-		numItems(estate->grp.numItems()), numParam(numParam), state(state),
+	ba81sandwichOp(int numThreads, BA81Expect *estate, int _numParam, BA81FitState *_state,
+		       omxMatrix *_itemParam, double _abScale) :
+		numItems(estate->grp.numItems()), numParam(_numParam), state(_state),
 		dataColumns(estate->grp.dataColumns), itemOutcomes(estate->grp.itemOutcomes),
-		rowMap(estate->grp.rowMap), spec(estate->grp.spec), itemParam(itemParam),
-		itemDerivPadSize(state->itemDerivPadSize), abScale(abScale),
+		rowMap(estate->grp.rowMap), spec(estate->grp.spec), itemParam(_itemParam),
+		itemDerivPadSize(_state->itemDerivPadSize), abScale(_abScale),
 		rowWeight(estate->grp.rowWeight)
 	{
 		gradBuf.resize(numParam, numThreads);
@@ -631,13 +635,13 @@ struct ba81gradCovOp {
 	const int itemDerivPadSize;
 	Eigen::ArrayXi px;
 
-	ba81gradCovOp(int numItems, BA81Expect *estate,
-		      int itemDerivPadSize, omxMatrix *itemParam,
+	ba81gradCovOp(int _numItems, BA81Expect *estate,
+		      int _itemDerivPadSize, omxMatrix *_itemParam,
 		      int numThreads, int itemDerivSize) :
-		numItems(numItems), dataColumns(estate->grp.dataColumns),
+		numItems(_numItems), dataColumns(estate->grp.dataColumns),
 		rowMap(estate->grp.rowMap),
-		spec(estate->grp.spec), itemParam(itemParam),
-		itemDerivPadSize(itemDerivPadSize)
+		spec(estate->grp.spec), itemParam(_itemParam),
+		itemDerivPadSize(_itemDerivPadSize)
 	{
 		px.resize(numThreads);
 		expected.resize(estate->grp.maxOutcomes, numThreads);
@@ -800,14 +804,6 @@ ba81ComputeFit(omxFitFunction* oo, int want, FitContext *fc)
 	if (estate->type == EXPECTATION_AUGMENTED) {
 		buildItemParamMap(oo, fc);
 
-		if (want & FF_COMPUTE_PARAMFLAVOR) {
-			for (size_t px=0; px < state->numFreeParam; ++px) {
-				if (state->paramFlavor[px] == NULL) continue;
-				fc->flavor[px] = state->paramFlavor[px];
-			}
-			return;
-		}
-
 		if (want & FF_COMPUTE_PREOPTIMIZE) {
 			omxExpectationCompute(fc, oo->expectation, NULL);
 			return;
@@ -885,13 +881,9 @@ ba81ComputeFit(omxFitFunction* oo, int want, FitContext *fc)
 			const int numUnique = estate->getNumUnique();
 			if (state->returnRowLikelihoods) {
 				const double OneOverLargest = estate->grp.quad.getReciprocalOfOne();
-				omxData *data = estate->data;
 				for (int rx=0; rx < numUnique; rx++) {
-					int dups = omxDataNumIdenticalRows(data, estate->grp.rowMap[rx]);
-					for (int dup=0; dup < dups; dup++) {
-						int dest = omxDataIndex(data, estate->grp.rowMap[rx]+dup);
-						oo->matrix->data[dest] = patternLik[rx] * OneOverLargest;
-					}
+					int dest = estate->grp.rowMap[rx];
+					oo->matrix->data[dest] = patternLik[rx] * OneOverLargest;
 				}
 			} else {
 				double *rowWeight = estate->grp.rowWeight;

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -32,12 +32,16 @@ mxSetDefaultOptions <- function() {
 imxHasOpenMP <- function() .Call(hasOpenMP_wrapper)
 
 .onLoad <- function(libname, pkgname) {
-	# http://stackoverflow.com/questions/12598242/global-variables-in-packages-in-r
-	assign("pkg_globals", new.env(), envir=parent.env(environment()))
 	mxSetDefaultOptions()
 }
 
 .onAttach <- function(libname, pkgname) {
+	if (.Platform$GUI!="Rgui") {
+		.Call(.enableMxLog)
+	} else {
+		packageStartupMessage(paste("Notice: R GUI cannot display verbose output from the OpenMx backend.",
+					    "If you need detail diagnostics then R CMD BATCH is one option."))
+	}
 	if (!imxHasOpenMP()) {
 		packageStartupMessage("OpenMx is not compiled to take advantage of computers with multiple cores.")
 	} else if (Sys.getenv("OMP_NUM_THREADS") == "") {

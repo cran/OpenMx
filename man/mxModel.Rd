@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ Returns a new \link{MxModel} object. \link{MxModel} objects must include an obje
 }
 
 \references{
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 
 \seealso{
@@ -125,8 +125,8 @@ HSModel <- mxModel(model="Holzinger_and_Swineford_1939", type="RAM",
     mxPath(from="vis" , to="text", arrows=2, free=TRUE),
     mxPath(from="math", to="text", arrows=2, free=TRUE),
 
-    # Allow latent variables to have variance (first fixed  @ 1)
-    mxPath(from=latents, arrows=2, free=c(FALSE,TRUE,TRUE), values=1.0), 
+    # Allow latent variables to have variance
+    mxPath(from=latents, arrows=2, free=FALSE, values=1.0),
     # Manifest have residual variance
     mxPath(from=manifests, arrows=2),   
     # the data to be analysed

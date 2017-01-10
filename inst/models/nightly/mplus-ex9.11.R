@@ -17,9 +17,9 @@ mkGroup <- function(name, dat) {
         paste0('between',name), type='RAM',
         latentVars=c(paste0('y',1:6), 'fb1', 'fb2'),
         mxData(dat[!duplicated(dat$clus),], 'raw', primaryKey='clus'),
-        mxPath('fb1', paste0('y',1:3), free=c(FALSE,TRUE,TRUE), values=1,
+        mxPath('fb1', paste0('y',1:3), free=c(FALSE,TRUE,TRUE), values=1, lbound = -1, ubound = 10,
                labels=paste0('bl',1:3)),
-        mxPath('fb2', paste0('y',4:6), free=c(FALSE,TRUE,TRUE), values=1,
+        mxPath('fb2', paste0('y',4:6), free=c(FALSE,TRUE,TRUE), values=1, lbound = -1, ubound = 10,
                labels=paste0('bl',4:6)),
         mxPath(c('fb1','fb2'), arrows=2, connect="unique.pairs", values=c(.5,0,.5)),
         mxPath('one', c('fb1','fb2'), free=FALSE),
@@ -28,9 +28,9 @@ mkGroup <- function(name, dat) {
     withinModel <- mxModel(
         paste0('within', name), type='RAM', betweenModel,
         manifestVars=paste0('y',1:6), latentVars=c('fw1','fw2'),
-        mxData(dat, 'raw', sort=FALSE),
-        mxPath('fw1', paste0('y',1:3), free=c(FALSE,TRUE,TRUE), values=1),
-        mxPath('fw2', paste0('y',4:6), free=c(FALSE,TRUE,TRUE), values=1),
+        mxData(dat, 'raw'),
+        mxPath('fw1', paste0('y',1:3), free=c(FALSE,TRUE,TRUE), values=1, lbound = -1, ubound = 10),
+        mxPath('fw2', paste0('y',4:6), free=c(FALSE,TRUE,TRUE), values=1, lbound = -1, ubound = 10),
         mxPath(paste0('y',1:6), arrows=2, values=1),
         mxPath('one', paste0('y',1:6), labels=paste0('yi',1:6)),
         mxPath(c('fw1','fw2'), arrows=2, connect="unique.pairs", values=c(1,0,1)),
@@ -45,8 +45,9 @@ cfa <- mxModel(
 
 cfa$withinGroup2$betweenGroup2$M$free[1,c('fb1','fb2')] <- TRUE
 
-cfa <- mxRun(cfa)
-omxCheckCloseEnough(cfa$output$fit, 49922.16, 1e-2)
+cfa <- mxTryHard(cfa)
+omxCheckCloseEnough(cfa$output$fit, 49853.908, 1e-2)
+# Mplus -24926.956 * -2 = 49853.91
 
 cfa$withinGroup1$expectation$.rampart <- 0L
 cfa$withinGroup2$expectation$.rampart <- 0L
@@ -54,7 +55,7 @@ cfa <- mxRun(mxModel(cfa,
 		    mxComputeSequence(list(
 			mxComputeOnce('fitfunction', 'fit'),
 			mxComputeReportExpectation()))))
-omxCheckCloseEnough(cfa$output$fit, 49926.38, 1e-2) # same location without Rampart
+omxCheckCloseEnough(cfa$output$fit, 49853.908, 1e-2) # same location without Rampart
 
 # Here is the MPlus solution
 f1 <- omxSetParameters(cfa, labels=names(coef(cfa)),
@@ -81,13 +82,13 @@ f1 <- mxRun(mxModel(f1,
 			mxComputeReportExpectation()))))
 omxCheckCloseEnough(f1$output$fit, 49853.91, 1e-2)
 
-f1$withinGroup1$expectation$.rampart <- 1L
-f1$withinGroup2$expectation$.rampart <- 1L
+f1$withinGroup1$expectation$.rampart <- NA_integer_
+f1$withinGroup2$expectation$.rampart <- NA_integer_
 f1 <- mxRun(mxModel(f1,
 		    mxComputeSequence(list(
 			mxComputeOnce('fitfunction', 'fit'),
 			mxComputeReportExpectation()))))
-omxCheckCloseEnough(f1$output$fit, 49992.94, 1e-2)  # doesn't look best anymore!
+omxCheckCloseEnough(f1$output$fit, 49853.91, 1e-2)
 
 if (0) { # double check everything
 	ed = f1$withinGroup2$expectation$debug

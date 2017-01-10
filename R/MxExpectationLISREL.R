@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -45,7 +45,6 @@ setClass(Class = "MxExpectationLISREL",
 	        numStats = "numeric",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
-		dataColumns = "numeric", #Used in FIML to grab the correct data elements
 		thresholdColumns = "numeric", #Used in FIML
 		thresholdLevels = "numeric", # Used in FIML
 		threshnames = "character",
@@ -731,14 +730,7 @@ setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 })
 
 
-setMethod("genericExpGetPrecision", "MxExpectationLISREL",
-	function(.Object) {
-		if(!single.na(.Object@thresholds)) {
-			return(list(stepSize=0.1, iterations=3L))
-		} else {
-			callNextMethod();
-		}
-})
+setMethod("genericExpGetPrecision", "MxExpectationLISREL", NormalExpGetPrecision)
 
 
 

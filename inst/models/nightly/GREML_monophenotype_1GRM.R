@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -56,11 +56,10 @@ plan <- mxComputeSequence(freeSet = c("Va","Ve"),steps=list(
 	mxComputeConfidenceInterval(
 		plan=mxComputeGradientDescent(
 			fitfunction="GREML_1GRM_1trait.fitfunction", nudgeZeroStarts=FALSE, maxMajorIter=150),
-		fitfunction="GREML_1GRM_1trait.fitfunction",
-		constraintType=ifelse(mxOption(NULL,"Default optimizer")=="NPSOL","none","ineq")
-	),
+		fitfunction="GREML_1GRM_1trait.fitfunction"),
 	mxComputeStandardError(),
-	mxComputeReportDeriv()
+	mxComputeReportDeriv(),
+	mxComputeReportExpectation()
 ))
 
 #The MxData object.  N.B. use of 'sort=FALSE' is CRITICALLY IMPORTANT, because the rows and columns of dataset
@@ -138,7 +137,8 @@ testmod2 <- mxModel(
 		mxComputeNewtonRaphson(fitfunction="fitfunction"),
 		mxComputeOnce('fitfunction', c('fit','gradient','hessian','ihessian')),
 		mxComputeStandardError(),
-		mxComputeReportDeriv()
+		mxComputeReportDeriv(),
+		mxComputeReportExpectation()
 	))
 )
 
@@ -166,11 +166,10 @@ plan3 <- mxComputeSequence(freeSet = c("H2","Vp"),steps=list(
 	mxComputeConfidenceInterval(
 		plan=mxComputeGradientDescent(
 			fitfunction="GREML_1GRM_1trait_altparam.fitfunction", nudgeZeroStarts=FALSE, maxMajorIter=150),
-		fitfunction="GREML_1GRM_1trait_altparam.fitfunction",
-		constraintType=ifelse(mxOption(NULL,"Default optimizer")=="NPSOL","none","ineq")
-	),
+		fitfunction="GREML_1GRM_1trait_altparam.fitfunction"),
 	mxComputeStandardError(),
-	mxComputeReportDeriv()
+	mxComputeReportDeriv(),
+	mxComputeReportExpectation()
 ))
 
 testmod3 <- mxModel(

@@ -6,9 +6,9 @@
 \title{Numerically estimate Hessian using Richardson extrapolation}
 \usage{
 mxComputeNumericDeriv(freeSet = NA_character_, ...,
-  fitfunction = "fitfunction", parallel = TRUE, stepSize = 1e-04,
-  iterations = 4L, verbose = 0L, knownHessian = NULL,
-  checkGradient = TRUE, hessian = TRUE)
+  fitfunction = "fitfunction", parallel = TRUE, stepSize = mxOption(NULL,
+  "Gradient step size"), iterations = 4L, verbose = 0L,
+  knownHessian = NULL, checkGradient = TRUE, hessian = TRUE)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}
@@ -29,7 +29,7 @@ mxComputeNumericDeriv(freeSet = NA_character_, ...,
 
 \item{checkGradient}{whether to check the first order convergence criterion (gradient is near zero)}
 
-\item{hessian}{whether to estimate the Hessian}
+\item{hessian}{whether to estimate the Hessian. If FALSE then only the gradient is estimated.}
 }
 \description{
 For N free parameters, Richardson extrapolation requires

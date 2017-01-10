@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,8 +18,13 @@
 #include "Compute.h"
 #include "omxRFitFunction.h"
 
-static void omxCallRFitFunction(omxFitFunction *oo, int want, FitContext *) {
-	if (want & (FF_COMPUTE_PREOPTIMIZE)) return;
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
+static void omxCallRFitFunction(omxFitFunction *oo, int want, FitContext *)
+{
+	if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) return;
 
 	omxRFitFunction* rFitFunction = (omxRFitFunction*)oo->argStruct;
 

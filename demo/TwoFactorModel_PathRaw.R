@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ twoFactorModel <- mxModel("Two Factor Model Path Specification", type="RAM",
 twoFactorFit <- mxRun(twoFactorModel)
 
 summary(twoFactorFit)
-twoFactorFit$output$estimate
+coef(twoFactorFit)
 
 omxCheckCloseEnough(twoFactorFit$output$estimate[["l2"]], 0.9723, 0.01)
 omxCheckCloseEnough(twoFactorFit$output$estimate[["l3"]], 0.9313, 0.01)

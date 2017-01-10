@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -20,25 +20,35 @@ setClass(Class = "MxConstraint",
 		formula = "MxAlgebraFormula",
 		alg1 = "MxCharOrNumber",
 		alg2 = "MxCharOrNumber",
-		relation = "MxCharOrNumber"
+		relation = "MxCharOrNumber",
+		jac = "MxCharOrNumber",
+		linear = "logical"
 	))
 	
 setMethod("initialize", "MxConstraint",
-	function(.Object, name, formula) {
+	function(.Object, name, formula, jac=character(0)){#, linear=FALSE) {
 		.Object@name <- name
 		.Object@formula <- formula
 		.Object@alg1 <- as.character(NA)
 		.Object@alg2 <- as.character(NA)
 		.Object@relation <- as.character(NA)
+		#if(linear && is.null(jac)){stop("linear constraints must be provided with a Jacobian")}
+		.Object@jac <- jac
+		.Object@linear <- FALSE
 		return(.Object)
 	}
 )
 
-mxConstraint <- function(expression, name = NA,...) {
+mxConstraintFromString <- function(exprString, name = NA,...) {
+	eval(substitute(mxConstraint(tExp, name=name, ...),
+			list(tExp = parse(text=exprString)[[1]])))
+}
+
+mxConstraint <- function(expression, name=NA, ..., jac=character(0)){#, linear=FALSE) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		# user may have added an illegal parameter, or an illegal symbol in the expression
-		stop("mxConstraint accepts only two arguments. Check that you've used only the legal comparators (<, ==, >) in the constraint formula.")
+		stop("mxConstraint accepts at most only three arguments. Check that you've used only the legal comparators (<, ==, >) in the constraint formula.")
 	}
 	
 	if (single.na(name)) {
@@ -63,7 +73,7 @@ mxConstraint <- function(expression, name = NA,...) {
 	}
     algebraErrorChecking(formula[[2]], "mxConstraint")
     algebraErrorChecking(formula[[3]], "mxConstraint")
-	return(new("MxConstraint", name, formula))
+	return(new("MxConstraint", name, formula, jac))#, linear))
 }
 
 convertConstraints <- function(flatModel) {
@@ -87,7 +97,9 @@ convertSingleConstraint <- function(constraint, flatModel) {
 			clist)
 		stop(msg, call.=FALSE)
 	}
-	return(list(index1,index2,index3 - 1))
+	index4 <- imxLocateIndex(flatModel, constraint@jac, constraint@name)
+	lin <- FALSE
+	return(list(index1,index2,index3 - 1,index4,lin))
 }
 
 ##' imxConstraintRelations

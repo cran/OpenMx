@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
  *  limitations under the License.
  */
 
+/*File created 2013*/
+
 #ifndef _OMX_COMPUTE_H_
 #define _OMX_COMPUTE_H_
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h>
 #include "omxDefines.h"
 #include <Eigen/SparseCore>
 #include "glue.h"
@@ -89,6 +88,27 @@ struct HessianBlock {
 	int estNonZero() const;
 };
 
+struct CIobjective {
+	ConfidenceInterval *CI;
+
+	enum Diagnostic {
+		DIAG_SUCCESS=1,
+		DIAG_ALPHA_LEVEL,
+		DIAG_BA_D1, DIAG_BA_D2,
+		DIAG_BN_D1, DIAG_BN_D2,
+		DIAG_BOUND_INFEASIBLE,
+		DIAG_BOXED
+	};
+
+	virtual bool gradientKnown() { return false; };
+	virtual void gradient(FitContext *fc, double *gradOut) {};
+	virtual void evalIneq(FitContext *fc, omxMatrix *fitMat, double *out) {};
+	virtual void evalEq(FitContext *fc, omxMatrix *fitMat, double *out) {};
+	virtual void evalFit(omxFitFunction *ff, int want, FitContext *fc);
+	virtual void checkSolution(FitContext *fc);
+	virtual Diagnostic getDiag() = 0;
+};
+
 // The idea of FitContext is to eventually enable fitting from
 // multiple starting values in parallel.
 
@@ -121,6 +141,7 @@ class FitContext {
 
 	std::string IterationError;
 	int computeCount;
+	ComputeInform inform;
 
  public:
 	FreeVarGroup *varGroup;
@@ -134,7 +155,6 @@ class FitContext {
 	int fitUnits;
 	double *est;
 	std::vector<bool> profiledOut;
-	std::vector<const char*> flavor;
 	Eigen::VectorXd grad;
 	int infoDefinite;
 	double infoCondNum;
@@ -143,20 +163,20 @@ class FitContext {
 	double *infoA; // sandwich, the bread
 	double *infoB; // sandwich, the meat
 	int iterations;
-	ComputeInform inform;
 	int wanted;
 	std::vector< class FitContext* > childList;
+	Eigen::VectorXd constraintFunVals;
+	Eigen::MatrixXd constraintJacobian;
+	Eigen::VectorXd LagrMultipliers;
+	Eigen::VectorXi constraintStates;
 
 	// for confidence intervals
-	omxConfidenceInterval *CI;
-	double targetFit;
-	bool lowerBound;
-	bool compositeCIFunction;
+	CIobjective *ciobj;
 
 	FitContext(omxState *_state, std::vector<double> &startingValues);
 	FitContext(FitContext *parent, FreeVarGroup *group);
 	bool openmpUser;  // whether some fitfunction/expectation uses OpenMP
-	void createChildren();
+	void createChildren(omxMatrix *alg);
 	void destroyChildren();
 	void allocStderrs();
 	void ensureParamWithinBox(bool nudge);
@@ -169,13 +189,15 @@ class FitContext {
 	void updateParentAndFree();
 	template <typename T> void moveInsideBounds(std::vector<T> &prevEst);
 	void log(int what);
+	void setInform(int _in) { inform = _in; };
+	int getInform() { return inform; };
 	bool haveReferenceFit(omxMatrix *fitMat) {
 		if (std::isfinite(fit)) return true;
 		if (inform == INFORM_UNINITIALIZED) {
 			omxRecompute(fitMat, this);
 			fit = omxMatrixElement(fitMat, 0, 0);
 			if (std::isfinite(fit)) return true;
-			inform = INFORM_STARTING_VALUES_INFEASIBLE;
+			setInform(INFORM_STARTING_VALUES_INFEASIBLE);
 		}
 		if (inform != INFORM_CONVERGED_OPTIMUM &&
 		    inform != INFORM_UNCONVERGED_OPTIMUM) {
@@ -204,7 +226,8 @@ class FitContext {
 	void postInfo();
 	void resetIterationError();
 	void recordIterationError(const char* msg, ...) __attribute__((format (printf, 2, 3)));
-	int getComputeCount(); //approximate
+	int getGlobalComputeCount(); //approximate
+	int getLocalComputeCount(); //approximate
 	void incrComputeCount() { ++computeCount; };
 
 	// If !std::isfinite(fit) then IterationError.size() should be nonzero but not all of
@@ -234,6 +257,7 @@ class omxCompute {
 	omxCompute();
         virtual void initFromFrontend(omxState *, SEXP rObj);
         void compute(FitContext *fc);
+	void computeWithVarGroup(FitContext *fc);
         virtual void computeImpl(FitContext *fc) {}
 	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out);
         virtual ~omxCompute();
@@ -245,6 +269,7 @@ omxCompute *newComputeGradientDescent();
 omxCompute *newComputeNumericDeriv();
 omxCompute *newComputeNewtonRaphson();
 omxCompute *newComputeConfidenceInterval();
+omxCompute *newComputeTryHard();
 
 void omxApproxInvertPosDefTriangular(int dim, double *hess, double *ihess, double *stress);
 void omxApproxInvertPackedPosDefTriangular(int dim, int *mask, double *packedHess, double *stress);
@@ -272,10 +297,8 @@ class GradientOptimizerContext {
 	int numOptimizerThreads;
 	int maxMajorIterations;
 
-	int ControlMajorLimit;
 	int ControlMinorLimit;
 	double ControlRho;
-	double ControlFuncPrecision;
 	double ControlTolerance;
 	bool warmStart;
 	bool useGradient;
@@ -290,6 +313,7 @@ class GradientOptimizerContext {
 	// TODO remove, better to pass as a parameter so we can avoid copies
 	Eigen::VectorXd equality;
 	Eigen::VectorXd inequality;
+	bool CSOLNP_HACK;
 
 	// NPSOL has bugs and can return the wrong fit & estimates
 	// even when optimization proceeds correctly.
@@ -297,6 +321,7 @@ class GradientOptimizerContext {
 	Eigen::VectorXd est;    //like fc->est but omitting profiled out params
 	Eigen::VectorXd bestEst;
 	Eigen::VectorXd grad;
+	double eqNorm, ineqNorm;
 
 	// output
 	int informOut;
@@ -309,14 +334,23 @@ class GradientOptimizerContext {
 	void setupSimpleBounds();          // NLOPT style
 	void setupIneqConstraintBounds();  // CSOLNP style
 	void setupAllBounds();             // NPSOL style
+	
+	Eigen::VectorXd constraintFunValsOut;
+	Eigen::MatrixXd constraintJacobianOut;
+	Eigen::VectorXd LagrMultipliersOut;
+	Eigen::VectorXi constraintStatesOut;
 
 	double solFun(double *myPars, int* mode);
 	double evalFit(double *myPars, int thrId, int *mode);
 	double recordFit(double *myPars, int* mode);
 	void solEqBFun();
 	void myineqFun();
-	template <typename T1> void allConstraintsFun(Eigen::MatrixBase<T1> &constraintOut);
+	template <typename T1, typename T2, typename T3> void allConstraintsFun(
+			Eigen::MatrixBase<T1> &constraintOut, Eigen::MatrixBase<T2> &jacobianOut, Eigen::MatrixBase<T3> &needcIn, int mode);
 	template <typename T1> void checkActiveBoxConstraints(Eigen::MatrixBase<T1> &nextEst);
+	template <typename T1> void linearConstraintCoefficients(Eigen::MatrixBase<T1> &lcc);
+	bool usingAnalyticJacobian;
+	void checkForAnalyticJacobians();
 	void useBestFit();
 	void copyToOptimizer(double *myPars);
 	void copyFromOptimizer(double *myPars, FitContext *fc2);
@@ -326,9 +360,11 @@ class GradientOptimizerContext {
 	int getIteration() const { return fc->iterations; };
 	int getWanted() const { return fc->wanted; };
 	void setWanted(int nw) { fc->wanted = nw; };
-	bool inConfidenceIntervalProblem() const;
-	int getConfidenceIntervalVarIndex() const;
-	bool inConfidenceIntervalLowerBound() const { return fc->lowerBound; };
+	bool hasKnownGradient() const;
+	template <typename T1>
+	void setKnownGradient(Eigen::MatrixBase<T1> &gradOut) {
+		fc->ciobj->gradient(fc, gradOut.derived().data());
+	};
 	omxState *getState() const { return fc->state; };
 };
 

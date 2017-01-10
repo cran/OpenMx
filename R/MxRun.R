@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -122,30 +122,8 @@ runHelper <- function(model, frontendStart,
 		warning("mxRun(..., useOptimizer=FALSE) ignored due to custom compute plan")
 	}
 	if (!is.null(model@fitfunction) && defaultComputePlan) {
-		compute <- NULL
-		fitNum <- paste(model@name, 'fitfunction', sep=".")
-		if (!useOptimizer) {
-			compute <- mxComputeOnce(from=fitNum, 'fit', .is.bestfit=TRUE)
-		} else {
-			steps = list(GD=mxComputeGradientDescent(fitfunction=fitNum))
-			if (length(intervals) && intervals) {
-				ciOpt <- mxComputeGradientDescent(
-				    fitfunction=fitNum, nudgeZeroStarts=FALSE, maxMajorIter=150)
-				if (ciOpt$engine == "SLSQP") cType <- 'ineq'
-				else cType <- 'none'
-				steps <- c(steps, CI=mxComputeConfidenceInterval(
-				    fitfunction=fitNum, constraintType=cType, plan=ciOpt))
-			}
-			if (options[["Calculate Hessian"]] == "Yes") {
-				steps <- c(steps, ND=mxComputeNumericDeriv(fitfunction=fitNum))
-			}
-			if (options[["Standard Errors"]] == "Yes") {
-				steps <- c(steps, SE=mxComputeStandardError(), HQ=mxComputeHessianQuality())
-			}
-			compute <- mxComputeSequence(c(steps,
-						       RD=mxComputeReportDeriv(),
-						       RE=mxComputeReportExpectation()))
-		}
+		compute <- omxDefaultComputePlan(modelName=model@name, intervals=(length(intervals) && intervals),
+					useOptimizer=useOptimizer, optionList=options)
 		compute@.persist <- FALSE
 		model@compute <- compute
 	}
@@ -204,7 +182,8 @@ runHelper <- function(model, frontendStart,
 
 		if (defaultComputePlan && is(model@compute, "MxComputeSequence")) {
 			iterations <- Reduce(min, c(4L, sapply(prec, function(x) x[['iterations']])))
-			stepSize <- Reduce(max, c(1e-4, sapply(prec, function(x) x[['stepSize']])))
+			stepSize <- Reduce(max, c(sqrt(.Machine$double.eps),
+						  sapply(prec, function(x) x[['stepSize']])))
 			model <- adjustDefaultNumericDeriv(model, iterations, stepSize)
 			flatModel <- adjustDefaultNumericDeriv(flatModel, iterations, stepSize)
 		}
@@ -218,8 +197,9 @@ runHelper <- function(model, frontendStart,
 	parameters <- flatModel@parameters
 	numParam <- length(parameters)
 	if (numParam == 0 && defaultComputePlan && !is.null(model@fitfunction)) {
-		compute <- mxComputeOnce(from=paste(model@name, 'fitfunction', sep="."),
-					 'fit', .is.bestfit=TRUE)
+		compute <- mxComputeSequence(list(CO=mxComputeOnce(from=paste(model@name, 'fitfunction', sep="."),
+								   'fit', .is.bestfit=TRUE),
+						  RE=mxComputeReportExpectation()))
 		compute@.persist <- FALSE
 		compute <- assignId(compute, 1L, '.')
 		model@compute <- compute
@@ -242,7 +222,8 @@ runHelper <- function(model, frontendStart,
 	output <- .Call(backend,
 			constraints, matrices, parameters,
 			algebras, expectations, computes,
-			data, intervalList, communication, options, defVars, PACKAGE = "OpenMx")
+			data, intervalList, communication, options, defVars,
+			silent || !interactive(), PACKAGE = "OpenMx")
 	backendStop <- Sys.time()
 	backendElapsed <- backendStop - frontendStop
 	model <- updateModelMatrices(model, flatModel, output$matrices)
@@ -262,10 +243,10 @@ runHelper <- function(model, frontendStart,
 	model <- imxReplaceModels(model, independents)
 	model@output <- nameOptimizerOutput(suppressWarnings, flatModel,
 		names(matrices), names(algebras),
-		names(parameters), output)
+		names(parameters), names(constraints), model@compute, output)
 	
 	theFitUnits <- model$output$fitUnits
-	if( length(theFitUnits) > 0 && theFitUnits %in% "r'Wr" ){
+	if(options[["Standard Errors"]] == "Yes" && length(theFitUnits) > 0 && theFitUnits %in% "r'Wr" ){
 		wlsSEs <- imxWlsStandardErrors(model)
 		model@output$standardErrors <- wlsSEs$SE
 		model@output$hessian <- 2*solve(wlsSEs$Cov) #puts in same units as m2ll Hessian
@@ -319,3 +300,18 @@ updateModelExpectationDims <- function(model, expectations){
 	return(model)
 }
 
+#' Report backend progress
+#'
+#' Prints a show status string to the console without emitting a
+#' newline.
+#'
+#' @param info the character string to print
+#' @param eraseLen the number of characters to erase
+imxReportProgress <- function(info, eraseLen) {
+	origLen = nchar(info)
+	if (origLen < eraseLen) {
+		info <- paste0(info, paste0(rep(' ', eraseLen - nchar(info)), collapse=""))
+	}
+	cat(paste0("\r", info))
+	if (origLen == 0) cat("\r")
+}

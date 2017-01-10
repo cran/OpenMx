@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,12 +29,14 @@
 #include "omxState.h"
 #include "omxExpectationBA81.h"  // improve encapsulation TODO
 
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
 omxData::omxData() : rownames(0), primaryKey(-1),
 		     dataObject(0), dataMat(0), meansMat(0), acovMat(0), obsThresholdsMat(0),
 		     thresholdCols(0), numObs(0), _type(0), numFactor(0), numNumeric(0),
-		     indexVector(0), identicalDefs(0), identicalMissingness(0),
-				    identicalRows(0), rows(0), cols(0),
-		     expectation(0)
+		     rows(0), cols(0), expectation(0)
 {}
 
 omxData* omxDataLookupFromState(SEXP dataObject, omxState* state) {
@@ -54,7 +56,7 @@ static void newDataDynamic(SEXP dataObject, omxData *od)
 		omxRaiseErrorf("Don't know how to create dynamic data with type '%s'", od->getType());
 	}
 
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("verbose")));
+	{ScopedProtect p2(dataLoc, R_do_slot(dataObject, Rf_install("verbose")));
 	od->verbose = Rf_asInteger(dataLoc);
 	}
 }
@@ -80,8 +82,8 @@ void omxData::connectDynamicData(omxState *currentState)
 		return;
 	}
 
-	omxExpectation *ex = omxExpectationFromIndex(INTEGER(dataLoc)[0], currentState);
 	if (Rf_length(dataLoc) == 1) {
+		omxExpectation *ex = omxExpectationFromIndex(INTEGER(dataLoc)[0], currentState);
 		BA81Expect *other = (BA81Expect *) ex->argStruct;
 		numObs = other->weightSum;
 		addDynamicDataSource(ex);
@@ -143,7 +145,7 @@ void omxData::recompute()
 	}
 }
 
-void omxData::newDataStatic(omxState *state, SEXP dataObject)
+void omxData::newDataStatic(omxState *state, SEXP dataObj)
 {
 	omxData *od = this;
 	SEXP dataLoc, dataVal;
@@ -152,22 +154,21 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 	// PARSE MxData Structure
 	if(OMX_DEBUG) {mxLog("Processing Data '%s'", od->name);}
 
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("type")));
-	od->_type = CHAR(STRING_ELT(dataLoc,0));
-	if(OMX_DEBUG) {mxLog("Element is type %s.", od->_type);}
-	}
-
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install(".isSorted")));
-	od->isSorted = Rf_asLogical(dataLoc);
-	}
 	{
-		ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("primaryKey")));
+		ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("type")));
+		od->_type = CHAR(STRING_ELT(dataLoc,0));
+		if(OMX_DEBUG) {mxLog("Element is type %s.", od->_type);}
+
+		ProtectedSEXP needsort(R_do_slot(dataObj, Rf_install(".needSort")));
+		od->needSort = Rf_asLogical(needsort);
+
+		ScopedProtect p2(dataLoc, R_do_slot(dataObj, Rf_install("primaryKey")));
 		int pk = Rf_asInteger(dataLoc);
 		if (pk != NA_INTEGER) {
 			primaryKey = pk - 1;
 		}
 	}
-	{ScopedProtect pdl(dataLoc, R_do_slot(dataObject, Rf_install("observed")));
+	{ScopedProtect pdl(dataLoc, R_do_slot(dataObj, Rf_install("observed")));
 	if(OMX_DEBUG) {mxLog("Processing Data Elements.");}
 	if (Rf_isFrame(dataLoc)) {
 		if(OMX_DEBUG) {mxLog("Data is a frame.");}
@@ -226,7 +227,7 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 	}
 
 	if(OMX_DEBUG) {mxLog("Processing Means Matrix.");}
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("means")));
+	{ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("means")));
 	od->meansMat = omxNewMatrixFromRPrimitive(dataLoc, state, 0, 0);
 	}
 
@@ -246,7 +247,7 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 	}
 
 	if(OMX_DEBUG) {mxLog("Processing Asymptotic Covariance Matrix.");}
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("acov")));
+	{ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("acov")));
 	od->acovMat = omxNewMatrixFromRPrimitive(dataLoc, state, 0, 0);
 	}
 
@@ -258,7 +259,7 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 	}
 
 	if(OMX_DEBUG) {mxLog("Processing Observed Thresholds Matrix.");}
-	{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("thresholds")));
+	{ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("thresholds")));
 	od->obsThresholdsMat = omxNewMatrixFromRPrimitive(dataLoc, state, 0, 0);
 	if (!strEQ(od->obsThresholdsMat->getType(), "matrix")) {
 		Rf_error("Observed thresholds must be constant");
@@ -274,63 +275,38 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 		od->thresholdCols.reserve(od->obsThresholdsMat->cols);
 		int *columns;
 		{
-			ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("thresholdColumns")));
+			ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("thresholdColumns")));
 			columns = INTEGER(dataLoc);
 		}
 
 		int *levels;
 		{
-			ScopedProtect p1(dataVal, R_do_slot(dataObject, Rf_install("thresholdLevels")));
+			ScopedProtect p1(dataVal, R_do_slot(dataObj, Rf_install("thresholdLevels")));
 			levels = INTEGER(dataVal);
 		}
 
-		for(int i = 0; i < od->obsThresholdsMat->cols; i++) {
+		//for(int i = 0; i < od->obsThresholdsMat->cols; i++) {
+		for(int i = 0; i < od->cols; i++) {
+			if (levels[i] == NA_INTEGER) continue;
 			omxThresholdColumn tc;
+			tc.dColumn = i;
 			tc.column = columns[i];
 			tc.numThresholds = levels[i];
 			od->thresholdCols.push_back(tc);
 			od->numFactor++; //N.B. must increment numFactor when data@type=='raw' (above) AND when data@type=='acov' (here)
 			if(OMX_DEBUG) {
-				mxLog("Column %d is ordinal with %d thresholds in threshold column %d.", 
-				      i, levels[i], columns[i]);
+				mxLog("%s: column %d is ordinal with %d thresholds in threshold column %d.", 
+				      name, i, levels[i], columns[i]);
 			}
 		}
 	}
 
 	if(!strEQ(od->_type, "raw")) {
 		if(OMX_DEBUG) {mxLog("Processing Observation Count.");}
-		ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("numObs")));
-		od->numObs = REAL(dataLoc)[0];
+		ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("numObs")));
+		od->numObs = Rf_asInteger(dataLoc);
 	} else {
 		od->numObs = od->rows;
-		if(OMX_DEBUG) {mxLog("Processing presort metadata.");}
-		/* For raw data, process sorting metadata. */
-		// Process unsorted indices:  // TODO: Generate reverse lookup table
-		{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("indexVector")));
-		od->indexVector = INTEGER(dataLoc);
-		}
-
-		if(Rf_length(dataLoc) == 0 || od->indexVector[0] == R_NaInt) od->indexVector = NULL;
-
-		// Process pre-computed identicality checks
-		if(OMX_DEBUG) {mxLog("Processing definition variable identicality.");}
-		{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("identicalDefVars")));
-		od->identicalDefs = INTEGER(dataLoc);
-		}
-
-		if(Rf_length(dataLoc) == 0 || od->identicalDefs[0] == R_NaInt) od->identicalDefs = NULL;
-		if(OMX_DEBUG) {mxLog("Processing missingness identicality.");}
-		{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("identicalMissingness")));
-		od->identicalMissingness = INTEGER(dataLoc);
-		}
-
-		if(Rf_length(dataLoc) == 0 || od->identicalMissingness[0] == R_NaInt) od->identicalMissingness = NULL;
-		if(OMX_DEBUG) {mxLog("Processing row identicality.");}
-		{ScopedProtect p1(dataLoc, R_do_slot(dataObject, Rf_install("identicalRows")));
-		od->identicalRows = INTEGER(dataLoc);
-		}
-
-		if(Rf_length(dataLoc) == 0 || od->identicalRows[0] == R_NaInt) od->identicalRows = NULL;
 	}
 
 	if (hasPrimaryKey()) {
@@ -345,23 +321,23 @@ void omxData::newDataStatic(omxState *state, SEXP dataObject)
 	}
 }
 
-omxData* omxState::omxNewDataFromMxData(SEXP dataObject, const char *name)
+omxData* omxState::omxNewDataFromMxData(SEXP dataObj, const char *name)
 {
-	if(dataObject == NULL) {
+	if(dataObj == NULL) {
 		Rf_error("Null Data Object detected.  This is an internal Rf_error, and should be reported on the forums.\n");
 	}
 
 	SEXP DataClass;
 	const char* dclass;
-	{ScopedProtect p1(DataClass, STRING_ELT(Rf_getAttrib(dataObject, R_ClassSymbol), 0));
+	{ScopedProtect p1(DataClass, STRING_ELT(Rf_getAttrib(dataObj, R_ClassSymbol), 0));
 		dclass = CHAR(DataClass);
 	}
 	if(OMX_DEBUG) {mxLog("Initializing %s element", dclass);}
 	omxData* od = new omxData();
 	od->name = name;
 	dataList.push_back(od);
-	if (strcmp(dclass, "MxDataStatic")==0) od->newDataStatic(this, dataObject);
-	else if (strcmp(dclass, "MxDataDynamic")==0) newDataDynamic(dataObject, od);
+	if (strcmp(dclass, "MxDataStatic")==0) od->newDataStatic(this, dataObj);
+	else if (strcmp(dclass, "MxDataDynamic")==0) newDataDynamic(dataObj, od);
 	else Rf_error("Unknown data class %s", dclass);
 	return od;
 }
@@ -372,6 +348,16 @@ void omxFreeData(omxData* od) {
 	omxFreeMatrix(od->acovMat);
 	omxFreeMatrix(od->obsThresholdsMat);
 	delete od;
+}
+
+bool omxDataElementMissing(omxData *od, int row, int col)
+{
+	if(od->dataMat != NULL) {
+		return std::isnan(omxMatrixElement(od->dataMat, row, col));
+	}
+	ColumnData &cd = od->rawCols[col];
+	if (cd.realData) return std::isnan(cd.realData[row]);
+	else return cd.intData[row] == NA_INTEGER;
 }
 
 double omxDoubleDataElement(omxData *od, int row, int col) {
@@ -416,7 +402,7 @@ omxMatrix* omxDataCovariance(omxData *od)
 		return omxGetExpectationComponent(ex, "covariance");
 	}
 
-	Rf_error("%s: type='cov' data must be in matrix storage", od->name);
+	Rf_error("%s: type='%s' data must be in matrix storage", od->name, od->_type);
 }
 
 omxMatrix* omxDataAcov(omxData *od)
@@ -447,12 +433,23 @@ void omxData::assertColumnIsData(int col)
 	case COLUMNDATA_NUMERIC:
 		return;
 	case COLUMNDATA_UNORDERED_FACTOR:
-		Rf_warning("In data '%s', column '%s' must be an ordered factor. Please use mxFactor()",
-			   name, cd.name);
+		if (++Global->dataTypeWarningCount < 5) {
+			Rf_warning("In data '%s', column '%s' must be an ordered factor. "
+				   "Please use mxFactor()", name, cd.name);
+		}
 		return;
 	case COLUMNDATA_INTEGER:
-		Rf_error("In data '%s', column '%s' must be an ordered factor. Please use mxFactor()",
-			 name, cd.name);
+		cd.type = COLUMNDATA_NUMERIC;
+		cd.realData = (double*) R_alloc(rows, sizeof(double));
+		for (int rx=0; rx < rows; ++rx) {
+			if (cd.intData[rx] == NA_INTEGER) {
+				cd.realData[rx] = NA_REAL;
+			} else {
+				cd.realData[rx] = cd.intData[rx];
+			}
+		}
+		cd.intData = 0;
+		return;
 	default:
 		Rf_error("In data '%s', column '%s' is an unknown data type", name, cd.name);
 	}
@@ -529,28 +526,6 @@ std::vector<omxThresholdColumn> &omxDataThresholds(omxData *od)
     return od->thresholdCols;
 }
 
-void omxSetContiguousDataColumns(omxContiguousData* contiguous, omxData* data, omxMatrix* colList) {
-
-	contiguous->isContiguous = FALSE;   // Assume not contiguous
-
-	if (data->dataMat == NULL) return; // Data has no matrix elements, so skip.
-
-	omxMatrix* dataMat = data->dataMat;
-	if (dataMat->colMajor) return;      // If data matrix is column-major, there's no continuity
-	
-	int colListLength = colList->cols;              // # of columns in the cov matrix
-	double start = omxVectorElement(colList, 0);    // Data col of first column of the covariance
-	contiguous->start = (int) start;                // That's our starting point.
-	contiguous->length = colListLength;             // And the length is ncol(cov)
-	
-	for(int i = 1; i < colListLength; i++) {        // Make sure that the col list is 
-		double next = omxVectorElement(colList, i); // contiguously increasing in column number
-		if (next != (start + i)) return;            // If it isn't, it's not contiguous data
-	}
-	
-	contiguous->isContiguous = TRUE;    // Passed.  This is contiguous.
-}
-
 void omxContiguousDataRow(omxData *od, int row, int start, int len, omxMatrix* om) {
 	// TODO: Might be better to combine this with omxDataRow to make a single accessor omxDataRow with a second signature that accepts an omxContiguousData argument.
 	if(row >= od->rows) Rf_error("Invalid row");
@@ -571,58 +546,6 @@ void omxDataRow(omxData *od, int row, omxMatrix* colList, omxMatrix* om)
 	omxDataRow(od, row, ecl, om);
 }
 
-int omxDataIndex(omxData *od, int row) {
-	if(od->indexVector != NULL)
-		return od->indexVector[row];
-	else return row;
-}
-
-int omxDataNumIdenticalRows(omxData *od, int row) {
-	if(od->identicalRows != NULL)
-		return od->identicalRows[row];
-	else return 1;
-}
-int omxDataNumIdenticalMissingness(omxData *od, int row) {
-	if(od->identicalMissingness != NULL)
-		return od->identicalMissingness[row];
-	else return 1;
-}
-
-int omxDataNumIdenticalDefs(omxData *od, int row){
-	if(od->identicalDefs != NULL)
-		return od->identicalDefs[row];
-	else return 1;
-}
-
-int omxDataNumIdenticalContinuousRows(omxData *od, int row) {
-	if(od->numNumeric <= 0) {
-		return od->rows;
-	}
-	return omxDataNumIdenticalRows(od, row);
-}
-
-int omxDataNumIdenticalContinuousMissingness(omxData *od, int row) {
-	if(od->numNumeric <= 0) {
-		return od->rows;
-	}
-	return omxDataNumIdenticalMissingness(od, row);
-}
-
-int omxDataNumIdenticalOrdinalRows(omxData *od, int row) {
-	if(od->numFactor <= 0) {
-		return od->rows;
-	}
-	return omxDataNumIdenticalRows(od, row);
-}
-
-int omxDataNumIdenticalOrdinalMissingness(omxData *od, int row) {
-	if(od->numFactor <= 0) {
-		return od->rows;
-	}
-	return omxDataNumIdenticalMissingness(od, row);
-}
-
-
 double omxDataNumObs(omxData *od)
 {
 	return od->numObs;
@@ -640,201 +563,7 @@ const char *omxDataType(omxData *od) {
 	return od->_type;
 }
 
-int elementEqualsDataframe(SEXP column, int offset1, int offset2) {
-	switch (TYPEOF(column)) {
-	case REALSXP:
-		if(ISNA(REAL(column)[offset1])) return ISNA(REAL(column)[offset2]);
-		if(ISNA(REAL(column)[offset2])) return ISNA(REAL(column)[offset1]);
-		return(REAL(column)[offset1] == REAL(column)[offset2]);
-	case LGLSXP:
-	case INTSXP:
-		return(INTEGER(column)[offset1] == INTEGER(column)[offset2]);		
-	}
-	return(0);
-}
-
-int testRowDataframe(SEXP data, int numrow, int numcol, int i, int *row, int base) {
-	SEXP column;
-	int j, equal = TRUE;
-
-	if (i == numrow) {
-		equal = FALSE;
-	} else {
-		for(j = 0; j < numcol && equal; j++) {
-			column = VECTOR_ELT(data, j);
-			equal = elementEqualsDataframe(column, base, i);
-		}
-	}
-
-	if (!equal) {
-		int gap = i - base;
-		for(j = 0; j < gap; j++) {
-			row[base + j] = gap - j;
-		}
-		base = i;
-	}
-	return(base);
-}
-
-int elementEqualsMatrix(SEXP data, int row1, int row2, int numrow, int col) {
-	int coloffset = col * numrow;
-	switch (TYPEOF(data)) {
-	case REALSXP:
-		if(ISNA(REAL(data)[row1 + coloffset])) return ISNA(REAL(data)[row2 + coloffset]);
-		if(ISNA(REAL(data)[row2 + coloffset])) return ISNA(REAL(data)[row1 + coloffset]);
-		return(REAL(data)[row1 + coloffset] == REAL(data)[row2 + coloffset]);
-	case LGLSXP:
-	case INTSXP:
-		return(INTEGER(data)[row1 + coloffset] == INTEGER(data)[row2 + coloffset]);
-	}
-	return(0);
-}
-
-int testRowMatrix(SEXP data, int numrow, int numcol, int i, int *row, int base) {
-	int j, equal = TRUE;
-
-	if (i == numrow) {
-		equal = FALSE;
-	} else {
-		for(j = 0; j < numcol && equal; j++) {
-			equal = elementEqualsMatrix(data, i, base, numrow, j);
-		}
-	}
-
-	if (!equal) {
-		int gap = i - base;
-		for(j = 0; j < gap; j++) {
-			row[base + j] = gap - j;
-		}
-		base = i;
-	}
-	return(base);
-}
-
-SEXP findIdenticalMatrix(SEXP data, SEXP missing, SEXP defvars,
-			 SEXP skipMissingExp, SEXP skipDefvarsExp) {
-
-	SEXP retval, identicalRows, identicalMissing, identicalDefvars;
-	int i, numrow, numcol, defvarcol;
-	int *irows, *imissing, *idefvars;
-	int baserows, basemissing, basedefvars;
-	int skipMissing, skipDefvars;
-
-	skipMissing = LOGICAL(skipMissingExp)[0];
-	skipDefvars = LOGICAL(skipDefvarsExp)[0];
-	numrow = Rf_nrows(data);
-	numcol = Rf_ncols(data);
-	defvarcol = Rf_ncols(defvars);
-	Rf_protect(retval = Rf_allocVector(VECSXP, 3));
-	Rf_protect(identicalRows = Rf_allocVector(INTSXP, numrow));
-	Rf_protect(identicalMissing = Rf_allocVector(INTSXP, numrow));
-	Rf_protect(identicalDefvars = Rf_allocVector(INTSXP, numrow));
-	irows = INTEGER(identicalRows);
-	imissing = INTEGER(identicalMissing);
-	idefvars = INTEGER(identicalDefvars);
-	if (skipMissing) {
-		for(i = 0; i < numrow; i++) {
-			imissing[i] = numrow - i;
-		}
-	}
-	if (skipDefvars) {
-		for(i = 0; i < numrow; i++) {
-			idefvars[i] = numrow - i;
-		}
-	}
-	baserows = 0;
-	basemissing = 0;
-	basedefvars = 0;
-	for(i = 1; i <= numrow; i++) {
-		baserows = testRowMatrix(data, numrow, numcol, i, irows, baserows); 
-		if (!skipMissing) {
-			basemissing = testRowMatrix(missing, numrow, numcol, i, imissing, basemissing); 
-		}
-		if (!skipDefvars) {
-			basedefvars = testRowMatrix(defvars, numrow, defvarcol, i, idefvars, basedefvars);
-		}
-	}
-	SET_VECTOR_ELT(retval, 0, identicalRows);
-	SET_VECTOR_ELT(retval, 1, identicalMissing);
-	SET_VECTOR_ELT(retval, 2, identicalDefvars);
-	return retval;
-}
-
-SEXP findIdenticalDataFrame(SEXP data, SEXP missing, SEXP defvars,
-			    SEXP skipMissingExp, SEXP skipDefvarsExp) {
-
-	SEXP retval, identicalRows, identicalMissing, identicalDefvars;
-	int i, numrow, numcol, defvarcol;
-	int *irows, *imissing, *idefvars;
-	int baserows, basemissing, basedefvars;
-	int skipMissing, skipDefvars;
-
-	skipMissing = LOGICAL(skipMissingExp)[0];
-	skipDefvars = LOGICAL(skipDefvarsExp)[0];
-	numrow = Rf_length(VECTOR_ELT(data, 0));
-	numcol = Rf_length(data);
-	defvarcol = Rf_length(defvars);
-	Rf_protect(retval = Rf_allocVector(VECSXP, 3));
-	Rf_protect(identicalRows = Rf_allocVector(INTSXP, numrow));
-	Rf_protect(identicalMissing = Rf_allocVector(INTSXP, numrow));
-	Rf_protect(identicalDefvars = Rf_allocVector(INTSXP, numrow));
-	irows = INTEGER(identicalRows);
-	imissing = INTEGER(identicalMissing);
-	idefvars = INTEGER(identicalDefvars);
-	if (skipMissing) {
-		for(i = 0; i < numrow; i++) {
-			imissing[i] = numrow - i;
-		}
-	}
-	if (skipDefvars) {
-		for(i = 0; i < numrow; i++) {
-			idefvars[i] = numrow - i;
-		}
-	}
-	baserows = 0;
-	basemissing = 0;
-	basedefvars = 0;
-	for(i = 1; i <= numrow; i++) {
-		baserows = testRowDataframe(data, numrow, numcol, i, irows, baserows); 
-		if (!skipMissing) {
-			basemissing = testRowMatrix(missing, numrow, numcol, i, imissing, basemissing);
-		}
-		if (!skipDefvars) {
-			basedefvars = testRowDataframe(defvars, numrow, defvarcol, i, idefvars, basedefvars);
-		}
-	}
-	SET_VECTOR_ELT(retval, 0, identicalRows);
-	SET_VECTOR_ELT(retval, 1, identicalMissing);
-	SET_VECTOR_ELT(retval, 2, identicalDefvars);
-	return retval;
-}
-
-SEXP findIdenticalRowsData2(SEXP data, SEXP missing, SEXP defvars,
-			   SEXP skipMissingness, SEXP skipDefvars) {
-	if (Rf_isMatrix(data)) {
-		return(findIdenticalMatrix(data, missing, defvars, skipMissingness, skipDefvars));
-	} else {
-		return(findIdenticalDataFrame(data, missing, defvars, skipMissingness, skipDefvars));
-	}
-}
-
-SEXP findIdenticalRowsData(SEXP data, SEXP missing, SEXP defvars,
-			   SEXP skipMissingness, SEXP skipDefvars)
-{
-	omxManageProtectInsanity protectManager;
-
-	try {
-		return findIdenticalRowsData2(data, missing, defvars,
-					      skipMissingness, skipDefvars);
-	} catch( std::exception& __ex__ ) {
-		exception_to_try_Rf_error( __ex__ );
-	} catch(...) {
-		string_to_try_Rf_error( "c++ exception (unknown reason)" );
-	}
-}
-
-
-void omxData::omxPrintData(const char *header, int maxRows)
+void omxData::omxPrintData(const char *header, int maxRows, int *permute)
 {
 	if (!header) header = "Default data";
 
@@ -857,17 +586,19 @@ void omxData::omxPrintData(const char *header, int maxRows)
         if (maxRows >= 0 && maxRows < upto) upto = maxRows;
 
 	if (od->rawCols.size()) {
-		for(int j = 0; j < od->cols; j++) {
-			ColumnData &cd = od->rawCols[j];
+		for (auto &cd : od->rawCols) {
+			buf += " ";
+			buf += cd.name;
 			if (cd.intData) {
-				buf += " I";
+				buf += "[I]";
 			} else {
-				buf += " N";
+				buf += "[N]";
 			}
 		}
 		buf += "\n";
 
-		for (int vx=0; vx < upto; vx++) {
+		for (int vxv=0; vxv < upto; vxv++) {
+			int vx = permute? permute[vxv] : vxv;
 			for (int j = 0; j < od->cols; j++) {
 				ColumnData &cd = od->rawCols[j];
 				if (cd.intData) {
@@ -886,17 +617,10 @@ void omxData::omxPrintData(const char *header, int maxRows)
 					}
 				}
 			}
-			buf += "\n";
+			buf += string_snprintf("\t# %d \n", vxv);
 		}
 	}
 
-	if (od->identicalRows) {
-		buf += "row\tidentical\tmissing\tdefvars\n";
-		for(int j = 0; j < upto; j++) {
-			buf += string_snprintf("%d\t%d\t%d\t%d\n", j, od->identicalRows[j],
-					       od->identicalMissingness[j], od->identicalDefs[j]);
-		}
-	}
 	mxLogBig(buf);
 
 	if (od->dataMat) omxPrintMatrix(od->dataMat, "dataMat");
@@ -905,7 +629,12 @@ void omxData::omxPrintData(const char *header, int maxRows)
 
 void omxData::omxPrintData(const char *header)
 {
-        omxPrintData(header, -1);
+        omxPrintData(header, -1, 0);
+}
+
+void omxData::omxPrintData(const char *header, int maxRows)
+{
+        omxPrintData(header, maxRows, 0);
 }
 
 double omxDataDF(omxData *od)
@@ -925,28 +654,6 @@ double omxDataDF(omxData *od)
 		return df;
 	}
 	return NA_REAL;
-}
-
-SEXP omxData::getRowNames()
-{
-	if (!strEQ(_type, "raw")) Rf_error("getRowNames only works for type=raw data");
-
-	if (!isSorted) return rownames;
-
-	// We could notice if the original order was sorted and in the special
-	// form c(NA, #rows) to avoid recreating the rownames.
-
-	SEXP unsorted;
-	if (Rf_isString(rownames)) {
-		Rf_protect(unsorted = Rf_allocVector(STRSXP, rows));
-		for (int rx=0; rx < rows; rx++) {
-			int dest = omxDataIndex(this, rx);
-			SET_STRING_ELT(unsorted, dest, STRING_ELT(rownames, rx));
-		}
-	} else {
-		Rf_error("Type %d rownames not implemented", TYPEOF(rownames));
-	}
-	return unsorted;
 }
 
 static void markDefVarDependencies(omxState* os, omxDefinitionVar* defVar)

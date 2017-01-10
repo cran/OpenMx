@@ -7,7 +7,6 @@
 #include <Eigen/Cholesky>
 //#include <Eigen/SparseCholesky>
 #include <Eigen/CholmodSupport>
-#include <Rcpp.h>
 //#include <RcppEigenStubs.h>
 #include <RcppEigenWrap.h>
 //#include <Eigen/UmfPackSupport>
@@ -45,8 +44,8 @@ class AsymTool {
 	Eigen::SparseMatrix<double> fullA;
 	Eigen::SparseMatrix<double> IAF;
 
-	AsymTool(std::vector<T1> &latentFilter) :
-	AshallowDepth(-1), signA(-1.0), latentFilter(latentFilter), analyzed(false), hasDeterminedDepth(false),
+	AsymTool(std::vector<T1> &_latentFilter) :
+	AshallowDepth(-1), signA(-1.0), latentFilter(_latentFilter), analyzed(false), hasDeterminedDepth(false),
 		invertCount(0), filterCount(0) {};
 	void resize(int clumpVars, int _clumpObs)
 	{
@@ -152,14 +151,14 @@ template <typename T1> void AsymTool<T1>::filter()
 	if (doubleCheck) {
 		Eigen::MatrixXd denseAF;
 		denseAF.resize(fullA.rows(), clumpObs);
-		int dx=0;
+		int xx=0;
 		for (int cx=0; cx < fullA.cols(); ++cx) {
 			if (!latentFilter[cx]) continue;
-			denseAF.col(dx) = denseA.col(cx);
-			++dx;
+			denseAF.col(xx) = denseA.col(cx);
+			++xx;
 		}
-		if (dx != clumpObs) Rf_error("latentFilter has wrong count %d != %d",
-					     dx, clumpObs);
+		if (xx != clumpObs) Rf_error("latentFilter has wrong count %d != %d",
+					     xx, clumpObs);
 
 		// ensure inner iterator works
 		for (int k=0; k< IAF.outerSize(); ++k) {
@@ -188,32 +187,6 @@ template <typename T1> void AsymTool<T1>::filter()
 	++filterCount;
 	//{ Eigen::MatrixXd tmp = out; mxPrintMat("out", tmp); }
 }
-
-template<typename _MatrixType, int _UpLo = Eigen::Lower>
-class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
- private:
-	Eigen::MatrixXd ident;
-	Eigen::MatrixXd inverse;
-
- public:
-	typedef Eigen::LDLT<_MatrixType, _UpLo> Base;
-
-	double log_determinant() const {
-		typename Base::Scalar detL = Base::vectorD().array().log().sum();
-		return detL;
-	}
-
-	void refreshInverse()
-	{
-		if (ident.rows() != Base::m_matrix.rows()) {
-			ident.setIdentity(Base::m_matrix.rows(), Base::m_matrix.rows());
-		}
-
-		inverse = Base::solve(ident);
-	};
-
-	const Eigen::MatrixXd &getInverse() const { return inverse; };
-};
 
 /*
 template<typename _MatrixType, int _UpLo = Eigen::Lower>
@@ -380,7 +353,6 @@ namespace RelationalRAMExpectation {
 		int numJoins;
 		int parent1;  // first parent
 		int fk1;      // first foreign key
-		bool rotationLeader;
 
 		// clump indexes into the layout for models that
 		// are considered a compound component of this model.
@@ -421,7 +393,11 @@ namespace RelationalRAMExpectation {
 			return (omxRAMExpectation*) model->argStruct;
 		};
 		std::vector< omxMatrix* > &getBetween() const;
-		omxMatrix *getDataColumns() const { return model->dataColumns; };
+		typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnType;
+		const Eigen::Map<DataColumnType> getDataColumns() const {
+			const Eigen::Map<DataColumnType> vec(model->dataColumnFun(model), model->numDataColumns);
+			return vec;
+		};
 		void dataRow(omxMatrix *out) const;
 	};
 
@@ -445,6 +421,10 @@ namespace RelationalRAMExpectation {
 		Eigen::MatrixXd                  dataCov;
 		Eigen::VectorXd                  dataMean;
 	};
+
+	// This is not really the best organization. It would be better to
+	// partition the work into equal size covariance matrices then by
+	// identical covariance matrices and then by identical means.
 
 	class independentGroup {
 	private:
@@ -480,8 +460,8 @@ namespace RelationalRAMExpectation {
 		// could store coeff extraction plan in addr TODO
 		AsymTool<bool>          asymT;
 
-		independentGroup(class state *st, int size, int clumpSize)
-			: st(*st), clumpSize(clumpSize),
+		independentGroup(class state *_st, int size, int _clumpSize)
+			: st(*_st), clumpSize(_clumpSize),
 			analyzedCov(false), asymT(latentFilter)
 		{ placements.reserve(size); };
 		independentGroup(independentGroup *ig);
@@ -563,16 +543,15 @@ typedef std::set< std::pair< omxExpectation*, int> > dvScoreboardSetType;
 
 class omxRAMExpectation {
 	bool trivialF;
-	int Zversion;
+	unsigned Zversion;
 	omxMatrix *_Z;
+	Eigen::VectorXi dataCols;  // composition of F permutation and expectation->dataColumns
+	std::vector< omxThresholdColumn > thresholds;
  public:
 	std::vector< dvScoreboardSetType > dvScoreboard;
 	Eigen::VectorXd hasVariance;
 	std::vector<bool> ignoreDefVar;
 	std::vector<bool> latentFilter; // false when latent
-
-	// composition of F permutation and expectation->dataColumns
-	Eigen::VectorXi dataCols;
 
  	omxRAMExpectation(omxMatrix *Z) : trivialF(false), Zversion(0), _Z(Z) {};
 	~omxRAMExpectation() {
@@ -580,7 +559,7 @@ class omxRAMExpectation {
 	};
 
 	omxMatrix *getZ(FitContext *fc);
-	void CalculateRAMCovarianceAndMeans();
+	void CalculateRAMCovarianceAndMeans(FitContext *fc);
 
 	omxMatrix *cov, *means; // observed covariance and means
 	omxMatrix *A, *S, *F, *M, *I;
@@ -589,6 +568,7 @@ class omxRAMExpectation {
 	int verbose;
 	int numIters;
 	int rampart;
+	bool useSufficientSets;
 	bool rampartEnabled() { return rampart == NA_INTEGER || rampart > 0; };
 	double logDetObserved;
 	double n;
@@ -599,7 +579,35 @@ class omxRAMExpectation {
 	RelationalRAMExpectation::state *rram;
 	bool forceSingleGroup;
 
-	void studyF(omxMatrix *dc);
+	template <typename T>
+	void studyF(const Eigen::MatrixBase<T> &dataColumns,
+		    std::vector< omxThresholdColumn > &origThresholdInfo)
+	{
+		EigenMatrixAdaptor eF(F);
+		latentFilter.assign(eF.cols(), false);
+		dataCols.resize(eF.rows());
+		if (!eF.rows()) return;  // no manifests
+		for (int cx =0, dx=0; cx < eF.cols(); ++cx) {
+			int dest;
+			double isManifest = eF.col(cx).maxCoeff(&dest);
+			latentFilter[cx] = isManifest;
+			if (isManifest) {
+				int newDest = dataColumns.size()? dataColumns[dest] : dest;
+				dataCols[dx] = newDest;
+				if (origThresholdInfo.size()) {
+					omxThresholdColumn adj = origThresholdInfo[dest];
+					adj.dColumn = dx;
+					thresholds.push_back(adj);
+				}
+				dx += 1;
+			}
+		}
+	};
+	int *getDataColumnsPtr() const {
+		return (int*) dataCols.data();
+	}
+
+	std::vector< omxThresholdColumn > &getThresholdInfo() { return thresholds; }
 };
 
 namespace RelationalRAMExpectation {

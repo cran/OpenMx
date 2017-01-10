@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  *  limitations under the License.
  */
 
+#include <time.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <set>
@@ -22,7 +23,18 @@
 #include "Compute.h"
 #include "omxImportFrontendState.h"
 
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
 struct omxGlobal *Global = NULL;
+static bool mxLogEnabled = false;
+
+SEXP enableMxLog()
+{
+	mxLogEnabled = true;
+	return Rf_ScalarLogical(1);
+}
 
 FreeVarGroup *omxGlobal::findVarGroup(int id)
 {
@@ -60,9 +72,9 @@ bool FreeVarGroup::hasSameVars(FreeVarGroup *g2)
 int FreeVarGroup::lookupVar(int matrix, int row, int col)
 {
 	for (size_t vx=0; vx < vars.size(); ++vx) {
-		std::vector<omxFreeVarLocation> &locations = vars[vx]->locations;
-		for (size_t lx=0; lx < locations.size(); lx++) {
-			const omxFreeVarLocation &loc = locations[lx];
+		std::vector<omxFreeVarLocation> &locVec = vars[vx]->locations;
+		for (size_t lx=0; lx < locVec.size(); lx++) {
+			const omxFreeVarLocation &loc = locVec[lx];
 			if (loc.matrix != matrix) continue;
 			if (loc.row == row && loc.col == col) return vx;
 		}
@@ -206,6 +218,11 @@ void FreeVarGroup::log(omxState *os)
 
 omxGlobal::omxGlobal()
 {
+	silent = true;
+	lastProgressReport = time(0);
+	previousReportLength = 0;
+	previousReportFit = 0;
+	previousComputeCount = 0;
 	mxLogSetCurrentRow(-1);
 	numThreads = 1;
 	analyticGradients = 0;
@@ -214,10 +231,11 @@ omxGlobal::omxGlobal()
 	anonAlgebra = 0;
 	rowLikelihoodsWarning = false;
 	unpackedConfidenceIntervals = false;
-	fc = NULL;
+	topFc = NULL;
 	intervals = true;
 	gradientTolerance = 1e-6;
 	boundsUpdated = false;
+	dataTypeWarningCount = 0;
 
 	RAMInverseOpt = true;
 	RAMMaxDepth = 30;
@@ -236,19 +254,25 @@ omxMatrix *omxState::getMatrixFromIndex(int matnum) const
 	return matnum<0? matrixList[~matnum] : algebraList[matnum];
 }
 
+omxMatrix *omxState::lookupDuplicate(omxMatrix *element) const
+{
+	if (!element->hasMatrixNumber) Rf_error("lookupDuplicate without matrix number");
+	return getMatrixFromIndex(element->matrixNumber);
+}
+
 void omxState::setWantStage(int stage)
 {
 	wantStage = stage;
 	if (OMX_DEBUG) mxLog("wantStage set to 0x%x", stage);
 }
 
-omxMatrix *omxConfidenceInterval::getMatrix(omxState *st) const
+omxMatrix *ConfidenceInterval::getMatrix(omxState *st) const
 {
 	return st->getMatrixFromIndex(matrixNumber);
 }
 
 struct ciCmp {
-	bool operator() (const omxConfidenceInterval* x, const omxConfidenceInterval* y) const
+	bool operator() (const ConfidenceInterval* x, const ConfidenceInterval* y) const
 	{
 		if (x->matrixNumber != y->matrixNumber) {
 			return x->matrixNumber < y->matrixNumber;
@@ -266,30 +290,39 @@ void omxGlobal::unpackConfidenceIntervals(omxState *currentState)
 	unpackedConfidenceIntervals = true;
 
 	// take care to preserve order
-	std::vector<omxConfidenceInterval*> tmp;
+	std::vector<ConfidenceInterval*> tmp;
 	std::swap(tmp, intervalList);
-	std::set<omxConfidenceInterval*, ciCmp> uniqueCIs;
+	std::set<ConfidenceInterval*, ciCmp> uniqueCIs;
 
 	for (int ix=0; ix < (int) tmp.size(); ++ix) {
-		omxConfidenceInterval *ci = tmp[ix];
+		ConfidenceInterval *ci = tmp[ix];
 		if (!ci->isWholeAlgebra()) {
-			if (uniqueCIs.count(ci) == 0) {
+			auto iter = uniqueCIs.find(ci);
+			if (iter == uniqueCIs.end()) {
 				uniqueCIs.insert(ci);
 				intervalList.push_back(ci);
+			} else if (ci->cmpBoundAndType(**iter)) {
+				Rf_warning("Different confidence intervals '%s' and '%s' refer to the same thing",
+					   ci->name.c_str(), (*iter)->name.c_str());
 			}
 			continue;
 		}
 		omxMatrix *mat = ci->getMatrix(currentState);
 		for (int cx=0; cx < mat->cols; ++cx) {
 			for (int rx=0; rx < mat->rows; ++rx) {
-				omxConfidenceInterval *cell = new omxConfidenceInterval(*ci);
+				ConfidenceInterval *cell = new ConfidenceInterval(*ci);
 				cell->name = string_snprintf("%s[%d,%d]", ci->name.c_str(), 1+rx, 1+cx);
 				cell->row = rx;
 				cell->col = cx;
-				if (uniqueCIs.count(cell) == 0) {
+				auto iter = uniqueCIs.find(cell);
+				if (iter == uniqueCIs.end()) {
 					uniqueCIs.insert(cell);
 					intervalList.push_back(cell);
 				} else {
+					if (cell->cmpBoundAndType(**iter)) {
+						Rf_warning("Different confidence intervals '%s' and '%s' refer to the same thing",
+							   cell->name.c_str(), (*iter)->name.c_str());
+					}
 					delete cell;
 				}
 			}
@@ -317,7 +350,7 @@ int omxState::nextId = 0;
 void omxState::init()
 {
 	stateId = ++nextId;
-	wantStage = 0;
+	setWantStage(FF_COMPUTE_INITIAL_FIT);
 }
 
 void omxState::loadDefinitionVariables(bool start)
@@ -328,30 +361,17 @@ void omxState::loadDefinitionVariables(bool start)
 	for(int ex = 0; ex < int(dataList.size()); ++ex) {
 		omxData *e1 = dataList[ex];
 		if (e1->defVars.size() == 0) continue;
-		int row = 0;
-		if (start) {
-			if (e1->rows != 1) {
-				e1->loadFakeData(this, NA_REAL);
-				continue;
-			}
-		} else {
-			// find row=0 in the unsorted data
-			int obs = omxDataNumObs(e1);
-			for (int dx=0; dx < obs; ++dx) {
-				if (omxDataIndex(e1, dx) == 0) {
-					row = dx;
-					break;
-				}
-			}
+		if (start && e1->rows != 1) {
+			e1->loadFakeData(this, NA_REAL);
+			continue;
 		}
-		e1->loadDefVars(this, row);
+		e1->loadDefVars(this, 0);
 	}
 }
 
-omxState::omxState(omxState *src, FitContext *fc)
+omxState::omxState(omxState *src) : clone(true)
 {
 	init();
-	clone = true;
 
 	dataList			= src->dataList;
 		
@@ -379,9 +399,16 @@ omxState::omxState(omxState *src, FitContext *fc)
 		matrixList[mx]->copyAttr(src->matrixList[mx]);
 	}
 
+	for (size_t xx=0; xx < src->conListX.size(); ++xx) {
+		conListX.push_back(src->conListX[xx]->duplicate(this));
+	}
+}
+
+void omxState::initialRecalc(FitContext *fc)
+{
 	omxInitialMatrixAlgebraCompute(fc);
 
-	for(size_t j = 0; j < src->expectationList.size(); j++) {
+	for(size_t j = 0; j < expectationList.size(); j++) {
 		// TODO: Smarter inference for which expectations to duplicate
 		omxCompleteExpectation(expectationList[j]);
 	}
@@ -390,14 +417,19 @@ omxState::omxState(omxState *src, FitContext *fc)
 		omxMatrix *matrix = algebraList[ax];
 		if (!matrix->fitFunction) continue;
 		omxCompleteFitFunction(matrix);
+		omxFitFunctionCompute(matrix->fitFunction, FF_COMPUTE_INITIAL_FIT, fc);
+	}
+
+	for (size_t xx=0; xx < conListX.size(); ++xx) {
+		conListX[xx]->prep(fc);
 	}
 }
 
 omxState::~omxState()
 {
-	if(OMX_DEBUG) { mxLog("Freeing %d Constraints.", (int) conList.size());}
-	for(int k = 0; k < (int) conList.size(); k++) {
-		delete conList[k];
+	if(OMX_DEBUG) { mxLog("Freeing %d Constraints.", (int) conListX.size());}
+	for(int k = 0; k < (int) conListX.size(); k++) {
+		delete conListX[k];
 	}
 
 	for(size_t ax = 0; ax < algebraList.size(); ax++) {
@@ -424,9 +456,10 @@ omxState::~omxState()
 
 omxGlobal::~omxGlobal()
 {
-	if (fc) {
-		omxState *state = fc->state;
-		delete fc;
+	if (previousReportLength) reportProgressStr("");
+	if (topFc) {
+		omxState *state = topFc->state;
+		delete topFc;
 		delete state;
 	}
 	for (size_t cx=0; cx < intervalList.size(); ++cx) {
@@ -502,6 +535,8 @@ void mxLogSetCurrentRow(int row) {}
 
 static ssize_t mxLogWriteSynchronous(const char *outBuf, int len)
 {
+	if (!mxLogEnabled) return len;
+
 	int maxRetries = 20;
 	ssize_t wrote = 0;
 	ssize_t got;
@@ -557,6 +592,46 @@ void mxLog(const char* msg, ...)   // thread-safe
 
 	ssize_t wrote = mxLogWriteSynchronous(buf2, len);
 	if (wrote != len) Rf_error("mxLog only wrote %d/%d, errno=%d", wrote, len, errno);
+}
+
+void omxGlobal::reportProgressStr(const char *msg)
+{
+	ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 3));
+	SETCAR(theCall, Rf_install("imxReportProgress"));
+	ProtectedSEXP Rmsg(Rf_allocVector(STRSXP, 1));
+	SET_STRING_ELT(Rmsg, 0, Rf_mkChar(msg));
+	SETCADR(theCall, Rmsg);
+	SETCADDR(theCall, Rf_ScalarInteger(previousReportLength));
+	Rf_eval(theCall, R_GlobalEnv);
+}
+
+void omxGlobal::reportProgress(const char *context, FitContext *fc)
+{
+	if (omx_absolute_thread_num() != 0) {
+		mxLog("omxGlobal::reportProgress called in a thread context (report this bug to developers)");
+		return;
+	}
+
+	R_CheckUserInterrupt();
+
+	time_t now = time(0);
+	if (silent || now - lastProgressReport < 1 || fc->getGlobalComputeCount() == previousComputeCount) return;
+
+	lastProgressReport = now;
+
+	std::string str;
+	if (previousReportFit == 0.0 || previousReportFit == fc->fit) {
+		str = string_snprintf("%s %d %.6g",
+				      context, fc->getGlobalComputeCount(), fc->fit);
+	} else {
+		str = string_snprintf("%s %d %.6g %.4g",
+				      context, fc->getGlobalComputeCount(), fc->fit, fc->fit - previousReportFit);
+	}
+
+	reportProgressStr(str.c_str());
+	previousReportLength = str.size();
+	previousReportFit = fc->fit;
+	previousComputeCount = fc->getGlobalComputeCount();
 }
 
 void diagParallel(int verbose, const char* msg, ...)
@@ -658,19 +733,61 @@ void omxGlobal::checkpointPostfit(const char *callerName, FitContext *fc, double
 	}
 }
 
-UserConstraint::UserConstraint(FitContext *fc, const char *name, omxMatrix *arg1, omxMatrix *arg2) :
-	super(name)
+void UserConstraint::prep(FitContext *fc)
+{
+	fc->state->setWantStage(FF_COMPUTE_INITIAL_FIT);
+	refresh(fc);
+	nrows = pad->rows;
+	ncols = pad->cols;
+	size = nrows * ncols;
+	if (size == 0) {
+		Rf_warning("Constraint '%s' evaluated to a 0x0 matrix and will have no effect", name);
+	}
+	omxAlgebraPreeval(pad, fc);
+	if(jacobian){
+		jacMap.resize(jacobian->cols);
+		std::vector<const char*> *jacColNames = &jacobian->colnames;
+		for (size_t nx=0; nx < jacColNames->size(); ++nx) {
+			int to = fc->varGroup->lookupVar((*jacColNames)[nx]);
+			jacMap[nx] = to;
+		}
+	}
+}
+
+UserConstraint::UserConstraint(FitContext *fc, const char *_name, omxMatrix *arg1, omxMatrix *arg2, omxMatrix *jac, int lin) :
+	super(_name)
 {
 	omxState *state = fc->state;
 	omxMatrix *args[2] = {arg1, arg2};
 	pad = omxNewAlgebraFromOperatorAndArgs(10, args, 2, state); // 10 = binary subtract
-	state->setWantStage(FF_COMPUTE_INITIAL_FIT);
+	jacobian = jac;
+	linear = lin;
+}
+
+omxConstraint *UserConstraint::duplicate(omxState *dest)
+{
+	omxMatrix *args[2] = {
+		dest->lookupDuplicate(pad->algebra->algArgs[0]),
+		dest->lookupDuplicate(pad->algebra->algArgs[1])
+	};
+
+	UserConstraint *uc = new UserConstraint(name);
+	uc->opCode = opCode;
+	uc->pad = omxNewAlgebraFromOperatorAndArgs(10, args, 2, dest); // 10 = binary subtract
+	uc->jacobian = jacobian;
+	uc->linear = linear;
+	return uc;
+}
+
+void UserConstraint::refreshAndGrab(FitContext *fc, Type ineqType, double *out)
+{
+	fc->incrComputeCount();
 	refresh(fc);
-	int nrows = pad->rows;
-	int ncols = pad->cols;
-	size = nrows * ncols;
-	if (size == 0) {
-		Rf_warning("Constraint '%s' evaluated to a 0x0 matrix and will have no effect", name);
+
+	for(int k = 0; k < size; k++) {
+		double got = pad->data[k];
+		if (opCode != ineqType) got = -got;
+		out[k] = got;
 	}
 }
 
@@ -682,6 +799,7 @@ UserConstraint::~UserConstraint()
 void UserConstraint::refresh(FitContext *fc)
 {
 	omxRecompute(pad, fc);
+	//omxRecompute(jacobian, fc); //<--Not sure if Jacobian needs to be recomputed every time constraint function does.
 }
 
 omxCheckpoint::omxCheckpoint() : wroteHeader(false), lastCheckpoint(0), lastIterations(0),
@@ -723,7 +841,7 @@ void omxCheckpoint::postfit(const char *context, FitContext *fc, double *est, bo
 	const int timeBufSize = 32;
 	char timeBuf[timeBufSize];
 	time_t now = time(NULL); // avoid checking unless we need it
-	int curEval = fc->getComputeCount();
+	int curEval = fc->getGlobalComputeCount();
 
 	bool doit = force;
 	if ((timePerCheckpoint && timePerCheckpoint <= now - lastCheckpoint) ||

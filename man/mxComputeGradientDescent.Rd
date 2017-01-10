@@ -10,7 +10,7 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
   useGradient = NULL, warmStart = NULL, nudgeZeroStarts = TRUE,
   maxMajorIter = NULL, gradientAlgo = mxOption(NULL, "Gradient algorithm"),
   gradientIterations = mxOption(NULL, "Gradient iterations"),
-  gradientStepSize = 1e-05)
+  gradientStepSize = mxOption(NULL, "Gradient step size"))
 }
 \arguments{
 \item{freeSet}{names of matrices containing free parameters.}
@@ -35,9 +35,9 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
 
 \item{gradientAlgo}{one of c('forward','central')}
 
-\item{gradientIterations}{number of Richardson iterations to use for the gradient (default 2)}
+\item{gradientIterations}{number of Richardson iterations to use for the gradient}
 
-\item{gradientStepSize}{the step size for the gradient (default 1e-5)}
+\item{gradientStepSize}{the step size for the gradient}
 }
 \description{
 This optimizer does not require analytic derivatives of the fit
@@ -47,7 +47,7 @@ OpenMx offers the choice of three optimizers: SLSQP, CSOLNP, and NPSOL.
 }
 \details{
 One of the most important options for SLSQP is
-\code{gradientAlgo}. By default, ##' the \code{central} method 
+\code{gradientAlgo}. By default, the \code{central} method 
 is used.  This method requires 2 times 
 \code{gradientIterations} function evaluations per parameter 
 per gradient.  The \code{central} method can be much more accurate 
@@ -62,6 +62,14 @@ Currently, only SLSQP uses arguments \code{gradientIterations}
 and \code{gradientAlgo}.  CSOLNP always uses the \code{forward} 
 method; NPSOL usually uses the \code{forward} method, but 
 adaptively switches to \code{central} under certain circumstances.
+
+CSOLNP uses the value of argument \code{gradientStepSize} as-is, 
+whereas SLSQP internally scales it by a factor of 100. The
+purpose of this transformation is to obtain roughly the same
+accuracy given other differences in numerical procedure.
+NPSOL ignores \code{gradientStepSize}, and instead uses a function
+of \link{mxOption} \dQuote{Function precision} to determine its gradient
+step size.
 
 Currently, only SLSQP and NPSOL can use analytic gradients, 
 and only NPSOL uses \code{warmStart}.

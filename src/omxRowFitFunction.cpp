@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,7 +18,32 @@
 #include "omxSymbolTable.h"
 #include "omxData.h"
 #include "omxRowFitFunction.h"
-#include "omxFIMLFitFunction.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
+typedef struct omxRowFitFunction {
+
+	/* Parts of the R  MxRowFitFunction Object */
+	omxMatrix* rowAlgebra;		// Row-by-row algebra
+	omxMatrix* rowResults;		// Aggregation of row algebra results
+	omxMatrix* reduceAlgebra;	// Algebra performed after row-by-row computation
+    omxMatrix* filteredDataRow; // Data row minus NAs
+    omxMatrix* existenceVector; // Set of NAs
+    omxMatrix* dataColumns;		// The order of columns in the data matrix
+
+    /* Contiguous data note for contiguity speedup */
+	omxContiguousData contiguous;		// Are the dataColumns contiguous within the data set
+
+	/* Structures determined from info in the MxRowFitFunction Object*/
+	omxMatrix* dataRow;         // One row of data, kept for aliasing only
+	omxData*   data;			// The data
+
+	int numDataRowDeps;         // number of algebra/matrix dependencies
+	int *dataRowDeps;           // indices of algebra/matrix dependencies
+
+} omxRowFitFunction;
 
 void omxDestroyRowFitFunction(omxFitFunction *oo) {
 
@@ -97,13 +122,12 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
 		markDataRowDependencies(localobj->matrix->currentState, oro);
 		
 		for(int j = 0; j < dataColumns->cols; j++) {
-			double dataValue = omxVectorElement(dataRow, j);
-			if(std::isnan(dataValue)) {
+			if(omxDataElementMissing(data, row, j)) {
 				toRemove[j] = 1;
-                omxSetVectorElement(existenceVector, j, 0);
+				omxSetVectorElement(existenceVector, j, 0);
 			} else {
 			    toRemove[j] = 0;
-                omxSetVectorElement(existenceVector, j, 1);
+			    omxSetVectorElement(existenceVector, j, 1);
 			}
 		}		
 		
@@ -112,14 +136,15 @@ static void omxRowFitFunctionSingleIteration(omxFitFunction *localobj, omxFitFun
 
 		omxRecompute(rowAlgebra, fc);
 
-		omxCopyMatrixToRow(rowAlgebra, omxDataIndex(data, row), rowResults);
+		omxCopyMatrixToRow(rowAlgebra, row, rowResults);
 	}
 	free(toRemove);
 	free(zeros);
 }
 
-static void omxCallRowFitFunction(omxFitFunction *oo, int want, FitContext *fc) {
-	if (want & (FF_COMPUTE_PREOPTIMIZE)) return;
+static void omxCallRowFitFunction(omxFitFunction *oo, int want, FitContext *fc)
+{
+	if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) return;
 
     if(OMX_DEBUG) { mxLog("Beginning Row Evaluation.");}
 	// Requires: Data, means, covariances.
@@ -282,7 +307,8 @@ void omxInitRowFitFunction(omxFitFunction* oo) {
 	}
 
 	/* Set up data columns */
-	omxSetContiguousDataColumns(&(newObj->contiguous), newObj->data, newObj->dataColumns);
+	EigenVectorAdaptor dc(newObj->dataColumns);
+	omxSetContiguousDataColumns(&(newObj->contiguous), newObj->data, dc);
 
 	oo->computeFun = omxCallRowFitFunction;
 	oo->destructFun = omxDestroyRowFitFunction;

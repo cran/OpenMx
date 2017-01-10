@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,26 @@
 #include <string.h>
 #include <string>
 
+#define R_NO_REMAP
+#include <Rcpp.h>
+#include <Rmath.h>
+#include <Rinternals.h>
+
+// Cut & paste from microbenchmark package (BSD license)
+typedef uint64_t nanotime_t;
+
+#if defined(WIN32)
+#include "nanotimer_windows.h"
+#elif defined(__MACH__) || defined(__APPLE__)
+#include "nanotimer_macosx.h"
+#elif defined(linux) || defined(__linux) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#include "nanotimer_gettime.h"
+#elif defined(sun) || defined(__sun) || defined(_AIX)
+#include "nanotimer_rtposix.h"
+#else /* Unsupported OS */
+inline nanotime_t get_nanotime(void) { return 0; }
+#endif
+
 #define MIN_ROWS_PER_THREAD 8
 
 #define OMXINLINE inline
@@ -48,6 +68,12 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #define EIGEN_DONT_PARALLELIZE
 #define  _OpenMx_Compilation_ 1  // work around bug in Eigen 3.2.5
 #define EIGEN_DEFAULT_DENSE_INDEX_TYPE int   // default is 8 but 4 bytes is plenty for us
+
+#ifdef OMX_BOUNDS_CHECK
+#ifdef NDEBUG
+#error "Undefine NDEBUG when using OMX_BOUNDS_CHECK"
+#endif
+#endif
 
 #ifdef DEBUGMX
 #ifdef NDEBUG
@@ -88,7 +114,9 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #include <vector>
 
 enum omxFFCompute {
-	FF_COMPUTE_PARAMFLAVOR  = 1<<0,  // delete this TODO
+	// In preoptimize, we determine which fit functions are
+	// actually in use so we can made a decision about the best
+	// multithreading strategy.
 	FF_COMPUTE_PREOPTIMIZE  = 1<<1,
 	FF_COMPUTE_MAXABSCHANGE = 1<<2,
 	FF_COMPUTE_FIT          = 1<<3,
@@ -108,6 +136,8 @@ enum omxFFCompute {
 	FF_COMPUTE_INITIAL_FIT  = 1<<11,    // omxInitialMatrixAlgebraCompute
 	FF_COMPUTE_FINAL_FIT    = 1<<12
 };
+
+#define GRADIENT_FUDGE_FACTOR(x) (pow(10.0,x))
 
 typedef struct omxMatrix omxMatrix;
 typedef struct omxState omxState;
@@ -140,6 +170,13 @@ static inline int triangleLoc1(int diag)
 static inline int triangleLoc0(int diag)
 {
 	return triangleLoc1(diag+1) - 1;  // 0 2 5 9 14 ..
+}
+
+static inline bool doubleEQ(double d1, double d2)
+{
+	// memcmp is required here because NaN != NaN always
+	// but careful because there is more than 1 bit pattern for NaN
+	return memcmp(&d1, &d2, sizeof(double)) == 0;
 }
 
 #ifdef _OPENMP
@@ -206,5 +243,103 @@ static OMXINLINE void omx_omp_unset_lock(omp_lock_t* __attribute__((unused)) loc
 #ifndef _OPENMP
 static inline int omp_get_thread_num() { return 0; }
 #endif
+
+#include <Eigen/Core>
+
+// Refactor as a single split function that pulls out all 3 parts
+// of the covariance matrix in one iteration through the elements?
+template <typename T1, typename T2, typename T3, typename T4, typename T5>
+void subsetNormalDist(const Eigen::MatrixBase<T1> &gmean, const Eigen::MatrixBase<T2> &gcov,
+		      T5 includeTest, int resultSize,
+		      Eigen::MatrixBase<T3> &mean, Eigen::MatrixBase<T4> &cov)
+{
+	mean.derived().resize(resultSize);
+	cov.derived().resize(resultSize, resultSize);
+
+	for (int gcx=0, cx=0; gcx < gcov.cols(); gcx++) {
+		if (!includeTest(gcx)) continue;
+		mean[cx] = gmean[gcx];
+		for (int grx=0, rx=0; grx < gcov.rows(); grx++) {
+			if (!includeTest(grx)) continue;
+			cov(rx,cx) = gcov(grx, gcx);
+			rx += 1;
+		}
+		cx += 1;
+	}
+}
+
+// Refactor as a single split function that pulls out all 3 parts
+// of the covariance matrix in one iteration through the elements?
+template <typename T2, typename T4, typename T5>
+void subsetCovariance(const Eigen::MatrixBase<T2> &gcov,
+		      T5 includeTest, int resultSize,
+		      Eigen::MatrixBase<T4> &cov)
+{
+	cov.derived().resize(resultSize, resultSize); // can avoid reallocation? TODO
+
+	for (int gcx=0, cx=0; gcx < gcov.cols(); gcx++) {
+		if (!includeTest(gcx)) continue;
+		for (int grx=0, rx=0; grx < gcov.rows(); grx++) {
+			if (!includeTest(grx)) continue;
+			cov(rx,cx) = gcov(grx, gcx);
+			rx += 1;
+		}
+		cx += 1;
+	}
+}
+
+template <typename T1, typename T2, typename T3>
+void subsetVector(const Eigen::MatrixBase<T1> &gmean, T2 includeTest,
+		  int resultSize, Eigen::MatrixBase<T3> &out)
+{
+	out.derived().resize(resultSize); // can avoid reallocation? TODO
+
+	for (int gcx=0, cx=0; gcx < gmean.size(); gcx++) {
+		if (!includeTest(gcx)) continue;
+		out[cx] = gmean[gcx];
+		cx += 1;
+	}
+}
+
+template <typename T2, typename T4, typename T5>
+void subsetCovarianceStore(Eigen::MatrixBase<T2> &gcov,
+		      T5 includeTest, const Eigen::MatrixBase<T4> &cov)
+{
+	for (int gcx=0, cx=0; gcx < gcov.cols(); gcx++) {
+		if (!includeTest(gcx)) continue;
+		for (int grx=0, rx=0; grx < gcov.rows(); grx++) {
+			if (!includeTest(grx)) continue;
+			gcov(grx, gcx) = cov(rx,cx);
+			rx += 1;
+		}
+		cx += 1;
+	}
+}
+
+template<typename _MatrixType, int _UpLo = Eigen::Lower>
+class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
+ private:
+	Eigen::MatrixXd ident;
+	Eigen::MatrixXd inverse;
+
+ public:
+	typedef Eigen::LDLT<_MatrixType, _UpLo> Base;
+
+	double log_determinant() const {
+		typename Base::Scalar detL = Base::vectorD().array().log().sum();
+		return detL;
+	}
+
+	void refreshInverse()
+	{
+		if (ident.rows() != Base::m_matrix.rows()) {
+			ident.setIdentity(Base::m_matrix.rows(), Base::m_matrix.rows());
+		}
+
+		inverse = Base::solve(ident);
+	};
+
+	const Eigen::MatrixXd &getInverse() const { return inverse; };
+};
 
 #endif /* _OMXDEFINES_H_ */

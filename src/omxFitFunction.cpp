@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,10 @@
 
 #include "omxFitFunction.h"
 #include "fitMultigroup.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 typedef struct omxFitFunctionTableEntry omxFitFunctionTableEntry;
 
@@ -102,17 +106,15 @@ void omxDuplicateFitMatrix(omxMatrix *tgt, const omxMatrix *src, omxState* newSt
 	omxFitFunction *ff = src->fitFunction;
 	if(ff == NULL) return;
 
-	omxFillMatrixFromMxFitFunction(tgt, ff->fitType, src->matrixNumber, ff->rObj);
+	omxFillMatrixFromMxFitFunction(tgt, src->matrixNumber, ff->rObj);
 	setFreeVarGroup(tgt->fitFunction, src->fitFunction->freeVarGroup);
 }
 
 void omxFitFunctionComputeAuto(omxFitFunction *off, int want, FitContext *fc)
 {
-	if (want & (FF_COMPUTE_INITIAL_FIT)) return;
+	if (!off->initialized) return;
 
-	if (!off->initialized) Rf_error("FitFunction not initialized");
-
-	if (!fc->CI) {
+	if (!fc->ciobj) {
 		off->computeFun(off, want, fc);
 	} else {
 		off->ciFun(off, want, fc);
@@ -123,9 +125,7 @@ void omxFitFunctionComputeAuto(omxFitFunction *off, int want, FitContext *fc)
 
 void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc)
 {
-	if (want & (FF_COMPUTE_INITIAL_FIT)) return;
-
-	if (!off->initialized) Rf_error("FitFunction not initialized");
+	if (!off->initialized) return;
 
 	off->computeFun(off, want, fc);
 	if (fc) fc->wanted |= want;
@@ -133,9 +133,7 @@ void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc)
 
 void omxFitFunctionComputeCI(omxFitFunction *off, int want, FitContext *fc)
 {
-	if (want & (FF_COMPUTE_INITIAL_FIT)) return;
-
-	if (!off->initialized) Rf_error("FitFunction not initialized");
+	if (!off->initialized) return;
 
 	off->ciFun(off, want, fc);
 	if (fc) fc->wanted |= want;
@@ -170,12 +168,6 @@ double totalLogLikelihood(omxMatrix *fitMat)
 	}
 }
 
-void omxFitFunctionPreoptimize(omxFitFunction *off, FitContext *fc)
-{
-	omxFitFunctionComputeAuto(off, FF_COMPUTE_PREOPTIMIZE, fc);
-	fc->fitUnits = off->units;
-}
-
 void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext *fc)
 {
 	bool doFit = want & FF_COMPUTE_FIT;
@@ -185,7 +177,7 @@ void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext 
 		omxFitFunctionComputeAuto(ff, want, fc);
 	} else {
 		if (want != FF_COMPUTE_FIT) Rf_error("Only fit is available");
-		if (fc->CI) Rf_error("CIs cannot be computed for unitless algebra");
+		if (fc->ciobj) Rf_error("CIs cannot be computed for unitless algebra");
 		omxRecompute(fitMat, fc);
 	}
 	if (doFit) {
@@ -203,8 +195,8 @@ void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext 
 void defaultAddOutput(omxFitFunction* oo, MxRList *out)
 {}
 
-omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitType,
-					  omxExpectation *expect, omxMatrix *matrix, bool rowLik)
+static omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitType,
+						 omxExpectation *expect, omxMatrix *matrix, bool rowLik)
 {
 	omxFitFunction *obj = (omxFitFunction*) R_alloc(1, sizeof(omxFitFunction));
 	OMXZERO(obj, 1);
@@ -249,20 +241,20 @@ omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitType,
 	return obj;
 }
 
-void omxFillMatrixFromMxFitFunction(omxMatrix* om, const char *fitType, int matrixNumber, SEXP rObj)
+void omxFillMatrixFromMxFitFunction(omxMatrix* om, int matrixNumber, SEXP rObj)
 {
 	om->hasMatrixNumber = TRUE;
 	om->matrixNumber = matrixNumber;
 
-	SEXP slotValue;
+	ProtectedSEXP fitFunctionClass(STRING_ELT(Rf_getAttrib(rObj, R_ClassSymbol), 0));
+	const char *fitType = CHAR(fitFunctionClass);
+
 	omxExpectation *expect = NULL;
-	{
-		ScopedProtect p1(slotValue, R_do_slot(rObj, Rf_install("expectation")));
-		if (Rf_length(slotValue) == 1) {
-			int expNumber = Rf_asInteger(slotValue);
-			if(expNumber != NA_INTEGER) {
-				expect = omxExpectationFromIndex(expNumber, om->currentState);
-			}
+	ProtectedSEXP slotValue(R_do_slot(rObj, Rf_install("expectation")));
+	if (Rf_length(slotValue) == 1) {
+		int expNumber = Rf_asInteger(slotValue);
+		if(expNumber != NA_INTEGER) {
+			expect = omxExpectationFromIndex(expNumber, om->currentState);
 		}
 	}
 
@@ -292,8 +284,9 @@ void omxChangeFitType(omxFitFunction *oo, const char *fitType)
 	Rf_error("Cannot find fit type '%s'", fitType);
 }
 
-static void defaultCIFun(omxFitFunction* oo, int ffcompute, FitContext *fc)
+static void defaultCIFun(omxFitFunction* oo, int want, FitContext *fc)
 {
+	if (want & FF_COMPUTE_INITIAL_FIT) return;
 	Rf_error("Confidence intervals are not supported for units %d", oo->units);
 }
 
@@ -337,56 +330,5 @@ omxMatrix* omxNewMatrixFromSlot(SEXP rObj, omxState* currentState, const char* s
 
 void loglikelihoodCIFun(omxFitFunction *ff, int want, FitContext *fc)
 {
-	const omxConfidenceInterval *CI = fc->CI;
-
-	if (want & FF_COMPUTE_PREOPTIMIZE) {
-		fc->targetFit = (fc->lowerBound? CI->lbound : CI->ubound) + fc->fit;
-		//mxLog("Set target fit to %f (MLE %f)", fc->targetFit, fc->fit);
-		return;
-	}
-
-	if (!(want & FF_COMPUTE_FIT)) {
-		Rf_error("Not implemented yet");
-	}
-
-	omxMatrix *fitMat = ff->matrix;
-
-	// We need to compute the fit here because that's the only way to
-	// check our soft feasibility constraints. If parameters don't
-	// change between here and the constraint evaluation then we
-	// should avoid recomputing the fit again in the constraint. TODO
-
-	omxFitFunctionCompute(fitMat->fitFunction, FF_COMPUTE_FIT, fc);
-	const double fit = totalLogLikelihood(fitMat);
-	omxMatrix *ciMatrix = CI->getMatrix(fitMat->currentState);
-	omxRecompute(ciMatrix, fc);
-	double CIElement = omxMatrixElement(ciMatrix, CI->row, CI->col);
-	omxResizeMatrix(fitMat, 1, 1);
-
-	if (!std::isfinite(fit) || !std::isfinite(CIElement)) {
-		fc->recordIterationError("Confidence interval is in a range that is currently incalculable. Add constraints to keep the value in the region where it can be calculated.");
-		fitMat->data[0] = nan("infeasible");
-		return;
-	}
-
-	if (want & FF_COMPUTE_FIT) {
-		double param = (fc->lowerBound? CIElement : -CIElement);
-		if (fc->compositeCIFunction) {
-			double diff = fc->targetFit - fit;
-			diff *= diff;
-			if (diff > 1e2) {
-				// Ensure there aren't any creative solutions
-				diff = nan("infeasible");
-				return;
-			}
-			fitMat->data[0] = diff + param;
-		} else {
-			fitMat->data[0] = param;
-		}
-		//mxLog("param at %f", fitMat->data[0]);
-	}
-	if (want & (FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN)) {
-		// add deriv adjustments here TODO
-	}
+	fc->ciobj->evalFit(ff, want, fc);
 }
-

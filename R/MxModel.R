@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -62,7 +62,12 @@ setMethod("initialize", "MxModel",
 		.Object@.resetdata <- FALSE
 	        .Object@.wasRun <- FALSE
 	        .Object@.modifiedSinceRun <- FALSE
-		.Object@.version <- packageVersion("OpenMx")
+		if (.hasSlot(.Object, '.version')) {
+			if (is.null(pkg_globals$myVersion)) {
+				pkg_globals$myVersion <- packageVersion("OpenMx")
+			}
+			.Object@.version <- pkg_globals$myVersion
+		}
 		.Object <- imxInitModel(.Object)
 		return(.Object)
 	}
@@ -217,6 +222,7 @@ setMethod("names", "MxModel",
 )
 
 .DollarNames.MxModel <- function(x, pattern) {   # .DollarNames is an S3 Generic
+	if (missing(pattern)) pattern <- ''
 		submodels <- names(x@submodels)
 		locals <- generateLocalNames(x)
 		slots <- imxGetSlotDisplayNames(x, slotList=visibleMxModelSlots)
@@ -602,7 +608,7 @@ modelModifyFilter <- function(model, entries, action) {
 	if (any(namedEntityFilter) && action == 'remove') {
 		stop(paste("Cannot use named entities when remove = TRUE.",
 			"Instead give the name of the entity when removing it.",
-			"See http://openmx.psyc.virginia.edu/wiki/mxmodel-help#Remove_an_object_from_a_model"))
+			"See http://openmx.ssri.psu.edu/wiki/mxmodel-help#Remove_an_object_from_a_model"))
 	}
 	if (any(characterFilter) && action == 'add') {
 		stop(paste("I don't know what to do with the following strings",

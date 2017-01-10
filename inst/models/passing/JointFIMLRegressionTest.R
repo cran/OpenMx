@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 # test of the joint ordinal/continuous fiml optimizer
 # create a single continuous and single ordinal variable
 # test both logistic regression and simple regression
@@ -45,7 +61,8 @@ regModel1 <- mxModel("JointSimpleRegressionTest",
 	mxMatrix("Full", 1, 1, free=TRUE, 
 		labels="threshY", dimnames=list(NA, "y"), 
 		name="thresh"),
-	mxFitFunctionML(),mxExpectationNormal("cov", "mean", dimnames = names(testData), thresholds="thresh", threshnames="y")
+	mxFitFunctionML(jointConditionOn='continuous'),
+	mxExpectationNormal("cov", "mean", dimnames = names(testData), thresholds="thresh", threshnames="y")
 	)
 # now a logistic regression
 regModel2 <- mxModel(regModel1, iaMat2, name="JointLogisticRegressionTest")
@@ -59,9 +76,18 @@ summary(regResults1)
 summary(regResults2)
 
 # check the likelihoods
-omxCheckCloseEnough(regResults1$output$Minus2LogLikelihood, 1789.092, 0.01)
-omxCheckCloseEnough(regResults2$output$Minus2LogLikelihood, 1789.092, 0.01)
+condOnContinuous <- 1789.092
+condOnOrdinal <- 1791.779
+omxCheckCloseEnough(regResults1$output$Minus2LogLikelihood, condOnContinuous, 0.01)
+omxCheckCloseEnough(regResults2$output$Minus2LogLikelihood, condOnContinuous, 0.01)
 
 # check the parameters
 omxCheckCloseEnough(regResults1$output$estimate, c(0.847, 0.282, -0.036, 0.062), 0.001)
 omxCheckCloseEnough(regResults2$output$estimate, c(1.592, 1.001, -0.036, 0.117), 0.01)
+
+# Simulate similar data
+test2Data <- mxGenerateData(testData, 500)
+reg2Results1 <- mxRun(mxModel(regModel1, mxData(test2Data, "raw")))
+sum2 <- fivenum(abs(reg2Results1$output$estimate - regResults1$output$estimate))
+omxCheckTrue(sum2[1] > 0)
+omxCheckTrue(sum2[5] < .1)

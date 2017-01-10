@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 require(OpenMx)
 
 set.seed(1234)
@@ -85,11 +101,11 @@ testmod3 <- mxModel(
 
 testrun3 <- mxRun(testmod3)
 
-omxCheckCloseEnough(testrun3$output$estimate[1],var(dat[,1])*99/100,epsilon=10^-5)
+omxCheckCloseEnough(testrun3$output$estimate[1],var(dat[,1]),epsilon=10^-5)
 omxCheckCloseEnough(testrun3$expectation$b,mean(dat[,1]),epsilon=10^-5)
-omxCheckCloseEnough(testrun3$expectation$bcov,(var(dat[,1])*99/100)/100,epsilon=10^-5)
+omxCheckCloseEnough(testrun3$expectation$bcov,(var(dat[,1]))/100,epsilon=10^-5)
 #MLfit from testrun should match fit of testrun3:
-omxCheckCloseEnough(testrun3$output$minimum, testrun$fitfunction$MLfit, epsilon=10^-2)
+omxCheckCloseEnough(testrun3$output$minimum, testrun$output$fit, epsilon=10^-2)
 
 testrun3summ <- summary(testrun3)
 #FIML fitfunction doesn't know how to tell the frontend that a GREML analysis involves only 1 observation:
@@ -102,4 +118,4 @@ omxCheckEquals(testrun3summ$degreesOfFreedom,98)
 #Check GREML-specific part of summary() output:
 omxCheckEquals(testrun3summ$GREMLfixeff$name,"x")
 omxCheckCloseEnough(testrun3summ$GREMLfixeff$coeff,mean(dat[,1]),epsilon=10^-5)
-omxCheckCloseEnough(testrun3summ$GREMLfixeff$se,sqrt(var(dat[,1])*99/100/100),epsilon=10^-5)
+omxCheckCloseEnough(testrun3summ$GREMLfixeff$se,sqrt(var(dat[,1])/100),epsilon=10^-5)

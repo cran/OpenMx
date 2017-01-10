@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ setClass(Class = "MxFitFunctionML",
 	     fellner = "logical",
 	     verbose = "integer",
 	     profileOut="MxOptionalChar",
-	     rowwiseParallel="logical"
-	 ),
+	     rowwiseParallel="logical",
+	     jointConditionOn="character"),
 	 )
 
 setMethod("initialize", "MxFitFunctionML",
 	  function(.Object, vector, rowDiagnostics, fellner, verbose, profileOut,
-		   rowwiseParallel, name = 'fitfunction') {
+		   rowwiseParallel, jointConditionOn, name = 'fitfunction') {
 		.Object@name <- name
 		.Object@vector <- vector
 		.Object@rowDiagnostics <- rowDiagnostics
@@ -34,6 +34,7 @@ setMethod("initialize", "MxFitFunctionML",
 		.Object@verbose <- verbose
 		.Object@profileOut <- profileOut
 		.Object@rowwiseParallel <- rowwiseParallel
+		.Object@jointConditionOn <- jointConditionOn
 		return(.Object)
 	}
 )
@@ -149,7 +150,7 @@ setMethod("generateReferenceModels", "MxFitFunctionML",
 				if(!single.na(model@expectation@.runDims)) { obsdata <- obsdata[selVars, selVars] }
 				#variable subsets are not run for covariance data
 				#consequently, selVars are only used when runDims are provided.
-			} else { obsdata <- obsdata[,selVars] }
+			} else { obsdata <- obsdata[,selVars, drop=FALSE] }
 		} else {
 			message(paste("The model", omxQuotes(modelName), "has not been run. So reference models",
 				"of all the variables in the data will be made.  For reference models",
@@ -160,7 +161,8 @@ setMethod("generateReferenceModels", "MxFitFunctionML",
 	})
 
 mxFitFunctionML <- function(vector = FALSE, rowDiagnostics=FALSE, ..., fellner=as.logical(NA),
-			    verbose=0L, profileOut=c(), rowwiseParallel=as.logical(NA)) {
+			    verbose=0L, profileOut=c(), rowwiseParallel=as.logical(NA),
+			    jointConditionOn=c('auto', 'ordinal', 'continuous')) {
 	if (length(list(...)) > 0) {
 		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
 	}
@@ -176,8 +178,10 @@ mxFitFunctionML <- function(vector = FALSE, rowDiagnostics=FALSE, ..., fellner=a
 	if (!is.na(fellner) && fellner && (vector || rowDiagnostics)) {
 		stop("'fellner' cannot be combined with 'vector' or 'rowDiagnostics'")
 	}
+	jointConditionOn <- match.arg(jointConditionOn)
 	return(new("MxFitFunctionML", vector, rowDiagnostics, fellner,
-		   as.integer(verbose), as.character(profileOut), rowwiseParallel))
+		   as.integer(verbose), as.character(profileOut), rowwiseParallel,
+		   jointConditionOn))
 }
 
 displayMxFitFunctionML <- function(fitfunction) {
@@ -187,6 +191,7 @@ displayMxFitFunctionML <- function(fitfunction) {
 	cat("$fellner :", fitfunction@fellner, '\n')
 	cat("$verbose :", fitfunction@verbose, '\n')
 	cat("$rowwiseParallel :", fitfunction@rowwiseParallel, '\n')
+	cat("$jointConditionOn :", fitfunction@jointConditionOn, '\n')
 	print(fitfunction@result)
 	invisible(fitfunction)
 }

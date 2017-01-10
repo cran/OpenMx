@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -80,8 +80,7 @@ if (1) {
 if (1) {
 	obj <- mxFitFunctionMultigroup(c("uniRegModelRaw", paste("model", 1:2, sep="")))
 	model <- mxModel(model="vector", obj, model1, model2, uniRegModelRaw)
-	omxCheckError(mxRun(model, suppressWarnings = TRUE), "The job for model 'vector' exited abnormally with the error message: 1:vector.fitfunction[0]: uniRegModelRaw.fitfunction of type imxFitFunctionFIML does not evaluate to a 1x1 matrix
-2:vector.fitfunction[0]: uniRegModelRaw.fitfunction of type imxFitFunctionFIML does not evaluate to a 1x1 matrix")
+	omxCheckError(mxRun(model, suppressWarnings = TRUE), "The job for model 'vector' exited abnormally with the error message: vector.fitfunction[0]: uniRegModelRaw.fitfunction of type imxFitFunctionFIML does not evaluate to a 1x1 matrix")
 }
 
 model <- mxModel(model="fail", mxFitFunctionMultigroup("noExisto"))

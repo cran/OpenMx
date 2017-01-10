@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -118,6 +118,8 @@ inline double *omxMatrixDataColumnMajor(omxMatrix *mat)
 	return mat->data;
 }
 
+// NOTE: These Eigen wrapper are not thread safe when mixed with omxCopyMatrix
+
 struct EigenMatrixAdaptor : Eigen::Map< Eigen::MatrixXd > {
 	EigenMatrixAdaptor(omxMatrix *mat) :
 	  Eigen::Map< Eigen::MatrixXd >(omxMatrixDataColumnMajor(mat), mat->rows, mat->cols) {}
@@ -133,9 +135,16 @@ struct EigenVectorAdaptor : Eigen::Map< Eigen::VectorXd > {
 	  Eigen::Map< Eigen::VectorXd >(mat->data, mat->rows * mat->cols) {}
 };
 
+template <typename Scalar>
+struct EigenStdVectorAdaptor : Eigen::Map< Eigen::Matrix<Scalar, Eigen::Dynamic, 1> > {
+	EigenStdVectorAdaptor(std::vector<Scalar> &vec) :
+	Eigen::Map< Eigen::Matrix<Scalar, Eigen::Dynamic, 1> >(vec.data(), vec.size()) {};
+};
+
 // If you call these functions directly then you need to free the memory with omxFreeMatrix.
 // If you obtain a matrix from omxNewMatrixFromSlot then you must NOT free it.
 omxMatrix* omxInitMatrix(int nrows, int ncols, unsigned short colMajor, omxState* os);
+omxMatrix *omxCreateCopyOfMatrix(omxMatrix *orig, omxState *os);
 
 	void omxFreeMatrix(omxMatrix* om);						// Ditto, traversing argument trees
 
@@ -190,7 +199,7 @@ bool omxNeedsUpdate(omxMatrix *matrix);
 
 OMXINLINE static bool omxMatrixIsDirty(omxMatrix *om) { return om->cleanVersion != om->version; }
 OMXINLINE static bool omxMatrixIsClean(omxMatrix *om) { return om->cleanVersion == om->version; }
-OMXINLINE static int omxGetMatrixVersion(omxMatrix *om) { return om->version; }
+OMXINLINE static unsigned omxGetMatrixVersion(omxMatrix *om) { return om->version; }
 
 static OMXINLINE int omxIsMatrix(omxMatrix *mat) {
     return (mat->algebra == NULL && mat->fitFunction == NULL);
@@ -428,7 +437,7 @@ void omxShallowInverse(FitContext *fc, int numIters, omxMatrix* A, omxMatrix* Z,
 
 double omxMaxAbsDiff(omxMatrix *m1, omxMatrix *m2);
 
-void checkIncreasing(omxMatrix* om, int column, int count, FitContext *fc);
+bool thresholdsIncreasing(omxMatrix* om, int column, int count, FitContext *fc);
 
 void omxMatrixHorizCat(omxMatrix** matList, int numArgs, omxMatrix* result);
 
@@ -440,7 +449,7 @@ void expm_eigen(int n, double *rz, double *out);
 void logm_eigen(int n, double *rz, double *out);
 
 template <typename T>
-void mxPrintMat(const char *name, const Eigen::DenseBase<T> &mat)
+std::string mxStringifyMatrix(const char *name, const Eigen::DenseBase<T> &mat, std::string &xtra)
 {
 	std::string buf;
 	bool transpose = mat.rows() > mat.cols();
@@ -451,29 +460,80 @@ void mxPrintMat(const char *name, const Eigen::DenseBase<T> &mat)
 	int rr = mat.rows();
 	int cc = mat.cols();
 	if (transpose) std::swap(rr,cc);
-	for(int j = 0; j < rr; j++) {
-		buf += "\n";
-		for(int k = 0; k < cc; k++) {
-			if (first) first=false;
-			else buf += ",";
-			double val;
-			if (transpose) {
-				val = mat(k,j);
-			} else {
-				val = mat(j,k);
+	if (!mat.derived().data()) {
+		buf += "\nNULL";
+	} else {
+		for(int j = 0; j < rr; j++) {
+			buf += "\n";
+			for(int k = 0; k < cc; k++) {
+				if (first) first=false;
+				else buf += ",";
+				double val;
+				if (transpose) {
+					val = mat(k,j);
+				} else {
+					val = mat(j,k);
+				}
+				buf += string_snprintf(" %3.6g", val);
 			}
-			buf += string_snprintf(" %3.6f", val);
 		}
 	}
 
-	if (transpose) {
-		buf += string_snprintf("), byrow=TRUE, nrow=%d, ncol=%d)%s\n",
-				       mat.cols(), mat.rows(), ")");
-	} else {
-		buf += string_snprintf("), byrow=TRUE, nrow=%d, ncol=%d)\n",
-				       mat.rows(), mat.cols());
-	}
+	int rows = mat.rows();
+	int cols = mat.cols();
+	if (transpose) std::swap(rows, cols);
+	buf += string_snprintf("), byrow=TRUE, nrow=%d, ncol=%d",
+			       rows, cols);
+	buf += xtra;
+	buf += ")";
+	if (transpose) buf += ")";
+	buf += "\n";
+	return buf;
+}
+
+template <typename T>
+void mxPrintMatX(const char *name, const Eigen::DenseBase<T> &mat, std::string &xtra)
+{
+	std::string buf = mxStringifyMatrix(name, mat, xtra);
 	mxLogBig(buf);
+}
+
+template <typename T>
+void mxPrintMat(const char *name, const Eigen::DenseBase<T> &mat)
+{
+	std::string xtra;
+	mxPrintMatX(name, mat, xtra);
+}
+
+template <typename T1, typename T2, typename T3>
+void computeMeanCov(const Eigen::MatrixBase<T1> &dataVec, int stride,
+		    Eigen::MatrixBase<T2> &meanOut, Eigen::MatrixBase<T3> &covOut)
+{
+	if (stride == 0) return;
+	int units = dataVec.size() / stride;
+	meanOut.derived().resize(stride);
+	meanOut.setZero();
+	covOut.derived().resize(stride, stride);
+	covOut.setZero();
+	// read the data only once to minimize memory thrashing
+	for (int ux=0; ux < units; ++ux) {
+		meanOut += dataVec.segment(ux * stride, stride);
+		covOut += (dataVec.segment(ux * stride, stride) *
+			   dataVec.segment(ux * stride, stride).transpose());
+	}
+	meanOut /= units;
+	covOut -= units * meanOut * meanOut.transpose();
+	covOut /= units-1;
+}
+
+template <typename T1, typename T2>
+double trace_prod(const Eigen::MatrixBase<T1> &t1, const Eigen::MatrixBase<T2> &t2)
+{
+	double sum = 0.0;
+	for (int rx=0; rx < t1.rows(); ++rx) {
+		sum += t1.row(rx) * t2.col(rx);
+	}
+	return sum;
 }
 
 #endif /* _OMXMATRIX_H_ */

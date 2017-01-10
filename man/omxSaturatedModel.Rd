@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -50,14 +50,30 @@ When an MxModel has been run, some effort is made to make the reference models f
 
 In general, it is best practice to give \code{mxRefModels} a model that has already been run.
 
-For IFA models (\link{mxExpectationBA81}), the independence model
-preserves equality constraints among item parameters from the original model.
+The are a few considerations specific to IFA models
+(\link{mxExpectationBA81}).
+The independence model preserves equality constraints among item
+parameters from the original model.
+The saturated model is a multinomial distribution with the proportions
+equal to the proportions in your data. For example, if you have 2
+dichotomous items then there are 4 possible response patterns: 00, 01, 10, 11.
+A multinomial distribution for these 2 items is fully specified by 3
+proportions or 3 parameters: a, b, c, \eqn{1.0-(a+b+c)}.
+Hence, there is no need to optimize the saturated model.
+When there is no missing data,
+the deviance is immediately known as \eqn{-2 * sum(log proportions)}.
+Typical Bayesian priors involve latent
+factors (various densities on the pseudo-guessing lower bound, log norm
+on loading, and uniqueness prior). These priors cannot be included
+in the independence model because there are no latent factors.
+Therefore, exercise caution when comparing the independence model
+to a model that includes Bayesian priors.
 
 \code{mxRefModels()} is not compatible with \link[OpenMx:mxExpectationGREML]{GREML expectation}, as there is no sensible general definition for a saturated GREML-type model.
 }
 
 \references{
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 
 \examples{

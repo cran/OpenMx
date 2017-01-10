@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -849,6 +849,7 @@ qualifyNamesFormula <- function(formula, modelname, namespace) {
 qualifyNamesConstraint <- function(constraint, modelname, namespace) {
 	constraint@name <- imxIdentifier(modelname, constraint@name)
 	constraint@formula <- qualifyNamesFormula(constraint@formula, modelname, namespace)
+	constraint@jac <- imxConvertIdentifier(constraint@jac[1], modelname, namespace)
 	return(constraint)
 }
 

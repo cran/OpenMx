@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -202,7 +202,8 @@ generateIFAReferenceModels <- function(model) {
 					 qpoints = expectation$qpoints,
 					 qwidth = expectation$qwidth),
 		       mxFitFunctionML(),
-		       mxComputeEM('expectation', 'scores', mxComputeNewtonRaphson(), maxIter = 1L))
+		       # Only need 1 iteration, but allow 2 to avoid code BLUE warning.
+		       mxComputeEM('expectation', 'scores', mxComputeNewtonRaphson(), maxIter = 2L))
 	dimnames(ind$item) = list(paste('p', 1:nrow(ind$item), sep=""), colnames(item))
 	ind$item$free <- !is.na(ind$item$values)
 

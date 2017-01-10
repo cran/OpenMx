@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ omxCheckError(mxModel(model, A, B, remove=TRUE),
 	paste("Cannot use named entities",
 	"when remove = TRUE. Instead give",
 	"the name of the entity when removing it.",
-	"See http://openmx.psyc.virginia.edu/wiki/mxmodel-help#Remove_an_object_from_a_model"))
+	"See http://openmx.ssri.psu.edu/wiki/mxmodel-help#Remove_an_object_from_a_model"))
 model <- mxModel(model, 'A', 'B', remove=TRUE)
 omxCheckEquals(length(names(model)), 12)
 

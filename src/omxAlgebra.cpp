@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@
 
 #include "omxMatrix.h"
 #include "omxFitFunction.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 void omxAlgebraAllocArgs(omxAlgebra *oa, int numArgs)
 {
@@ -92,6 +96,17 @@ void omxFreeAlgebraArgs(omxAlgebra *oa) {
 	}
 	omxAlgebraAllocArgs(oa, 0);
 	oa->matrix = NULL;
+}
+
+void omxAlgebraPreeval(omxMatrix *mat, FitContext *fc)
+{
+	if (mat->hasMatrixNumber) mat = fc->lookupDuplicate(mat);
+	omxState *st = mat->currentState;
+	st->setWantStage(FF_COMPUTE_PREOPTIMIZE);
+	omxRecompute(mat, fc);
+	auto ff = mat->fitFunction;
+	if (ff) fc->fitUnits = ff->units;
+	st->setWantStage(FF_COMPUTE_FIT);
 }
 
 void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
@@ -207,8 +222,8 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 			SEXP algebraArg;
 			{
 				ScopedProtect p1(algebraArg, VECTOR_ELT(algebra, j+1));
-				std::string name = string_snprintf("%s arg %d", om->name(), j);
-				oa->algArgs[j] = omxAlgebraParseHelper(algebraArg, om->currentState, name);
+				auto name2 = string_snprintf("%s arg %d", om->name(), j);
+				oa->algArgs[j] = omxAlgebraParseHelper(algebraArg, om->currentState, name2);
 			}
 			if (oa->algArgs[j]->nameStr.size() == 0) {
 				// A bit inefficient but invaluable for debugging

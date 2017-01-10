@@ -27,7 +27,7 @@ msg <- paste("Objective functions like mxFIMLObjective()",
 foo <- omxCheckWarning(mxFIMLObjective('cov', 'mean'), msg)
 }
 \references{
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 \seealso{
 \code{\link{omxCheckError}}

@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 library(OpenMx)
 #mxOption(NULL, "Default optimizer", "NPSOL")
 
@@ -24,7 +40,7 @@ fit1 <- mxRun(model, silent=TRUE)
 if (mxOption(NULL, 'Default optimizer') != "SLSQP") {ctype = 'none'} else {ctype = 'ineq'}
 
 cimodel <- mxModel(fit1,
-                   mxCI("var1", type="lower"),
+                   mxCI("var1", type="lower", boundAdj=FALSE),
                    mxCI("cov12", type="upper"),
                    mxCI("m1", type="both"),
                    mxComputeConfidenceInterval(verbose=0,plan=mxComputeGradientDescent(verbose=0), constraintType = ctype))
@@ -47,6 +63,10 @@ omxCheckCloseEnough(fit2$output$confidenceIntervals['var1','lbound'], c(0.9727),
 omxCheckCloseEnough(fit2$output$confidenceIntervals['cov12','ubound'], c(0.522), .001)
 
 omxCheckCloseEnough(fit1$output$fit, fit2$output$fit, 1e-6)
+
+fit4 <- omxCheckWarning(mxRun(mxModel(cimodel, mxCI('expectedMean[1,1]', interval=runif(1,.9,.95))),
+			      intervals = TRUE, silent=TRUE, checkpoint=FALSE),
+			"Different confidence intervals 'CIExample.expectedMean[1,1]' and 'm1' refer to the same thing")
 
 # ensure the [1,] syntax is supported
 data(demoOneFactor)

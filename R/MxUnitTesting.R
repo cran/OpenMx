@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ omxCheckTrue <- function(a) {
 ##' \code{\link{omxCheckIdentical}}, \code{\link{omxCheckSetEquals}},
 ##' \code{\link{omxCheckTrue}}, \code{\link{omxCheckEquals}}
 ##' @references
-##' The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+##' The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 ##' @examples
 ##' omxCheckCloseEnough(c(1, 2, 3), c(1.1, 1.9 ,3.0), epsilon = 0.5)
 ##' omxCheckCloseEnough(matrix(3, 3, 3), matrix(4, 3, 3), epsilon = 2)
@@ -217,7 +217,7 @@ tryCatch.W <- function(expr) {
 ##' \code{\link{omxCheckIdentical}}, \code{\link{omxCheckSetEquals}},
 ##' \code{\link{omxCheckTrue}}, \code{\link{omxCheckEquals}}
 ##' @references
-##' The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+##' The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 ##' @examples
 ##' msg <- paste("Objective functions like mxFIMLObjective()",
 ##'		"have been deprecated in favor of expectation and fit functions.\n",
@@ -265,7 +265,7 @@ omxCheckWarning <- function(expression, message) {
 ##' \code{\link{omxCheckIdentical}}, \code{\link{omxCheckSetEquals}},
 ##' \code{\link{omxCheckTrue}}, \code{\link{omxCheckEquals}}
 ##' @references
-##' The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+##' The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 ##' @examples
 ##' A <- mxMatrix('Full', 1, 1, labels = 'data.foo', free = TRUE, name = 'A')
 ##' model <- mxModel('model', A)
@@ -280,16 +280,16 @@ omxCheckWarning <- function(expression, message) {
 ##' omxCheckError(omxCheckCloseEnough(c(1, 2, 3), c(1.1, 1.9 ,3.0), .01), tmsg)
 omxCheckError <- function(expression, message) {
 	inputExpression <- match.call()$expression
-	assign("checkErrorState", FALSE, pkg_globals)
+	pkg_globals$checkErrorState <- FALSE
 	tryCatch(eval(inputExpression), error = function(x) {
 		if(!any(trim(x$message) == trim(message))) {
 			stop(paste("An error was thrown with the wrong message:",
 				x$message), call. = FALSE)
 		} else {
-			assign("checkErrorState", TRUE, pkg_globals)
+			pkg_globals$checkErrorState <- TRUE
 		}
 	})
-	if (!get("checkErrorState", pkg_globals)) {
+	if (!pkg_globals$checkErrorState) {
 		stop(paste("No error was observed for the expression",
 			deparse(inputExpression, width.cutoff = 500L)), call. = FALSE)
 	} else if (getOption("mxPrintUnitTests")) {

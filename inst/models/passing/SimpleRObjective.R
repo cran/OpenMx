@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -36,4 +36,4 @@ omxCheckCloseEnough(mxEval(A, modelOut),
 	rbind(c(4, 3), c(2, 1)), 
 	epsilon = 0.001)
 
-omxCheckCloseEnough(modelOut$output$hessian, diag(2, 4), 1e-10)
+omxCheckCloseEnough(modelOut$output$hessian, diag(2, 4), 1e-9)

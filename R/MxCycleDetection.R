@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -91,8 +91,11 @@ reportCycle <- function(backedges, destination, modelname) {
 	report <- cycle[!sapply(cycle, hasSquareBrackets)]
 	stop(paste("A cycle has been detected",
 		"in model", omxQuotes(modelname),
-		"involving the following elements:",
-		omxQuotes(report)), call. = FALSE)
+		". It involved the following elements:",
+		omxQuotes(report)),
+        "\nA common trigger for this error is not providing a ",
+		"name string as the first parameter to mxModel."
+		, call. = FALSE)
 }
 
 addFitFunctionDetection <- function(fitfunction, flatModel, dependencies) {

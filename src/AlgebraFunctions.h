@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,8 +28,6 @@
 **********************************************************/
 
 #include <limits>
-#include <R.h>
-#include <Rmath.h>
 #include "omxMatrix.h"
 #include "merge.h"
 #include "omxSadmvnWrapper.h"
@@ -62,7 +60,7 @@ static void omxMatrixInvert(FitContext *fc, omxMatrix** matList, int numArgs, om
 	int info = MatrixInvert1(result);
 	if (info) {
 		result->data[0] = nan("singular");
-		// recordIterationError not available here
+		// recordIterationError TODO
 	}
 }
 
@@ -1475,6 +1473,172 @@ static void omxElementPnbinom(FitContext *fc, omxMatrix** matList, int numArgs, 
 			Rf_warning("exactly one of arguments 'size', 'prob', and 'mu' must be negative (and therefore ignored)\n");
 			data[j] = Rf_pnbinom(data[j],sizecurr,probcurr,lower_tail_arg,give_log_arg); //let the R API handle bad inputs
 		}
+	}
+}
+
+static void omxElementDchisq(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *df = matList[1];
+	omxMatrix *ncp = matList[2];
+	omxMatrix *give_log = matList[3];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(df);
+	omxEnsureColumnMajor(ncp);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int dfDataSize = df->rows * df->cols;
+	int ncpDataSize = ncp->rows * ncp->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		if( Rf_sign(ncp->data[j%ncpDataSize]) == -1 ){
+			data[j] = Rf_dchisq(data[j],df->data[j%dfDataSize],give_log_arg);
+		}
+		else{
+			data[j] = Rf_dnchisq(data[j],df->data[j%dfDataSize],ncp->data[j%ncpDataSize],give_log_arg);
+		}
+	}
+}
+
+static void omxElementPchisq(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *df = matList[1];
+	omxMatrix *ncp = matList[2];
+	omxMatrix *lower_tail = matList[3];
+	omxMatrix *give_log = matList[4];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(df);
+	omxEnsureColumnMajor(ncp);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int dfDataSize = df->rows * df->cols;
+	int ncpDataSize = ncp->rows * ncp->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		if( Rf_sign(ncp->data[j%ncpDataSize]) == -1 ){
+			data[j] = Rf_pchisq(data[j],df->data[j%dfDataSize],lower_tail_arg,give_log_arg);
+		}
+		else{
+			data[j] = Rf_pnchisq(data[j],df->data[j%dfDataSize],ncp->data[j%ncpDataSize],lower_tail_arg,give_log_arg);
+		}
+	}
+}
+
+static void omxElementDbinom(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *n = matList[1];
+	omxMatrix *p = matList[2];
+	omxMatrix *give_log = matList[3];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(n);
+	omxEnsureColumnMajor(p);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nDataSize = n->rows * n->cols;
+	int pDataSize = p->rows * p->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_dbinom(data[j],n->data[j%nDataSize],p->data[j%pDataSize],give_log_arg);
+	}
+}
+
+static void omxElementPbinom(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *n = matList[1];
+	omxMatrix *p = matList[2];
+	omxMatrix *lower_tail = matList[3];
+	omxMatrix *give_log = matList[4];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(n);
+	omxEnsureColumnMajor(p);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int nDataSize = n->rows * n->cols;
+	int pDataSize = p->rows * p->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_pbinom(data[j],n->data[j%nDataSize],p->data[j%pDataSize],lower_tail_arg,give_log_arg);
+	}
+}
+
+static void omxElementDcauchy(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *location = matList[1];
+	omxMatrix *scale = matList[2];
+	omxMatrix *give_log = matList[3];
+	
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(location);
+	omxEnsureColumnMajor(scale);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int locationDataSize = location->rows * location->cols;
+	int scaleDataSize = scale->rows * scale->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_dcauchy(data[j],location->data[j%locationDataSize],scale->data[j%scaleDataSize],give_log_arg);
+	}
+}
+
+static void omxElementPcauchy(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
+{
+	omxMatrix *inMat = matList[0];
+	omxMatrix *location = matList[1];
+	omxMatrix *scale = matList[2];
+	omxMatrix *lower_tail = matList[3];
+	omxMatrix *give_log = matList[4];
+	
+	int lower_tail_arg = (int)(lower_tail->data[0] != 0);
+	int give_log_arg = (int)(give_log->data[0] != 0);
+	
+	omxEnsureColumnMajor(inMat);
+	omxEnsureColumnMajor(location);
+	omxEnsureColumnMajor(scale);
+	
+	int inMatDataSize = inMat->rows * inMat->cols;
+	int locationDataSize = location->rows * location->cols;
+	int scaleDataSize = scale->rows * scale->cols;
+	
+	omxCopyMatrix(result, inMat);
+	
+	double* data = result->data;
+	for(int j = 0; j < inMatDataSize; j++) {
+		data[j] = Rf_pcauchy(data[j],location->data[j%locationDataSize],scale->data[j%scaleDataSize],lower_tail_arg,give_log_arg);
 	}
 }
 

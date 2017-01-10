@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ setClass(Class = "MxExpectationRAM",
 		M = "MxCharOrNumber",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
-		dataColumns = "numeric",
 		thresholdColumns = "numeric",
 		thresholdLevels = "numeric",
 		depth = "integer",
@@ -33,6 +32,7 @@ setClass(Class = "MxExpectationRAM",
 	    between = "MxOptionalCharOrNumber",
 	    verbose = "integer",
 	    .rampart = "integer",
+	    .useSufficientSets = "logical",
 	    .forceSingleGroup = "logical",
 	    .ignoreDefVarsHack = "logical", #remove TODO
 	    .identifyZeroVarPred = "logical"
@@ -59,6 +59,7 @@ setMethod("initialize", "MxExpectationRAM",
 		.Object@.forceSingleGroup <- FALSE
 		.Object@.ignoreDefVarsHack <- FALSE  # remove TODO
 		.Object@.identifyZeroVarPred <- TRUE
+		.Object@.useSufficientSets <- TRUE
 		return(.Object)
 	}
 )
@@ -211,10 +212,10 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 		translatedNames <- fMatrixTranslateNames(fMatrix, modelname)
 		.Object@depth <- generateRAMDepth(flatModel, aMatrix, model@options)
 		if (length(translatedNames)) {
+			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
 			if (mxDataObject@type == 'raw' || mxDataObject@type == 'acov') {
 				threshName <- .Object@thresholds
 				checkNumberOrdinalColumns(mxDataObject)
-				.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
 				verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
 				.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
 				retval <- generateThresholdColumns(flatModel, model, labelsData, translatedNames, data, threshName)
@@ -299,14 +300,7 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 		  ret
 })
 
-setMethod("genericExpGetPrecision", "MxExpectationRAM",
-	function(.Object) {
-		if(!single.na(.Object@thresholds)) {
-			return(list(stepSize=0.1, iterations=3L, functionPrecision=1e-9))
-		} else {
-			callNextMethod();
-		}
-})
+setMethod("genericExpGetPrecision", "MxExpectationRAM", NormalExpGetPrecision)
 
 generateRAMDepth <- function(flatModel, aMatrixName, modeloptions) {
 	mxObject <- flatModel[[aMatrixName]]

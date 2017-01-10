@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ R.E. Kalman  (1960).  A New Approach to Linear Filtering and Prediction Problems
 
 H.E. Rauch, F. Tung, C.T. Striebel.  (1965).  Maximum Likelihood Estimates of Linear Dynamic Systems.   \emph{American Institute of Aeronautics and Astronautics Journal, 3}, 1445-1450.
 
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 
 \examples{

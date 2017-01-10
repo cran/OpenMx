@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2012 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #include "omxMatrix.h"
 #include "Compute.h"
-#include <Eigen/Core>
 
 void solnp(double *est, GradientOptimizerContext &fit);
 
@@ -31,11 +30,5 @@ void omxInvokeCSOLNP(omxMatrix *fitMatrix, FitContext *fc, int *inform_out,
 
 void omxCSOLNPConfidenceIntervals(omxMatrix *fitMatrix, FitContext *fc, int verbose,
                                   double tolerance);
-
-void CSOLNPOpt_majIter(const char *optionValue);
-
-void CSOLNPOpt_minIter(const char *optionValue);
-
-void CSOLNPOpt_FuncPrecision(const char *optionValue);
 
 #endif // #define _OMX_CSOLNP_SPECIFIC_H

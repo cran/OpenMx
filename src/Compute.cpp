@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+
+/*File created 2013*/
 
 #include <algorithm>
 #include <stdarg.h>
@@ -30,6 +32,10 @@
 #include "omxState.h"
 #include "finiteDifferences.h"
 #include <Eigen/Cholesky>
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 void pda(const double *ar, int rows, int cols);
 
@@ -70,8 +76,8 @@ void FitContext::analyzeHessianBlock(HessianBlock *hb)
 		HessianBlock *hb2 = blockByVar[ hb->vars[vx] ];
 		if (!hb2) continue;
 
-		for (size_t vx=0; vx < hb2->vars.size(); ++vx) {
-			blockByVar[ hb2->vars[vx] ] = NULL;
+		for (size_t vx2=0; vx2 < hb2->vars.size(); ++vx2) {
+			blockByVar[ hb2->vars[vx2] ] = NULL;
 		}
 		estNonZero -= hb2->estNonZero();
 
@@ -87,19 +93,19 @@ void FitContext::analyzeHessianBlock(HessianBlock *hb)
 		if (inc) {
 			hb->subBlocks.push_back(hb2);
 		} else {
-			HessianBlock *parent = new HessianBlock;
-			mergeBlocks.push_back(parent);
-			parent->merge = true;
-			parent->vars = hb->vars;
-			parent->vars.insert(parent->vars.end(), hb2->vars.begin(), hb2->vars.end());
-			std::inplace_merge(parent->vars.begin(), parent->vars.begin() + hb->vars.size(), parent->vars.end());
-			int nsize = std::unique(parent->vars.begin(), parent->vars.end()) - parent->vars.begin();
-			parent->vars.resize(nsize);
-			parent->mat.resize(nsize, nsize);
-			parent->mat.triangularView<Eigen::Upper>().setZero();
-			parent->subBlocks.push_back(hb);
-			parent->subBlocks.push_back(hb2);
-			analyzeHessianBlock(parent);
+			HessianBlock *par2 = new HessianBlock;
+			mergeBlocks.push_back(par2);
+			par2->merge = true;
+			par2->vars = hb->vars;
+			par2->vars.insert(par2->vars.end(), hb2->vars.begin(), hb2->vars.end());
+			std::inplace_merge(par2->vars.begin(), par2->vars.begin() + hb->vars.size(), par2->vars.end());
+			int nsize = std::unique(par2->vars.begin(), par2->vars.end()) - par2->vars.begin();
+			par2->vars.resize(nsize);
+			par2->mat.resize(nsize, nsize);
+			par2->mat.triangularView<Eigen::Upper>().setZero();
+			par2->subBlocks.push_back(hb);
+			par2->subBlocks.push_back(hb2);
+			analyzeHessianBlock(par2);
 			return;
 		}
 	}
@@ -666,9 +672,7 @@ void FitContext::init()
 	stderrs = NULL;
 	inform = INFORM_UNINITIALIZED;
 	iterations = 0;
-	CI = NULL;
-	targetFit = nan("uninit");
-	lowerBound = false;
+	ciobj = 0;
 	openmpUser = false;
 	computeCount = 0;
 
@@ -717,17 +721,19 @@ FitContext::FitContext(omxState *_state, std::vector<double> &startingValues)
 	profiledOut.assign(numParam, false);
 
 	state = _state;
-	if (startingValues.size() != numParam) {
-		Rf_error("Got %d starting values for %d parameters",
-		      startingValues.size(), numParam);
+	if (numParam) {
+		if (startingValues.size() != numParam) {
+			Rf_error("Got %d starting values for %d parameters",
+				 startingValues.size(), numParam);
+		}
+		memcpy(est, startingValues.data(), sizeof(double) * numParam);
 	}
-	memcpy(est, startingValues.data(), sizeof(double) * numParam);
 }
 
-FitContext::FitContext(FitContext *parent, FreeVarGroup *varGroup)
+FitContext::FitContext(FitContext *_parent, FreeVarGroup *_varGroup)
 {
-	this->parent = parent;
-	this->varGroup = varGroup;
+	this->parent = _parent;
+	this->varGroup = _varGroup;
 	init();
 
 	state = parent->state;
@@ -754,12 +760,7 @@ FitContext::FitContext(FitContext *parent, FreeVarGroup *varGroup)
 	infoDefinite = parent->infoDefinite;
 	infoCondNum = parent->infoCondNum;
 	iterations = parent->iterations;
-
-	// confidence interval stuff
-	CI = parent->CI;
-	compositeCIFunction = parent->compositeCIFunction;
-	targetFit = parent->targetFit;
-	lowerBound = parent->lowerBound;
+	ciobj = parent->ciobj;
 }
 
 void FitContext::updateParent()
@@ -775,14 +776,11 @@ void FitContext::updateParent()
 	parent->infoDefinite = infoDefinite;
 	parent->infoCondNum = infoCondNum;
 	parent->iterations = iterations;
-	parent->computeCount += computeCount;
-	computeCount = 0;
 
 	// rewrite using mapToParent TODO
 
 	if (svars > 0) {
-		size_t s1 = 0;
-		for (size_t d1=0; d1 < dest->vars.size(); ++d1) {
+		for (size_t d1=0, s1 = 0; d1 < dest->vars.size(); ++d1) {
 			if (dest->vars[d1] != src->vars[s1]) continue;
 			parent->est[d1] = est[s1];
 			if (++s1 == svars) break;
@@ -799,17 +797,28 @@ void FitContext::updateParent()
 	// pda(parent->est, 1, dvars);
 }
 
-int FitContext::getComputeCount()
+int FitContext::getGlobalComputeCount()
 {
-	if (isClone()) {
-		return parent->getComputeCount();
-	} else {
-		int cc = computeCount;
-		for (size_t cx=0; cx < childList.size(); ++cx) {
-			cc += childList[cx]->computeCount;
-		}
-		return cc;
+	FitContext *fc = this;
+	if (fc->parent && fc->parent->childList.size()) {
+		// Kids for multithreading only appear as leaves of tree
+		fc = fc->parent;
 	}
+	int cc = fc->getLocalComputeCount();
+	while (fc->parent) {
+		fc = fc->parent;
+		cc += fc->getLocalComputeCount();
+	}
+	return cc;
+}
+
+int FitContext::getLocalComputeCount()
+{
+	int cc = computeCount;
+	for (size_t cx=0; cx < childList.size(); ++cx) {
+		cc += childList[cx]->getLocalComputeCount();
+	}
+	return cc;
 }
 
 void FitContext::updateParentAndFree()
@@ -887,7 +896,9 @@ std::string FitContext::getIterationError()
 
 		std::string result;
 		for (size_t cx=0; cx < childList.size(); ++cx) {
-			result += string_snprintf("%d: %s\n", int(cx), childList[cx]->IterationError.c_str());
+			auto &str = childList[cx]->IterationError;
+			if (!str.size()) continue;
+			result += string_snprintf("%d: %s\n", int(cx), str.c_str());
 		}
 		return result;
 	} else {
@@ -980,8 +991,6 @@ void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at)
 
 void FitContext::copyParamToModelClean()
 {
-	size_t numParam = varGroup->vars.size();
-
 	if(numParam == 0) return;
 
 	copyParamToModelInternal(varGroup, state, est);
@@ -999,15 +1008,7 @@ void FitContext::copyParamToModelClean()
 omxMatrix *FitContext::lookupDuplicate(omxMatrix* element)
 {
 	if (element == NULL) return NULL;
-
-	if (!element->hasMatrixNumber) Rf_error("FitContext::lookupDuplicate without matrix number");
-
-	int matrixNumber = element->matrixNumber;
-	if (matrixNumber >= 0) {
-		return(state->algebraList[matrixNumber]);
-	} else {
-		return(state->matrixList[-matrixNumber - 1]);
-	}
+	return state->lookupDuplicate(element);
 }
 	
 double *FitContext::take(int want)
@@ -1055,7 +1056,6 @@ void FitContext::preInfo()
 
 void FitContext::postInfo()
 {
-	size_t numParam = varGroup->vars.size();
 	switch (infoMethod) {
 	case INFO_METHOD_SANDWICH:{
 		// move into FCDeriv TODO
@@ -1092,7 +1092,7 @@ bool FitContext::isClone() const
 	return state->isClone();
 }
 
-void FitContext::createChildren()
+void FitContext::createChildren(omxMatrix *alg)
 {
 	if (Global->numThreads <= 1) {
 		diagParallel(OMX_DEBUG, "FitContext::createChildren: max threads set to 1");
@@ -1132,8 +1132,9 @@ void FitContext::createChildren()
 	for(int ii = 0; ii < numThreads; ii++) {
 		//omxManageProtectInsanity mpi;
 		FitContext *kid = new FitContext(this, varGroup);
-		kid->state = new omxState(state, kid);
-		kid->state->setWantStage(FF_COMPUTE_FIT);
+		kid->state = new omxState(state);
+		kid->state->initialRecalc(kid);
+		omxAlgebraPreeval(alg, kid);
 		childList.push_back(kid);
 		//if (OMX_DEBUG) mxLog("Protect depth at line %d: %d", __LINE__, mpi.getDepth());
 	}
@@ -1143,6 +1144,8 @@ void FitContext::createChildren()
 
 void FitContext::destroyChildren()
 {
+	if (0 == childList.size()) return;
+	IterationError = getIterationError();
 	for (int cx=0; cx < int(childList.size()); ++cx) {
 		delete childList[cx];
 	}
@@ -1152,9 +1155,14 @@ void FitContext::destroyChildren()
 FitContext::~FitContext()
 {
 	destroyChildren();
-	if (parent && parent->state != state) {
-		delete state;
+
+	if (parent) {
+		parent->computeCount += computeCount;
+		computeCount = 0;
+
+		if (parent->state != state) delete state;
 	}
+
 	clearHessian();
 	if (est) delete [] est;
 	if (stderrs) delete [] stderrs;
@@ -1175,6 +1183,20 @@ void FitContext::setRFitFunction(omxFitFunction *rff)
 	RFitFunction = rff;
 }
 
+void CIobjective::evalFit(omxFitFunction *ff, int want, FitContext *fc)
+{
+	omxFitFunctionCompute(ff, want, fc);
+}
+
+void CIobjective::checkSolution(FitContext *fc)
+{
+	if (fc->getInform() > INFORM_UNCONVERGED_OPTIMUM) return;
+
+	if (getDiag() != DIAG_SUCCESS) {
+		fc->setInform(INFORM_NONLINEAR_CONSTRAINTS_INFEASIBLE);
+	}
+}
+
 class EMAccel {
 protected:
 	FitContext *fc;
@@ -1184,7 +1206,7 @@ protected:
 	int verbose;
 
 public:
-	EMAccel(FitContext *fc, int verbose) : fc(fc), verbose(verbose) {
+	EMAccel(FitContext *_fc, int _verbose) : fc(_fc), verbose(_verbose) {
 		numParam = fc->varGroup->vars.size();
 		prevAdj1.assign(numParam, 0);
 		prevAdj2.resize(numParam);
@@ -1222,22 +1244,8 @@ public:
 	virtual bool calcDirection(bool major);
 };
 
-// Some evidence suggests that better performance is obtained when the
-// item parameters and latent distribution parameters are split into
-// separate Ramsay1975 groups with different minimum caution limits,
-//
-// ramsay.push_back(new Ramsay1975(fc, 1+int(ramsay.size()), 0, verbose, -1.25)); // M-step param
-// ramsay.push_back(new Ramsay1975(fc, 1+int(ramsay.size()), 0, verbose, -1));    // extra param
-//
-// I had this hardcoded for a while, but in making the API more generic,
-// I'm not sure how to allow specification of the Ramsay1975 grouping.
-// One possibility is list(flavor1=c("ItemParam"), flavor2=c("mean","cov"))
-// but this doesn't allow finer grain than matrix-wise assignment. The
-// other question is whether more Ramsay1975 groups really help or not.
-// nightly/ifa-cai2009.R actually got faster with 1 Ramsay group.
-
-Ramsay1975::Ramsay1975(FitContext *fc, int verbose, double minCaution) :
-	EMAccel(fc, verbose), minCaution(minCaution)
+Ramsay1975::Ramsay1975(FitContext *_fc, int _verbose, double _minCaution) :
+	EMAccel(_fc, _verbose), minCaution(_minCaution)
 {
 	maxCaution = 0.0;
 	caution = 0;
@@ -1331,8 +1339,8 @@ class Varadhan2008 : public EMAccel {
 	Eigen::VectorXd vv;
 
 public:
-	Varadhan2008(FitContext *fc, int verbose) :
-		EMAccel(fc, verbose), rr(&prevAdj2[0], numParam), vv(numParam)
+	Varadhan2008(FitContext *_fc, int _verbose) :
+		EMAccel(_fc, _verbose), rr(&prevAdj2[0], numParam), vv(numParam)
 	{
 		alpha = 0;
 		maxAlpha = 0;
@@ -1441,15 +1449,20 @@ void omxCompute::initFromFrontend(omxState *globalState, SEXP rObj)
 
 void omxCompute::compute(FitContext *fc)
 {
-	ComputeInform origInform = fc->inform;
 	FitContext *narrow = fc;
 	if (fc->varGroup != varGroup) narrow = new FitContext(fc, varGroup);
-	narrow->inform = INFORM_UNINITIALIZED;
-	if (OMX_DEBUG) { mxLog("enter %s varGroup %d", name, varGroup->id[0]); }
-	computeImpl(narrow);
-	fc->inform = std::max(origInform, narrow->inform);
-	if (OMX_DEBUG) { mxLog("exit %s varGroup %d inform %d", name, varGroup->id[0], fc->inform); }
+	computeWithVarGroup(narrow);
 	if (fc->varGroup != varGroup) narrow->updateParentAndFree();
+}
+
+void omxCompute::computeWithVarGroup(FitContext *fc)
+{
+	ComputeInform origInform = fc->getInform();
+	if (OMX_DEBUG) { mxLog("enter %s varGroup %d", name, varGroup->id[0]); }
+	fc->setInform(INFORM_UNINITIALIZED);
+	computeImpl(fc);
+	fc->setInform(std::max(origInform, fc->getInform()));
+	if (OMX_DEBUG) { mxLog("exit %s varGroup %d inform %d", name, varGroup->id[0], fc->getInform()); }
 	fc->destroyChildren();
 	Global->checkpointMessage(fc, fc->est, "%s", name);
 }
@@ -1481,12 +1494,15 @@ class omxComputeSequence : public ComputeContainer {
 class omxComputeIterate : public ComputeContainer {
 	typedef ComputeContainer super;
 	int maxIter;
+	double maxDuration;
 	double tolerance;
+	int iterations;
 	int verbose;
 
  public:
         virtual void initFromFrontend(omxState *, SEXP rObj);
         virtual void computeImpl(FitContext *fc);
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
 	virtual ~omxComputeIterate();
 };
 
@@ -1659,7 +1675,8 @@ static const struct omxComputeTableEntry omxComputeTable[] = {
 	{"MxComputeHessianQuality", &newComputeHessianQuality},
 	{"MxComputeReportDeriv", &newComputeReportDeriv},
 	{"MxComputeConfidenceInterval", &newComputeConfidenceInterval},
-	{"MxComputeReportExpectation", &newComputeReportExpectation}
+	{"MxComputeReportExpectation", &newComputeReportExpectation},
+	{"MxComputeTryHard", &newComputeTryHard}
 };
 
 omxCompute *omxNewCompute(omxState* os, const char *type)
@@ -1746,9 +1763,14 @@ void omxComputeIterate::initFromFrontend(omxState *globalState, SEXP rObj)
 	maxIter = INTEGER(slotValue)[0];
 	}
 
+	{
+		ProtectedSEXP RmaxDur(R_do_slot(rObj, Rf_install("maxDuration")));
+		maxDuration = Rf_asReal(RmaxDur);
+	}
+
 	{ScopedProtect p1(slotValue, R_do_slot(rObj, Rf_install("tolerance")));
 	tolerance = REAL(slotValue)[0];
-	if (tolerance <= 0) Rf_error("tolerance must be positive");
+	if (std::isfinite(tolerance) && tolerance <= 0) Rf_error("tolerance must be positive");
 	}
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("steps")));
@@ -1771,14 +1793,16 @@ void omxComputeIterate::initFromFrontend(omxState *globalState, SEXP rObj)
 		ScopedProtect p1(slotValue, R_do_slot(rObj, Rf_install("verbose")));
 		verbose = Rf_asInteger(slotValue);
 	}
+	iterations = 0;
 }
 
 void omxComputeIterate::computeImpl(FitContext *fc)
 {
-	int iter = 0;
 	double prevFit = 0;
 	double mac = tolerance * 10;
+	time_t startTime = time(0);
 	while (1) {
+		++iterations;
 		++fc->iterations;
 		for (size_t cx=0; cx < clist.size(); ++cx) {
 			clist[cx]->compute(fc);
@@ -1807,11 +1831,22 @@ void omxComputeIterate::computeImpl(FitContext *fc)
 			}
 			prevFit = fc->fit;
 		}
-		if (!(fc->wanted & (FF_COMPUTE_MAXABSCHANGE | FF_COMPUTE_FIT))) {
-			omxRaiseErrorf("ComputeIterate: neither MAC nor fit available");
+		if (std::isfinite(tolerance)) {
+			if (!(fc->wanted & (FF_COMPUTE_MAXABSCHANGE | FF_COMPUTE_FIT))) {
+				omxRaiseErrorf("ComputeIterate: neither MAC nor fit available");
+			}
+			if (mac < tolerance) break;
 		}
-		if (isErrorRaised() || ++iter > maxIter || mac < tolerance) break;
+		if (std::isfinite(maxDuration) && time(0) - startTime > maxDuration) break;
+		if (isErrorRaised() || iterations >= maxIter) break;
 	}
+}
+
+void omxComputeIterate::reportResults(FitContext *fc, MxRList *slots, MxRList *out)
+{
+	MxRList output;
+	output.add("iterations", Rf_ScalarInteger(iterations));
+	slots->add("output", output.asR());
 }
 
 omxComputeIterate::~omxComputeIterate()
@@ -2038,13 +2073,13 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 				1+paramProbeCount[vx], fc->varGroup->vars[vx]->name, offset);
 
 	setExpectationPrediction(fc, predict);
-	int informSave = fc->inform;  // not sure if we want to hide inform here TODO
+	int informSave = fc->getInform();  // not sure if we want to hide inform here TODO
 	fit1->compute(fc);
-	if (fc->inform > INFORM_UNCONVERGED_OPTIMUM) {
-		if (verbose >= 3) mxLog("ComputeEM: probe failed with code %d", fc->inform);
+	if (fc->getInform() > INFORM_UNCONVERGED_OPTIMUM) {
+		if (verbose >= 3) mxLog("ComputeEM: probe failed with code %d", fc->getInform());
 		failed = true;
 	}
-	fc->inform = informSave;
+	fc->setInform(informSave);
 	setExpectationPrediction(fc, "nothing");
 
 	rijWork.col(paramProbeCount[vx]) = (Est - optimum) / offset;
@@ -2126,8 +2161,6 @@ void ComputeEM::computeImpl(FitContext *fc)
 	if (verbose >= 1) mxLog("ComputeEM: Welcome, tolerance=%g accel=%s info=%d",
 				tolerance, accelName, information);
 
-	const char *flavor = "EM";
-	fc->flavor.assign(freeVars, flavor);
 	if (useRamsay) accel = new Ramsay1975(fc, verbose, -1.25);
 	if (useVaradhan) accel = new Varadhan2008(fc, verbose);
 
@@ -2146,14 +2179,14 @@ void ComputeEM::computeImpl(FitContext *fc)
 			fit1->compute(fc1);
 			mstepIter = fc1->iterations - startIter;
 			totalMstepIter += mstepIter;
-			mstepInform = fc1->inform;
+			mstepInform = fc1->getInform();
 			fc1->updateParentAndFree();
 		}
 
 		setExpectationPrediction(fc, "nothing");
 		if (accel) {
 			if (!lbound.size()) {
-				// omxFitFunctionPreoptimize can change bounds
+				// bounds might have changed
 				lbound.resize(freeVars);
 				ubound.resize(freeVars);
 				for(int px = 0; px < int(freeVars); px++) {
@@ -2222,10 +2255,10 @@ void ComputeEM::computeImpl(FitContext *fc)
 
 	int wanted = FF_COMPUTE_FIT | FF_COMPUTE_BESTFIT | FF_COMPUTE_ESTIMATE;
 	fc->wanted = wanted;
-	fc->inform = converged? mstepInform : INFORM_ITERATION_LIMIT;
+	fc->setInform(converged? mstepInform : INFORM_ITERATION_LIMIT);
 	bestFit = fc->fit;
 	if (verbose >= 1) mxLog("ComputeEM: cycles %d/%d total mstep %d fit %f inform %d",
-				EMcycles, maxIter, totalMstepIter, bestFit, fc->inform);
+				EMcycles, maxIter, totalMstepIter, bestFit, fc->getInform());
 
 	if (!converged || information == EMInfoNone) return;
 
@@ -2249,7 +2282,7 @@ struct estep_jacobian_functional {
 	ComputeEM *em;
 	FitContext *fc;
 
-	estep_jacobian_functional(ComputeEM *em, FitContext *fc) : em(em), fc(fc) {};
+	estep_jacobian_functional(ComputeEM *_em, FitContext *_fc) : em(_em), fc(_fc) {};
 
 	template <typename T1, typename T2>
 	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result) const {
@@ -2276,7 +2309,7 @@ void ComputeEM::dEstep(FitContext *fc, Eigen::MatrixBase<T1> &x, Eigen::MatrixBa
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_GRADIENT, fc);
 	}
 	result = fc->grad;
-	R_CheckUserInterrupt();
+	Global->reportProgress("MxComputeEM", fc);
 }
 
 void ComputeEM::Oakes(FitContext *fc)
@@ -2734,7 +2767,7 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 
 		for (size_t wx=0; wx < algebras.size(); ++wx) {
 			omxMatrix *algebra = algebras[wx];
-			omxFitFunctionPreoptimize(algebra->fitFunction, fc);
+			omxAlgebraPreeval(algebra, fc);
 			ComputeFit("Once", algebra, want, fc);
 			if (infoMat) {
 				fc->postInfo();
@@ -2792,9 +2825,7 @@ void ComputeHessianQuality::reportResults(FitContext *fc, MxRList *slots, MxRLis
 {
 	// See Luenberger & Ye (2008) Second Order Test (p. 190) and Condition Number (p. 239)
 
-	// memcmp is required here because NaN != NaN always
-	if (fc->infoDefinite != NA_LOGICAL ||
-	    memcmp(&fc->infoCondNum, &NA_REAL, sizeof(double)) != 0) {
+	if (fc->infoDefinite != NA_LOGICAL || !doubleEQ(fc->infoCondNum, NA_REAL)) {
 		if (verbose >= 1) {
 			mxLog("%s: information matrix already determined to be non positive definite; skipping", name);
 		}
@@ -2900,7 +2931,9 @@ void GradientOptimizerContext::copyBounds()
 	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
 		if (fc->profiledOut[vx]) continue;
 		solLB[px] = varGroup->vars[vx]->lbound;
+		if (!std::isfinite(solLB[px])) solLB[px] = NEG_INF;
 		solUB[px] = varGroup->vars[vx]->ubound;
+		if (!std::isfinite(solUB[px])) solUB[px] = INF;
 		++px;
 	}
 }
@@ -2920,19 +2953,19 @@ void GradientOptimizerContext::setupIneqConstraintBounds()
 
 	omxState *globalState = fc->state;
 	int eqn, nineqn;
-	globalState->countNonlinearConstraints(eqn, nineqn);
+	globalState->countNonlinearConstraints(eqn, nineqn, false);
 	equality.resize(eqn);
 	inequality.resize(nineqn);
 };
 
 void GradientOptimizerContext::setupAllBounds()
 {
-	omxState *globalState = fc->state;
+	omxState *st = fc->state;
 	int n = (int) numFree;
 
 	// treat all constraints as non-linear
 	int eqn, nineqn;
-	globalState->countNonlinearConstraints(eqn, nineqn);
+	st->countNonlinearConstraints(eqn, nineqn, false);
 	int ncnln = eqn + nineqn;
 	solLB.resize(n + ncnln);
 	solUB.resize(n + ncnln);
@@ -2940,8 +2973,8 @@ void GradientOptimizerContext::setupAllBounds()
 	copyBounds();
 
 	int index = n;
-	for(int constraintIndex = 0; constraintIndex < int(globalState->conList.size()); constraintIndex++) {
-		omxConstraint &cs = *globalState->conList[constraintIndex];
+	for(int constraintIndex = 0; constraintIndex < int(st->conListX.size()); constraintIndex++) {
+		omxConstraint &cs = *st->conListX[constraintIndex];
 		omxConstraint::Type type = cs.opCode;
 		switch(type) {
 		case omxConstraint::LESS_THAN:
@@ -2969,10 +3002,12 @@ void GradientOptimizerContext::reset()
 {
 	feasible = false;
 	bestFit = std::numeric_limits<double>::max();
+	eqNorm = 0;
+	ineqNorm = 0;
 }
 
-GradientOptimizerContext::GradientOptimizerContext(FitContext *fc, int verbose)
-	: fc(fc), verbose(verbose)
+GradientOptimizerContext::GradientOptimizerContext(FitContext *_fc, int _verbose)
+	: fc(_fc), verbose(_verbose)
 {
 	numFree = 0;
 	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
@@ -2981,10 +3016,8 @@ GradientOptimizerContext::GradientOptimizerContext(FitContext *fc, int verbose)
 	}
 	optName = "?";
 	fitMatrix = NULL;
-	ControlMajorLimit = 0;
-	ControlMinorLimit = 0;
+	ControlMinorLimit = 800;
 	ControlRho = 1.0;
-	ControlFuncPrecision = nan("uninit");
 	ControlTolerance = nan("uninit");
 	useGradient = false;
 	warmStart = false;
@@ -2994,6 +3027,7 @@ GradientOptimizerContext::GradientOptimizerContext(FitContext *fc, int verbose)
 	grad.resize(numFree);
 	copyToOptimizer(est.data());
 	numOptimizerThreads = (fc->childList.size() && !fc->openmpUser)? fc->childList.size() : 1;
+	CSOLNP_HACK = false;
 	reset();
 }
 
@@ -3008,14 +3042,9 @@ double GradientOptimizerContext::recordFit(double *myPars, int* mode)
 	return fit;
 }
 
-bool GradientOptimizerContext::inConfidenceIntervalProblem() const
+bool GradientOptimizerContext::hasKnownGradient() const
 {
-	return fc->CI && fc->CI->varIndex >= 0;
-}
-
-int GradientOptimizerContext::getConfidenceIntervalVarIndex() const
-{
-	return fc->CI->varIndex;
+	return fc->ciobj && fc->ciobj->gradientKnown();
 }
 
 void GradientOptimizerContext::copyToOptimizer(double *myPars)
@@ -3086,12 +3115,15 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 		}
 	}
 
-	if (*mode == 1) fc->iterations += 1;
+	if (*mode == 1) {
+		fc->iterations += 1;
+		Global->reportProgress("MxComputeGradientDescent", fc);
+	}
 	copyFromOptimizer(myPars, fc);
 
 	int want = FF_COMPUTE_FIT;
 	// eventually want to permit analytic gradient during CI
-	if (*mode > 0 && !fc->CI && useGradient && fitMatrix->fitFunction->gradientAvailable) {
+	if (*mode > 0 && !fc->ciobj && useGradient && fitMatrix->fitFunction->gradientAvailable) {
 		fc->grad.resize(fc->numParam);
 		fc->grad.setZero();
 		want |= FF_COMPUTE_GRADIENT;
@@ -3127,13 +3159,13 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 void GradientOptimizerContext::solEqBFun()
 {
 	const int eq_n = (int) equality.size();
-	omxState *globalState = fc->state;
+	omxState *st = fc->state;
 
 	if (!eq_n) return;
 
 	int cur = 0;
-	for(int j = 0; j < int(globalState->conList.size()); j++) {
-		omxConstraint &con = *globalState->conList[j];
+	for(int j = 0; j < int(st->conListX.size()); j++) {
+		omxConstraint &con = *st->conListX[j];
 		if (con.opCode != omxConstraint::EQUALITY) continue;
 
 		con.refreshAndGrab(fc, &equality(cur));
@@ -3150,17 +3182,23 @@ void GradientOptimizerContext::solEqBFun()
 void GradientOptimizerContext::myineqFun()
 {
 	const int ineq_n = (int) inequality.size();
-	omxState *globalState = fc->state;
+	omxState *st = fc->state;
 
 	if (!ineq_n) return;
 
 	int cur = 0;
-	for (int j = 0; j < int(globalState->conList.size()); j++) {
-		omxConstraint &con = *globalState->conList[j];
+	for (int j = 0; j < int(st->conListX.size()); j++) {
+		omxConstraint &con = *st->conListX[j];
 		if (con.opCode == omxConstraint::EQUALITY) continue;
 
 		con.refreshAndGrab(fc, (omxConstraint::Type) ineqType, &inequality(cur));
 		cur += con.size;
+	}
+
+	if (CSOLNP_HACK) {
+		// CSOLNP doesn't know that inequality constraints can be inactive TODO
+	} else {
+		inequality = inequality.array().max(0.0);
 	}
 
 	if (verbose >= 3) {

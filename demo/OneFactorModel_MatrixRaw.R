@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ oneFactorModel <- mxModel("Common Factor Model Matrix Specification",
 oneFactorFit<-mxRun(oneFactorModel)
 
 summary(oneFactorFit)
-oneFactorFit$output$estimate
+coef(oneFactorFit)
 
 omxCheckCloseEnough(oneFactorFit$output$estimate[["l2"]], 0.999, 0.01)
 omxCheckCloseEnough(oneFactorFit$output$estimate[["l3"]], 0.959, 0.01)

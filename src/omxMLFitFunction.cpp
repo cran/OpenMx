@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,16 +20,18 @@
 #include "multi_normal_sufficient.hpp"
 
 #include "omxExpectation.h"
-#include "omxFIMLFitFunction.h"
-#include "omxRAMExpectation.h"
 #include "RAMInternal.h"
-#include "omxBuffer.h"
 #include "matrix.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 static const double MIN_VARIANCE = 1e-6;
 
 struct MLFitState {
 
+	bool copiedData;
 	omxMatrix* observedCov;
 	omxMatrix* observedMeans;
 	omxMatrix* expectedCov;
@@ -43,6 +45,10 @@ static void omxDestroyMLFitFunction(omxFitFunction *oo) {
 
 	if(OMX_DEBUG) {mxLog("Freeing ML Fit Function.");}
 	MLFitState* omlo = ((MLFitState*)oo->argStruct);
+	if (omlo->copiedData) {
+		omxFreeMatrix(omlo->observedCov);
+		omxFreeMatrix(omlo->observedMeans);
+	}
 	delete omlo;
 }
 
@@ -91,8 +97,8 @@ struct multi_normal_deriv {
 	std::vector<bool> &fvMask;
 	MLFitState *omo;
 
-	multi_normal_deriv(FitContext *fc, std::vector<bool> &fvMask, MLFitState *omo) :
-		fc(fc), fvMask(fvMask), omo(omo) {};
+	multi_normal_deriv(FitContext *_fc, std::vector<bool> &_fvMask, MLFitState *_omo) :
+		fc(_fc), fvMask(_fvMask), omo(_omo) {};
 
 	template <typename T>
 	T operator()(Eigen::Matrix<T, Eigen::Dynamic, 1>& x) const {
@@ -137,8 +143,7 @@ struct multi_normal_deriv {
 static void omxCallMLFitFunction(omxFitFunction *oo, int want, FitContext *fc)
 {
 	const double Scale = Global->llScale;
-	if (want & (FF_COMPUTE_PREOPTIMIZE)) return;
-	if (want & (FF_COMPUTE_PARAMFLAVOR)) return;
+	if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) return;
 
 	omxExpectation* expectation = oo->expectation;
 	omxExpectationCompute(fc, expectation, NULL);
@@ -291,9 +296,20 @@ void omxInitMLFitFunction(omxFitFunction* oo)
 		return;
 	}
 
-	if(OMX_DEBUG) { mxLog("Initializing ML fit function."); }
+	if (strEQ(expectation->expType, "MxExpectationGREML")) {
+		omxInitGREMLFitFunction(oo);
+		return;
+	}
 
 	oo->ciFun = loglikelihoodCIFun;
+
+	if (strEQ(expectation->expType, "MxExpectationStateSpace")) {
+		ssMLFitInit(oo);
+		return;
+	}
+
+	if(OMX_DEBUG) { mxLog("Initializing ML fit function."); }
+
 	oo->computeFun = omxCallMLFitFunction;
 	oo->destructFun = omxDestroyMLFitFunction;
 	oo->addOutput = addOutput;
@@ -355,12 +371,26 @@ void omxInitMLFitFunction(omxFitFunction* oo)
 	oo->populateAttrFun = omxPopulateMLAttributes;
 	oo->canDuplicate = true;
 
-	if(OMX_DEBUG) { mxLog("Processing Observed Covariance."); }
 	newObj->observedCov = omxDataCovariance(dataMat);
-	if(OMX_DEBUG) { mxLog("Processing Observed Means."); }
 	newObj->observedMeans = omxDataMeans(dataMat);
+	newObj->copiedData = false;
+
+	auto dc = oo->expectation->getDataColumns();
+	if (dc.size()) {
+		newObj->copiedData = true;
+		newObj->observedCov = omxCreateCopyOfMatrix(newObj->observedCov, oo->matrix->currentState);
+		newObj->observedMeans = omxCreateCopyOfMatrix(newObj->observedMeans, oo->matrix->currentState);
+		Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic, int> pm(dc);
+		EigenMatrixAdaptor Ecov(newObj->observedCov);
+		Ecov.derived() = (pm * Ecov * pm.transpose()).eval();
+		if (newObj->observedMeans) {
+			EigenVectorAdaptor Emean(newObj->observedMeans);
+			Emean.derived() = (pm * Emean).eval();
+		}
+	}
+
 	if(OMX_DEBUG && newObj->observedMeans == NULL) { mxLog("ML: No Observed Means."); }
-	if(OMX_DEBUG) { mxLog("Processing n."); }
+
 	newObj->n = omxDataNumObs(dataMat);
 
 	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, "cov");

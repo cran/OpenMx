@@ -18,7 +18,7 @@ tMod <- mxModel("teacher", type="RAM",
 
 sMod <- mxModel("student", type="RAM", tMod,
                 manifestVars = c("y1", "y2"),
-                mxData(type="raw", observed=sData, sort=FALSE),
+                mxData(type="raw", observed=sData),
                 mxPath("one", paste0("y",1:2), values=rnorm(2)),
                 mxPath(c("y1", "y2"), connect = "unique.pairs", arrows=2,
                        labels=paste0("theta", 1:3), values=c(1.1,0,1.2)),
@@ -41,7 +41,7 @@ if (1) {
 	omxCheckEquals(g1$numSufficientSets, 1L)
 
 	g2 <- ed$g2
-	omxCheckEquals(g2$numSufficientSets, 0L)
+	omxCheckEquals(g2$numSufficientSets, 1L)
 	omxCheckCloseEnough(as.matrix(g2$covariance), diag(c(1.42, 1.55)), 1e-2)
 	omxCheckCloseEnough(g2$mean, rep(c(-1.085, 0.318), 25), 1e-2)
 

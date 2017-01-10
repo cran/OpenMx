@@ -1,3 +1,19 @@
+#
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
 require(OpenMx)
 
 if (mxOption(NULL, 'Default optimizer') == "CSOLNP") {
@@ -235,7 +251,7 @@ Laplace_rgsn_fit1 <- mxTryHard(model=Laplace_rgsn_mod1,scale=10)
 omxCheckCloseEnough(Laplace_rgsn_fit1$output$fit, 64.55, .02)
 omxCheckCloseEnough(Laplace_rgsn_fit1$output$estimate, c(3.21, 1.01, 0.85), .03)
 
-Laplace_rgsn_fit1 <- mxTryHard(model=Laplace_rgsn_mod1,initialGradientStepSize=0.1)
+Laplace_rgsn_fit1 <- mxTryHard(model=Laplace_rgsn_mod1,initialGradientStepSize=0.001)
 omxCheckCloseEnough(Laplace_rgsn_fit1$output$fit, 64.55, .02)
 omxCheckCloseEnough(Laplace_rgsn_fit1$output$estimate, c(3.21, 1.01, 0.85), .03)
 

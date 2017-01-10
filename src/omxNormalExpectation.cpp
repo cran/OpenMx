@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@
 #include "omxFitFunction.h"
 #include "omxDefines.h"
 #include "omxNormalExpectation.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 void omxComputeNormalExpectation(omxExpectation* ox, FitContext *fc, const char *, const char *) {
 	omxNormalExpectation* one = (omxNormalExpectation*) (ox->argStruct);

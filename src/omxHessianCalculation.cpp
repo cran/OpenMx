@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@
 #include "omxExportBackendState.h"
 #include "Compute.h"
 #include "omxBuffer.h"
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 class omxComputeNumericDeriv : public omxCompute {
 	typedef omxCompute super;
@@ -246,7 +250,7 @@ void omxComputeNumericDeriv::doHessianCalculation(int numChildren, struct hess_s
 			omxEstimateHessianOnDiagonal(i, hess_work + threadId);
 		}
 
-		R_CheckUserInterrupt();
+		Global->reportProgress("MxComputeNumericDeriv", hess_work->fc);
 
 #pragma omp parallel for num_threads(parallelism)
 		for(int i = 0; i < int(todo.size()); i++) {
@@ -255,12 +259,12 @@ void omxComputeNumericDeriv::doHessianCalculation(int numChildren, struct hess_s
 		}
 	} else {
 		for(int i = 0; i < numParams; i++) {
-			R_CheckUserInterrupt();
+			Global->reportProgress("MxComputeNumericDeriv", hess_work->fc);
 			if (hessian && std::isfinite(hessian[i*numParams + i])) continue;
 			omxEstimateHessianOnDiagonal(i, hess_work);
 		}
 		for(int i = 0; i < int(todo.size()); i++) {
-			R_CheckUserInterrupt();
+			Global->reportProgress("MxComputeNumericDeriv", hess_work->fc);
 			omxEstimateHessianOffDiagonal(todo[i].first, todo[i].second, hess_work);
 		}
 	}
@@ -270,9 +274,9 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 {
 	super::initFromFrontend(state, rObj);
 
-	if (state->conList.size()) {
+	if (state->conListX.size()) {
 		Rf_error("Cannot compute estimated Hessian with constraints (%d constraints found)",
-		      state->conList.size());
+		      state->conListX.size());
 	}
 
 	fitMat = omxNewMatrixFromSlot(rObj, state, "fitfunction");
@@ -299,7 +303,7 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 	}
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("stepSize")));
-	stepSize = REAL(slotValue)[0];
+	stepSize = GRADIENT_FUDGE_FACTOR(3.0) * REAL(slotValue)[0];
 	if (stepSize <= 0) Rf_error("stepSize must be positive");
 
 	knownHessian = NULL;
@@ -352,13 +356,14 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	optima.resize(numParams);
 	memcpy(optima.data(), fc->est, sizeof(double) * numParams);
 
-	if (parallel) fc->createChildren();
+	omxAlgebraPreeval(fitMat, fc);
+	fc->createChildren(fitMat); // allow FIML rowwiseParallel even when parallel=false
 
 	// TODO: Check for nonlinear constraints and adjust algorithm accordingly.
 	// TODO: Allow more than one hessian value for calculation
 
 	int numChildren = 0;
-	if (parallel) numChildren = fc->childList.size();
+	if (parallel && !fc->openmpUser) numChildren = fc->childList.size();
 
 	if (!fc->haveReferenceFit(fitMat)) return;
 
@@ -471,7 +476,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 		if (verbose >= 1) {
 			mxLog("Some gradient entries are too large, norm %f", Gc.matrix().norm());
 		}
-		if (fc->inform < INFORM_NOT_AT_OPTIMUM) fc->inform = INFORM_NOT_AT_OPTIMUM;
+		if (fc->getInform() < INFORM_NOT_AT_OPTIMUM) fc->setInform(INFORM_NOT_AT_OPTIMUM);
 	}
 
 	memcpy(fc->est, optima.data(), sizeof(double) * numParams);

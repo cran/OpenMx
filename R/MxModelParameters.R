@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -363,6 +363,7 @@ getParametersHelper <- function(amatrix, modelname, selection, fetch) {
 	return(theValues[!duplicated(theNames)])
 }
 
+#N.B. this function seems to fail when 'amatrix' has condensed slots:
 setParametersMatrix <- function(amatrix, names, free, values, newlabels, lbound, ubound) {	
 	labels <- amatrix@labels
 	locations <- which(labels %in% names)

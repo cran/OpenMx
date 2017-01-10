@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ bModel <- mxModel(
 
 wModel <- mxModel(
     'within', type="RAM", bModel,
-    mxData(type="raw", observed=wData, sort=FALSE),
+    mxData(type="raw", observed=wData),
     manifestVars = 'bmi',
     latentVars = c("E", "AU"),
     mxPath(from="one", to="bmi", arrows=1, free=TRUE, values=20, labels="mean"),
@@ -128,7 +128,7 @@ bModel2 <- mxModel(
 
 wModel2 <- mxModel(
     'within', type="RAM", bModel2,
-    mxData(type="raw", observed=wData, sort=FALSE),
+    mxData(type="raw", observed=wData),
     manifestVars = 'bmi',
     latentVars = c("E", "AU"),
     mxPath(from="one", to="bmi", arrows=1, free=TRUE,

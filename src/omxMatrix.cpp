@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,11 @@
 #include "matrix.h"
 #include "unsupported/Eigen/MatrixFunctions"
 #include "omxState.h"
+#include <limits>
+
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
 
 // forward declarations
 static const char *omxMatrixMajorityList[] = {"T", "n"};		// BLAS Column Majority.
@@ -55,7 +60,31 @@ void omxPrintMatrix(omxMatrix *source, const char* header) // make static TODO
 	EigenMatrixAdaptor Esrc(source);
 	if (!header) header = source->name();
 	if (!header) header = "?";
-	mxPrintMat(header, Esrc);
+
+	std::string buf;
+	auto &rownames = source->rownames;
+	auto &colnames = source->colnames;
+	if (rownames.size() || colnames.size()) {
+		buf += ", dimnames=list(";
+		if (!rownames.size()) {
+			buf += "NULL";
+		} else {
+			buf += "c(";
+			for (auto &nn : rownames) buf += string_snprintf("'%s', ", nn);
+			buf += "),";
+		}
+		buf += " ";
+		if (!colnames.size()) {
+			buf += "NULL";
+		} else {
+			buf += "c(";
+			for (auto &nn : colnames) buf += string_snprintf("'%s', ", nn);
+			buf += ")";
+		}
+		buf += ")";
+	}
+
+	mxPrintMatX(header, Esrc, buf);
 }
 
 omxMatrix* omxInitMatrix(int nrows, int ncols, unsigned short isColMajor, omxState* os) {
@@ -97,6 +126,14 @@ static void omxFreeInternalMatrixData(omxMatrix * om)
 	}
 	om->owner = NULL;
 	om->data = NULL;
+}
+
+omxMatrix *omxCreateCopyOfMatrix(omxMatrix *orig, omxState *os)
+{
+	if (!orig) return 0;
+	omxMatrix *copy = omxInitMatrix(0, 0, 1, os);
+	omxCopyMatrix(copy, orig);
+	return copy;
 }
 
 void omxCopyMatrix(omxMatrix *dest, omxMatrix *orig) {
@@ -768,33 +805,26 @@ double omxMaxAbsDiff(omxMatrix *m1, omxMatrix *m2)
 	return mad;
 }
 
-void checkIncreasing(omxMatrix* om, int column, int count, FitContext *fc)
+bool thresholdsIncreasing(omxMatrix* om, int column, int count, FitContext *fc)
 {
-	double previous = - INFINITY;
-	double current;
 	int threshCrossCount = 0;
 	if(count > om->rows) {
-		count = om->rows;
+		Rf_error("Too many thresholds (%d) requested from %dx%d thresholds matrix (in column %d)",
+			 count, om->rows, om->cols, column);
 	}
-	for(int j = 0; j < count; j++ ) {
-		current = omxMatrixElement(om, j, column);
-		if(std::isnan(current) || current == NA_INTEGER) {
-			continue;
-		}
-		if(j == 0) {
-			continue;
-		}
-		previous = omxMatrixElement(om, j-1, column);
-		if(std::isnan(previous) || previous == NA_INTEGER) {
-			continue;
-		}
-		if(current <= previous) {
+	for(int j = 1; j < count; j++ ) {
+		double lower = omxMatrixElement(om, j-1, column);
+		double upper = omxMatrixElement(om, j, column);
+		if (upper - lower < sqrt(std::numeric_limits<double>::epsilon()) * (fabs(lower) + fabs(upper))) {
 			threshCrossCount++;
 		}
 	}
 	if(threshCrossCount > 0) {
-		fc->recordIterationError("Found %d thresholds out of order in column %d.", threshCrossCount, column+1);
+		fc->recordIterationError("Found %d thresholds too close together in column %d.",
+					 threshCrossCount, column+1);
+		return false;
 	}
+	return true;
 }
 
 void omxMatrixHorizCat(omxMatrix** matList, int numArgs, omxMatrix* result)

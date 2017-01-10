@@ -85,4 +85,10 @@ const omxAlgebraTableEntry omxAlgebraSymbolTable[] = {
 {81,	"Poisson CDF",	"ppois",	 4,	omxElementPpois},
 {82,	"Negative-Binomial PMF",	"dnbinom",	 5,	omxElementDnbinom},
 {83,	"Negative-Binomial CDF",	"pnbinom",	 6,	omxElementPnbinom},
+{84,	"Chi-square PDF",	"dchisq",	 4,	omxElementDchisq},
+{85,	"Chi-square CDF",	"pchisq",	 5,	omxElementPchisq},
+{86,	"Binomial PMF",	"dbinom",	 4,	omxElementDbinom},
+{87,	"Binomial CDF",	"pbinom",	 5,	omxElementPbinom},
+{88,	"Cauchy PDF",	"dcauchy",	 4,	omxElementDcauchy},
+{89,	"Cauchy CDF",	"pcauchy",	 5,	omxElementPcauchy},
 };

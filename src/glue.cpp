@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,14 +18,11 @@
 #include <sys/types.h>
 #include <errno.h>
 
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h>
+#include "omxDefines.h"
 #include <R_ext/Rdynload.h>
 #include <R_ext/BLAS.h>
 #include <R_ext/Lapack.h>
 
-#include "omxDefines.h"
 #include "glue.h"
 #include "omxState.h"
 #include "omxMatrix.h"
@@ -39,13 +36,41 @@
 #include "dmvnorm.h"
 #include "npsolswitch.h"
 #include "omxCsolnp.h"
+#include <Rcpp.h>
+#include <RcppEigen.h>
+#include "omxSadmvnWrapper.h"
 
-void markAsDataFrame(SEXP list)
+void markAsDataFrame(SEXP list, int rows)
+{
+	if (rows >= 0) {
+		// Use the special form c(NA, #rows) to avoid creating actual
+		// rownames.
+		ProtectedSEXP rownames(Rf_allocVector(INTSXP, 2));
+		INTEGER(rownames)[0] = NA_INTEGER;
+		INTEGER(rownames)[1] = rows;
+		Rf_setAttrib(list, R_RowNamesSymbol, rownames);
+	}
+
+	ProtectedSEXP classes(Rf_allocVector(STRSXP, 1));
+	SET_STRING_ELT(classes, 0, Rf_mkChar("data.frame"));
+	Rf_setAttrib(list, R_ClassSymbol, classes);
+}
+
+SEXP makeFactor(SEXP vec, int levels, const char **labels)
 {
 	SEXP classes;
 	Rf_protect(classes = Rf_allocVector(STRSXP, 1));
-	SET_STRING_ELT(classes, 0, Rf_mkChar("data.frame"));
-	Rf_setAttrib(list, R_ClassSymbol, classes);
+	SET_STRING_ELT(classes, 0, Rf_mkChar("factor"));
+	Rf_setAttrib(vec, R_ClassSymbol, classes);
+
+	SEXP Rlev;
+	Rf_protect(Rlev = Rf_allocVector(STRSXP, levels));
+	for (int lx=0; lx < levels; ++lx) {
+		SET_STRING_ELT(Rlev, lx, Rf_mkChar(labels[lx]));
+	}
+
+	Rf_setAttrib(vec, Rf_install("levels"), Rlev);
+	return vec;
 }
 
 static SEXP do_logm_eigen(SEXP x)
@@ -95,6 +120,126 @@ static SEXP do_expm_eigen(SEXP x)
 
     return z;
 }
+
+SEXP dtmvnorm_marginal2(SEXP Rxq, SEXP Rxr, SEXP Rq, SEXP Rr,
+			SEXP Rsigma, SEXP Rlower, SEXP Rupper)
+{
+	using Eigen::Map;
+	using Eigen::VectorXd;
+	using Eigen::MatrixXd;
+	using Rcpp::as;
+	const Map<VectorXd> xq(as<Map<VectorXd> >(Rxq));
+	const Map<VectorXd> xr(as<Map<VectorXd> >(Rxr));
+	int qq = Rf_asInteger(Rq) - 1;
+	int rr = Rf_asInteger(Rr) - 1;
+	const Map<MatrixXd> sigma(as<Map<MatrixXd> >(Rsigma));
+	const Map<VectorXd> lower(as<Map<VectorXd> >(Rlower));
+	const Map<VectorXd> upper(as<Map<VectorXd> >(Rupper));
+	VectorXd density(4);
+
+	_dtmvnorm_marginal2(NA_REAL, xq, xr, qq, rr, sigma, lower, upper, density);
+
+	return Rcpp::wrap(density);
+}
+
+SEXP dtmvnorm_marginal(SEXP Rxn, SEXP Rn, SEXP Rsigma, SEXP Rlower, SEXP Rupper)
+{
+	using Eigen::Map;
+	using Eigen::VectorXd;
+	using Eigen::MatrixXd;
+	using Rcpp::as;
+	const Map<VectorXd> xn(as<Map<VectorXd> >(Rxn));
+	int nn = Rf_asInteger(Rn) - 1;
+	const Map<MatrixXd> sigma(as<Map<MatrixXd> >(Rsigma));
+	const Map<VectorXd> lower(as<Map<VectorXd> >(Rlower));
+	const Map<VectorXd> upper(as<Map<VectorXd> >(Rupper));
+	VectorXd density(2);
+
+	_dtmvnorm_marginal(NA_REAL, xn, nn, sigma, lower, upper, density);
+
+	return Rcpp::wrap(density);
+}
+
+SEXP mtmvnorm(SEXP Rsigma, SEXP Rlower, SEXP Rupper)
+{
+	using Eigen::Map;
+	using Eigen::VectorXd;
+	using Eigen::MatrixXd;
+	using Rcpp::as;
+	const Map<MatrixXd> sigma(as<Map<MatrixXd> >(Rsigma));
+	const Map<VectorXd> fullLower(as<Map<VectorXd> >(Rlower));
+	const Map<VectorXd> fullUpper(as<Map<VectorXd> >(Rupper));
+
+	VectorXd tmean;
+	MatrixXd tcov;
+	_mtmvnorm(NA_REAL, sigma, fullLower, fullUpper, tmean, tcov);
+
+	omxManageProtectInsanity mpi;
+	MxRList result;
+	result.add("tmean", Rcpp::wrap(tmean));
+	result.add("tvar", Rcpp::wrap(tcov));
+	return result.asR();
+}
+
+void omxSadmvnWrapper(int numVars, 
+	double *corList, double *lThresh, double *uThresh, int *Infin, double *likelihood, int *inform)
+{
+	// Eigen::Map< Eigen::ArrayXd > elt(lThresh, numVars);
+	// Eigen::Map< Eigen::ArrayXd > eut(uThresh, numVars);
+	// mxPrintMat("lower", elt);
+	// mxPrintMat("upper", eut);
+
+    // SADMVN calls Alan Genz's sadmvn.f--see appropriate file for licensing info.
+   	// TODO: Check with Genz: should we be using sadmvn or sadmvn?
+   	// Parameters are:
+   	// 	N 		int			# of vars
+   	//	Lower	double*		Array of lower bounds
+   	//	Upper	double*		Array of upper bounds
+   	//	Infin	int*		Array of flags: 0 = (-Inf, upper] 1 = [lower, Inf), 2 = [lower, upper]
+   	//	Correl	double*		Array of correlation coeffs: in row-major lower triangular order
+   	//	MaxPts	int			Maximum # of function values (use 1000*N or 1000*N*N)
+   	//	Abseps	double		Absolute Rf_error tolerance.  Yick.
+   	//	Releps	double		Relative Rf_error tolerance.  Use EPSILON.
+   	//	Error	&double		On return: absolute real Rf_error, 99% confidence
+   	//	Value	&double		On return: evaluated value
+   	//	Inform	&int		On return: 0 = OK; 1 = Rerun, increase MaxPts; 2 = Bad input
+   	// TODO: Separate block diagonal covariance matrices into pieces for integration separately
+   	double Error;
+	double absEps = Global->absEps;
+	double relEps = Global->relEps;
+	int MaxPts = Global->calcNumIntegrationPoints(numVars);
+	int fortranThreadId = omx_absolute_thread_num() + 1;
+   	/* FOR DEBUGGING PURPOSES */
+    /*	numVars = 2;
+   	lThresh[0] = -2;
+   	uThresh[0] = -1.636364;
+   	Infin[0] = 2;
+   	lThresh[1] = 0;
+   	uThresh[1] = 0;
+   	Infin[1] = 0;
+   	smallCor[0] = 1.0; smallCor[1] = 0; smallCor[2] = 1.0; */
+   	F77_CALL(sadmvn)(&numVars, lThresh, uThresh, Infin, corList, &MaxPts, 
+		&absEps, &relEps, &Error, likelihood, inform, &fortranThreadId);
+
+   	if (0) {
+   		char infinCodes[3][20];
+   		strcpy(infinCodes[0], "(-INF, upper]");
+   		strcpy(infinCodes[1], "[lower, INF)");
+   		strcpy(infinCodes[2], "[lower, upper]");
+   		mxLog("Input to sadmvn is (%d rows):", numVars); //:::DEBUG:::
+		for(int i = 0; i < numVars; i++) {
+			mxLog("Row %d: %f, %f, %d(%s)", i, lThresh[i], uThresh[i], Infin[i], infinCodes[Infin[i]]);
+		}
+
+		mxLog("Cor: (Lower %d x %d):", numVars, numVars); //:::DEBUG:::
+		for(int i = 0; i < numVars*(numVars-1)/2; i++) {
+			// mxLog("Row %d of Cor: ", i);
+			// for(int j = 0; j < i; j++)
+			mxLog(" %f", corList[i]); // (i*(i-1)/2) + j]);
+			// mxLog("");
+		}
+	}
+} 
 
 static SEXP has_NPSOL()
 { return Rf_ScalarLogical(HAS_NPSOL); }
@@ -237,12 +382,6 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 				Global->majorIterations = atoi(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "Intervals")) {
 				Global->intervals = Rf_asLogical(VECTOR_ELT(options, i));
-			} else if (matchCaseInsensitive(nextOptionName, "Major iteration_CSOLNP")) {
-				CSOLNPOpt_majIter(nextOptionValue);
-			} else if (matchCaseInsensitive(nextOptionName, "Minor iteration_CSOLNP")) {
-				CSOLNPOpt_minIter(nextOptionValue);
-			} else if (matchCaseInsensitive(nextOptionName, "Function precision_CSOLNP")) {
-				CSOLNPOpt_FuncPrecision(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "RAM Inverse Optimization")) {
 				friendlyStringToLogical(nextOptionName, rawValue, &Global->RAMInverseOpt);
 				//mxLog("inv opt = %s %d", nextOptionValue, Global->RAMInverseOpt);
@@ -344,7 +483,7 @@ static double internalToUserBound(double val, double inf)
 SEXP omxBackend2(SEXP constraints, SEXP matList,
 		 SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
 		 SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
-		 SEXP defvars)
+		 SEXP defvars, bool silent)
 {
 	SEXP nextLoc;
 
@@ -357,6 +496,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 
 	FitContext::setRFitFunction(NULL);
 	Global = new omxGlobal;
+	Global->silent = silent;
 
 	/* Create new omxState for current state storage and initialize it. */
 	omxState *globalState = new omxState;
@@ -379,7 +519,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	std::vector<double> startingValues;
 	globalState->omxProcessFreeVarList(varList, &startingValues);
 	FitContext *fc = new FitContext(globalState, startingValues);
-	Global->fc = fc;
+	Global->topFc = fc;
 	fc->copyParamToModelClean();
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
@@ -411,7 +551,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	}
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	globalState->omxCompleteMxFitFunction(algList);
+	globalState->omxCompleteMxFitFunction(algList, fc);
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	Global->omxProcessMxComputeEntities(computeList, globalState);
@@ -425,8 +565,6 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	}
 
 	globalState->loadDefinitionVariables(true);
-
-	globalState->setWantStage(FF_COMPUTE_FIT);
 
 	omxCompute *topCompute = NULL;
 	if (Global->computeList.size()) topCompute = Global->computeList[0];
@@ -446,17 +584,18 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	if (topCompute && !isErrorRaised()) {
 		topCompute->compute(fc);
 
-		if ((fc->wanted & FF_COMPUTE_FIT) && !std::isfinite(fc->fit) &&
-		    fc->inform != INFORM_STARTING_VALUES_INFEASIBLE) {
+		if ((fc->wanted & FF_COMPUTE_FIT) && !std::isfinite(fc->fit)) {
 			std::string diag = fc->getIterationError();
-			omxRaiseErrorf("fit is not finite (%s)", diag.c_str());
+			if (diag.size()) {
+				omxRaiseErrorf("fit is not finite (%s)", diag.c_str());
+			}
 		}
 	}
 
 	SEXP evaluations;
 	Rf_protect(evaluations = Rf_allocVector(REALSXP,1));
 
-	REAL(evaluations)[0] = fc->getComputeCount();
+	REAL(evaluations)[0] = fc->getGlobalComputeCount();
 
 	MxRList result;
 
@@ -530,7 +669,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	MxRList backwardCompatStatus;
-	backwardCompatStatus.add("code", Rf_ScalarInteger(fc->inform));
+	backwardCompatStatus.add("code", Rf_ScalarInteger(fc->getInform()));
 	backwardCompatStatus.add("status", Rf_ScalarInteger(-isErrorRaised()));
 
 	if (isErrorRaised()) {
@@ -561,12 +700,13 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 static SEXP omxBackend(SEXP constraints, SEXP matList,
 		SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
 		SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
-		SEXP defvars)
+		       SEXP defvars, SEXP Rsilent)
 {
 	try {
 		return omxBackend2(constraints, matList,
 				   varList, algList, expectList, computeList,
-				   data, intervalList, checkpointList, options, defvars);
+				   data, intervalList, checkpointList, options, defvars,
+				   Rf_asLogical(Rsilent));
 	} catch( std::exception& __ex__ ) {
 		exception_to_try_Rf_error( __ex__ );
 	} catch(...) {
@@ -574,10 +714,20 @@ static SEXP omxBackend(SEXP constraints, SEXP matList,
 	}
 }
 
+static SEXP testEigenDebug()
+{
+	Eigen::VectorXd v1(2);
+	if (!std::isfinite(v1[0]) && !std::isfinite(v1[1])) {
+		Eigen::VectorXd v2(3);
+		Eigen::VectorXd v(3);
+		v = v1+v2;  // will call abort() unless EIGEN_NO_DEBUG defined
+	}
+	return Rf_ScalarLogical(false);
+}
+
 static R_CallMethodDef callMethods[] = {
-	{"backend", (DL_FUNC) omxBackend, 11},
+	{"backend", (DL_FUNC) omxBackend, 12},
 	{"callAlgebra", (DL_FUNC) omxCallAlgebra, 3},
-	{"findIdenticalRowsData", (DL_FUNC) findIdenticalRowsData, 5},
 	{"Dmvnorm_wrapper", (DL_FUNC) dmvnorm_wrapper, 3},
 	{"hasNPSOL_wrapper", (DL_FUNC) has_NPSOL, 0},
 	{"sparseInvert_wrapper", (DL_FUNC) sparseInvert_wrapper, 1},
@@ -587,6 +737,11 @@ static R_CallMethodDef callMethods[] = {
 	{"Log_wrapper", (DL_FUNC) &testMxLog, 1},
 	{"untitledNumberReset", (DL_FUNC) &untitledNumberReset, 0},
 	{"untitledNumber", (DL_FUNC) &untitledNumber, 0},
+	{".EigenDebuggingEnabled", (DL_FUNC) testEigenDebug, 0},
+	{".dtmvnorm.marginal", (DL_FUNC) dtmvnorm_marginal, 5},
+	{".dtmvnorm.marginal2", (DL_FUNC) dtmvnorm_marginal2, 7},
+	{".mtmvnorm", (DL_FUNC) mtmvnorm, 3},
+	{".enableMxLog", (DL_FUNC) &enableMxLog, 0},
 	{NULL, NULL, 0}
 };
 

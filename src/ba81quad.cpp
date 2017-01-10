@@ -1,5 +1,5 @@
 /*
-  Copyright 2012-2014, 2016 Joshua Nathaniel Pritikin and contributors
+  Copyright 2012-2017, 2016 Joshua Nathaniel Pritikin and contributors
 
   This is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,9 +17,13 @@
 
 #include "ba81quad.h"
 
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
 const double ba81NormalQuad::MIN_VARIANCE = 0.01;
 
-ba81NormalQuad::ba81NormalQuad(struct ifaGroup *ig) : ig(*ig)
+ba81NormalQuad::ba81NormalQuad(struct ifaGroup *_ig) : ig(*_ig)
 {
 	setOne(1);
 	layers.resize(1, layer(this));
@@ -407,7 +411,7 @@ void ifaGroup::setLatentDistribution(double *_mean, double *_cov)
 {
 	if (!mean) {
 		mean = (double *) R_alloc(itemDims, sizeof(double));
-		memset(mean, 0, itemDims * sizeof(double));
+		if (itemDims) memset(mean, 0, itemDims * sizeof(double));
 	} else {
 		mean = _mean;
 	}
@@ -420,11 +424,6 @@ void ifaGroup::setLatentDistribution(double *_mean, double *_cov)
 		cov = _cov;
 	}
 }
-
-#include "matrix.h"
-
-#include "Connectedness.h"
-using namespace UndirectedGraph;
 
 template <typename T1, typename T2, typename T3>
 void ba81NormalQuad::setStructure(double Qwidth, int Qpoints,
@@ -460,56 +459,13 @@ void ba81NormalQuad::setStructure(double Qwidth, int Qpoints,
 		return;
 	}
 
-	// obtain the manifest covariance to look for independent blocks
-	int totalVars = param.cols() + mean.rows();
-	Eigen::MatrixXd totalS(totalVars, totalVars);
-	totalS.setIdentity();
-	totalS.bottomRightCorner(mean.rows(), mean.rows()) = cov;
-	//mxPrintMat("totalS", totalS);
-	Eigen::MatrixXd totalA(totalVars, totalVars);
-	totalA.setZero();
-	totalA.block(0, param.cols(), param.cols(), mean.rows()) =
-		param.block(0, 0, mean.rows(), param.cols()).transpose();
-	totalA.diagonal().array() += 1;
-	if (MatrixInvert1(totalA)) Rf_error("Inverse failed"); // copy code into this file TODO
-	//mxPrintMat("totalA", totalA);
-	Eigen::MatrixXd totalCov = totalA * totalS * totalA.transpose();
-	//mxPrintMat("totalCov", totalCov);
-
-	std::vector<int> region;
-	Connectedness::SubgraphType subgraph;
-	Connectedness cc(region, subgraph, param.cols(), false);
-	for (int cx=1; cx < param.cols(); ++cx) {
-		for (int rx=0; rx < cx; ++rx) {
-			double val = fabs(totalCov(rx,cx));
-			if (val < 1e-7) continue;
-			cc.connect(rx, cx);
-			//cc.log();
-		}
-	}
-
 	layers.clear();
-	layers.resize(cc.numSubgraphs(), layer(this));
+	layers.resize(1, layer(this));
 
-	for (int lx=0, rx=0; rx < (int) region.size(); ++rx) {
-		std::set<int> members;
-		if (region[rx] == -1) members.insert(rx);
-		else std::swap(members, subgraph[ region[rx] ]);
-		if (0 == members.size()) continue;
-
-		layers[lx].itemsMask.assign(param.cols(), false);
-		layers[lx].abilitiesMask.assign(mean.rows(), false);
-		for (auto it : members) {
-			layers[lx].itemsMask[it] = true;
-			for (int ax=0; ax < mean.rows(); ++ax) {
-				if (fabs(totalCov(it, param.cols() + ax)) < 1e-7) continue;
-				layers[lx].abilitiesMask[ax] = true;
-			}
-		}
-
-		layers[lx].setStructure(param, mean, cov);
-		lx += 1;
-	}
+	// This overengineering was done in error.
+	layers[0].itemsMask.assign(param.cols(), true);
+	layers[0].abilitiesMask.assign(mean.rows(), true);
+	layers[0].setStructure(param, mean, cov);
 }
 
 template <typename T1, typename T2, typename T3>

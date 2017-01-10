@@ -1,4 +1,20 @@
 #
+#   Copyright 2007-2017 The OpenMx Project
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
+#
 #  OpenMx Ordinal Data Example
 #  Revision history:
 #		Michael Neale 14 Aug 2010
@@ -70,7 +86,8 @@ summary(thresholdModelrun, refModels=thresholdSaturated)
 
 a <- proc.time()
 thresholdModelWLS <- mxModel(thresholdModel, name="WLSThresholdModel", mxDataWLS(ordinalData, type="ULS"), #Change type here!!!
-	mxExpectationNormal(covariance="impliedCovs", dimnames = fruitynames, thresholds="thresholdMatrix"),
+	mxMatrix('Zero', nrow=1, ncol=nVariables, name='impliedMeans'),
+	mxExpectationNormal(covariance="impliedCovs", means='impliedMeans', dimnames = fruitynames, thresholds="thresholdMatrix"),
 	mxFitFunctionWLS())
 thresholdModelWLSrun <- mxRun(thresholdModelWLS)
 b <- proc.time()
@@ -125,7 +142,8 @@ wmod2 <- mxModel(tmod2, mxDataWLS(ordinalData), mxFitFunctionWLS(),
 	mxAlgebra(UnitVector %x% t(sqrt(diag2vec(impliedCovs))), name='theStandardDeviations'),
 	mxAlgebra(UnitVector %x% M, name='theM'),
 	mxAlgebra( (Thresh-theM)/theStandardDeviations, name='newThresh'),
-	mxExpectationNormal(covariance='newCov', thresholds='newThresh', dimnames = fruitynames) #N.B. means left out on purpose
+	mxMatrix('Zero', 1, nVariables, name='MZ'),
+	mxExpectationNormal(covariance='newCov', means='MZ', thresholds='newThresh', dimnames = fruitynames) #N.B. means left out on purpose
 )
 
 
@@ -146,11 +164,18 @@ cbind(omxGetParameters(trun2), omxGetParameters(wrun2))
 plot(omxGetParameters(trun2), omxGetParameters(wrun2))
 abline(a=0, b=1)
 
-omxCheckCloseEnough(rms(omxGetParameters(trun2), omxGetParameters(wrun2)), 0, .03)
+omxCheckCloseEnough(rms(omxGetParameters(trun2), omxGetParameters(wrun2)), 0, .035)
 omxCheckCloseEnough(cor(omxGetParameters(trun2), omxGetParameters(wrun2)), 1, .05)
-}
 
 
+# new style for model 2
+wmod2a <- mxModel(tmod2, mxDataWLS(ordinalData), mxFitFunctionWLS())
+wrun2a <- mxRun(wmod2a)
 
+cbind(omxGetParameters(trun2), omxGetParameters(wrun2), omxGetParameters(wrun2a))
+
+# Check that old/hard stadardization and new/easy standardization give the same
+#  answer.
+omxCheckCloseEnough(omxGetParameters(wrun2), omxGetParameters(wrun2a), 1e-4)
 
 

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
 #   limitations under the License.
 
 require(OpenMx)
+
+if (mxOption(NULL,"Default optimizer") == 'CSOLNP') stop("SKIP")
+
 #mxOption(NULL, "Default optimizer", "NPSOL")
 
 #Prepare Data
@@ -47,7 +50,7 @@ twinACEModel <- mxModel("twinACE",
 			nrow=1, 
 			ncol=1, 
 			free=TRUE,  
-			values=sqrt(.6), lbound=sqrt(.1),
+			values=sqrt(.6),
 			label="c", 
 			name="Y"
 		),
@@ -131,21 +134,28 @@ twinACENoIntervals <- mxRun(twinACEModel, suppressWarnings = TRUE)
 twinACEFit <- mxRun(twinACEModel, intervals=TRUE, suppressWarnings = TRUE)
 
 summary(twinACEFit)
-ci <- twinACEFit$compute$steps[['CI']]$output[['detail']]
-omxCheckTrue(is.factor(ci[['side']]))
-omxCheckEquals(levels(ci[['side']]), c('upper', 'lower'))
-omxCheckEquals(c(unclass(ci[['side']])), rep(c(1,2),3))
+detail <- twinACEFit$compute$steps[['CI']]$output[['detail']]
+print(detail)
+omxCheckTrue(is.factor(detail[['side']]))
+omxCheckEquals(levels(detail[['side']]), c('upper', 'lower'))
+
+ci <- twinACEFit$output$confidenceIntervals
+#cat(deparse(round(ci[,'ubound'],4)))
+omxCheckCloseEnough(ci[-2,'lbound'], c(0.556, 0.1537), .01)
+omxCheckCloseEnough(ci[,'ubound'], c(0.683, 0.052, 0.1956), .005)
 
 iterateMxRun <- function(model, maxIterations) {
   model <- mxOption(model, "Optimality tolerance", 1e-6)
-	return(iterateMxRunHelper(mxRun(model), maxIterations, 1))
+  return(iterateMxRunHelper(mxRun(mxModel(model, mxComputeGradientDescent(maxMajorIter=150L))),
+				  maxIterations, 1))
 }
 
 iterateMxRunHelper <- function(model, maxIterations, iteration) {
 	if (length(model$output) > 0 && model$output$status[[1]] == 0) {
 		return(model)
 	} else if (iteration < maxIterations) {
-		return(iterateMxRunHelper(mxRun(model), maxIterations, iteration + 1))
+		return(iterateMxRunHelper(mxRun(mxModel(model, mxComputeGradientDescent(maxMajorIter=150L))),
+					  maxIterations, iteration + 1))
 	} else {
 		return(model)
 	}
@@ -189,22 +199,11 @@ CIelower <- mxModel(twinACEIntervals, name = 'E_CIlower',
 runCIelower <- suppressWarnings(iterateMxRun(CIelower, 3))
 runCIeupper <- suppressWarnings(iterateMxRun(CIeupper, 3))
 
-ci <- twinACEFit$output$confidenceIntervals
-#cat(deparse(round(ci[,'ubound'],4)))
-omxCheckCloseEnough(ci[-2,'lbound'], c(0.4697, 0.1567), .005)
+omxCheckCloseEnough(twinACEFit$output$confidenceIntervals[1, 'lbound'], mxEval(common.A, runCIalower), .01)
+omxCheckCloseEnough(twinACEFit$output$confidenceIntervals[1, 'ubound'], mxEval(common.A, runCIaupper), .01)
 
-if (mxOption(NULL, 'Default optimizer') == "CSOLNP") {
-        omxCheckCloseEnough(ci[,'ubound'], c(0.6012, 0.132, 0.2001), .04)
-} else {
-        omxCheckCloseEnough(ci[,'ubound'], c(0.6012, 0.132, 0.2001), .005)
-}
-
-omxCheckCloseEnough(twinACEFit$output$confidenceIntervals[1, 'lbound'], mxEval(common.A, runCIalower), .001)
-omxCheckCloseEnough(twinACEFit$output$confidenceIntervals[1, 'ubound'], mxEval(common.A, runCIaupper), .02)
-
-if (mxOption(NULL, 'Default optimizer') == "SLSQP") {
-  omxCheckTrue(is.na(twinACEFit$output$confidenceIntervals[2, 'lbound']))
-}
+# Can go either way
+#omxCheckTrue(is.na(twinACEFit$output$confidenceIntervals[2, 'lbound']))
 
 omxCheckCloseEnough(twinACEFit$output$confidenceIntervals[2, 'ubound'], mxEval(common.C, runCIcupper), .001)
 

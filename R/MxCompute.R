@@ -277,12 +277,14 @@ setClass(Class = "MxComputeGradientDescent",
 	   engine = "character",
 	     availableEngines = "character",
 	     tolerance = "numeric",
-	     nudgeZeroStarts = "logical",
+	   nudgeZeroStarts = "logical",
+	   .excludeVars = "MxOptionalChar",
 	   verbose = "integer",
 	     maxMajorIter = "integer",
 	     gradientAlgo = "character",
 	     gradientIterations = "integer",
-	     gradientStepSize = "numeric",
+	   gradientStepSize = "numeric",
+	   defaultCImethod = "character",
 	     warmStart = "MxOptionalMatrix"))  # rename to 'preconditioner'?
 
 setMethod("qualifyNames", signature("MxComputeGradientDescent"),
@@ -311,6 +313,8 @@ setMethod("initialize", "MxComputeGradientDescent",
 		  .Object@freeSet <- freeSet
 		  .Object@fitfunction <- fit
 		  .Object@engine <- engine
+		  .Object@defaultCImethod <- 'none'
+		  if (engine == 'SLSQP') .Object@defaultCImethod <- 'ineq'
 		  .Object@useGradient <- useGradient
 		  .Object@verbose <- verbose
 		  .Object@tolerance <- tolerance
@@ -324,6 +328,7 @@ setMethod("initialize", "MxComputeGradientDescent",
 		  if (imxHasNPSOL()) {
 			  .Object@availableEngines <- c(.Object@availableEngines, "NPSOL")
 		  }
+		  .Object@.excludeVars <- c()
 		  .Object
 	  })
 
@@ -342,7 +347,7 @@ imxHasNPSOL <- function() .Call(hasNPSOL_wrapper)
 ##' OpenMx offers the choice of three optimizers: SLSQP, CSOLNP, and NPSOL.
 ##'
 ##' One of the most important options for SLSQP is
-##' \code{gradientAlgo}. By default, ##' the \code{central} method 
+##' \code{gradientAlgo}. By default, the \code{central} method 
 ##' is used.  This method requires 2 times 
 ##' \code{gradientIterations} function evaluations per parameter 
 ##' per gradient.  The \code{central} method can be much more accurate 
@@ -358,6 +363,14 @@ imxHasNPSOL <- function() .Call(hasNPSOL_wrapper)
 ##' method; NPSOL usually uses the \code{forward} method, but 
 ##' adaptively switches to \code{central} under certain circumstances.
 ##' 
+##' CSOLNP uses the value of argument \code{gradientStepSize} as-is, 
+##' whereas SLSQP internally scales it by a factor of 100. The
+##' purpose of this transformation is to obtain roughly the same
+##' accuracy given other differences in numerical procedure.
+##' NPSOL ignores \code{gradientStepSize}, and instead uses a function
+##' of \link{mxOption} \dQuote{Function precision} to determine its gradient
+##' step size.
+##' 
 ##' Currently, only SLSQP and NPSOL can use analytic gradients, 
 ##' and only NPSOL uses \code{warmStart}.
 ##'
@@ -372,8 +385,8 @@ imxHasNPSOL <- function() .Call(hasNPSOL_wrapper)
 ##' @param nudgeZeroStarts whether to nudge any zero starting values prior to optimization (default TRUE)
 ##' @param maxMajorIter maximum number of major iterations
 ##' @param gradientAlgo one of c('forward','central')
-##' @param gradientIterations number of Richardson iterations to use for the gradient (default 2)
-##' @param gradientStepSize the step size for the gradient (default 1e-5)
+##' @param gradientIterations number of Richardson iterations to use for the gradient
+##' @param gradientStepSize the step size for the gradient
 ##' @aliases
 ##' MxComputeGradientDescent-class
 ##' @references
@@ -403,7 +416,7 @@ mxComputeGradientDescent <- function(freeSet=NA_character_, ...,
 				     nudgeZeroStarts=TRUE, maxMajorIter=NULL,
 				     gradientAlgo=mxOption(NULL, "Gradient algorithm"),
 				     gradientIterations=mxOption(NULL, "Gradient iterations"),
-				     gradientStepSize=1e-5) {
+				     gradientStepSize=mxOption(NULL, "Gradient step size")) {
 
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -446,6 +459,139 @@ setMethod("displayCompute", signature(Ob="MxComputeGradientDescent", indent="int
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeTryHard",
+	 contains = "BaseCompute",
+	 representation = representation(
+	     plan = "MxCompute",
+	     verbose = "integer",
+	     location = "numeric",
+	     scale = "numeric",
+	     maxRetries = "integer"))
+
+setMethod("assignId", signature("MxComputeTryHard"),
+	function(.Object, id, defaultFreeSet) {
+		.Object <- callNextMethod()
+		defaultFreeSet <- .Object@freeSet
+		id <- .Object@id
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- assignId(slot(.Object, sl), id, defaultFreeSet)
+			id <- slot(.Object, sl)@id + 1L
+		}
+		.Object@id <- id
+		.Object
+	})
+
+setMethod("getFreeVarGroup", signature("MxComputeTryHard"),
+	function(.Object) {
+		result <- callNextMethod()
+		for (step in c(.Object@plan)) {
+			got <- getFreeVarGroup(step)
+			if (length(got)) result <- append(result, got)
+		}
+		result
+	})
+
+setMethod("qualifyNames", signature("MxComputeTryHard"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- qualifyNames(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeTryHard"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- convertForBackend(slot(.Object, sl), flatModel, model)
+		}
+		.Object
+	})
+
+setMethod("updateFromBackend", signature("MxComputeTryHard"),
+	function(.Object, computes) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- updateFromBackend(slot(.Object, sl), computes)
+		}
+		.Object
+	})
+
+setMethod("initialize", "MxComputeTryHard",
+	  function(.Object, freeSet, plan, verbose, location, scale, maxRetries) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object@plan <- plan
+		  .Object@verbose <- verbose
+		  .Object@location <- location
+		  .Object@scale <- scale
+		  .Object@maxRetries <- maxRetries
+		  .Object
+	  })
+
+##' Repeatedly attempt a compute plan until successful
+##'
+##' The provided compute plan is run until the status code indicates
+##' success (0 or 1). It gives up after a small number of retries.
+##'
+##' Upon failure, start values are randomly perturbed.  Currently only
+##' the uniform distribution is implemented.  The distribution is
+##' parametrized by arguments \code{location} and \code{scale}.  The
+##' location parameter is the distribution's median.  For the uniform
+##' distribution, \code{scale} is the absolute difference between its
+##' median and extrema (i.e., half the width of the rectangle).  Each
+##' start value is multiplied by a random draw and then added to a
+##' random draw from a distribution with the same \code{scale} but
+##' with a median of zero.
+##' 
+##' @param plan compute plan to optimize the model
+##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param freeSet names of matrices containing free variables
+##' @param verbose level of debugging output
+##' @param location location of the perturbation distribution
+##' @param scale scale of the perturbation distribution
+##' @param maxRetries maximum number of plan evaluations per invocation (including the first evaluation)
+##' @seealso
+##' \code{\link{mxTryHard}}
+##' @aliases
+##' MxComputeTryHard-class
+##' @references
+##' Shanno, D. F. (1985). On Broyden-Fletcher-Goldfarb-Shanno method. \emph{Journal of
+##' Optimization Theory and Applications, 46}(1), 87-94.
+mxComputeTryHard <- function(plan, ..., freeSet=NA_character_, verbose=0L,
+			     location=1.0, scale=0.25, maxRetries=3L)
+{
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeTryHard does not accept values for the '...' argument")
+	}
+	verbose <- as.integer(verbose)
+	maxRetries <- as.integer(maxRetries)
+	new("MxComputeTryHard", freeSet, plan, verbose, location, scale, maxRetries)
+}
+
+setMethod("displayCompute", signature(Ob="MxComputeTryHard", indent="integer"),
+	  function(Ob, indent) {
+		  callNextMethod()
+		  sp <- paste(rep('  ', indent), collapse="")
+		  cat(sp, "$plan :", '\n')
+		  displayCompute(Ob@plan, indent+1L)
+		  for (sl in c("verbose","location","scale",'maxRetries')) {
+			  if (is.na(slot(Ob, sl))) next
+			  slname <- paste("$", sl, sep="")
+			  if (is.character(slot(Ob, sl))) {
+				  cat(sp, slname, ":", omxQuotes(slot(Ob, sl)), '\n')
+			  } else {
+				  cat(sp, slname, ":", slot(Ob, sl), '\n')
+			  }
+		  }
+		  invisible(Ob)
+	  })
+
+#----------------------------------------------------
+
 setClass(Class = "MxComputeConfidenceInterval",
 	 contains = "BaseCompute",
 	 representation = representation(
@@ -463,7 +609,7 @@ setMethod("assignId", signature("MxComputeConfidenceInterval"),
 			slot(.Object, sl) <- assignId(slot(.Object, sl), id, defaultFreeSet)
 			id <- slot(.Object, sl)@id + 1L
 		}
-		.Object@id <- id 
+		.Object@id <- id
 		.Object
 	})
 
@@ -515,45 +661,37 @@ setMethod("initialize", "MxComputeConfidenceInterval",
 
 ##' Find likelihood-based confidence intervals
 ##'
-##' There are various ways to pose an equivalent profile likelihood
-##' problem. For good performance, it is essential to tailor the
-##' problem to the abilities of the optimizer. The problem can be
-##' posed without the use of constraints. This is how the code worked
-##' in version 2.1 and prior. Although this way of posing the problem
-##' creates an ill-conditioned Hessian, NPSOL is somehow able to
-##' isolate the poor conditioning from the rest of the problem and
-##' optimize it quickly. However, SLSQP is not so clever and exhibits
-##' very poor performance. For SLSQP, good performance is contingent
-##' on posing the problem using an inequality constraint on the fit.
-##'
-##' Geometrically, SLSQP performs best on smooth likelihood surfaces
-##' with smooth derivatives. In the profile CI problem, the distance
-##' limit on the deviance is like a wall. Walls do not have smooth
-##' derivatives but are more like a step function. The point of
-##' \link{mxConstraint} is to isolate the parts of a problem that are
-##' geometrically non-smooth. Constraints are dealt with specially in
-##' SLSQP to best accommodate their sharp geometry.
-##'
-##' For the default compute plan, the choice of constraintType is
-##' determined by which optimizer is selected.
-##'
+##' There are various equivalent ways to pose the optimization
+##' problems required to estimate confindence intervals. Most accurate
+##' solutions are achieved when the problem is posed using non-linear
+##' constraints. However, the available optimizers (NPSOL, SLSQP, and
+##' CSOLNP) often have difficulty with non-linear
+##' constraints.
+##' 
 ##' @param plan compute plan to optimize the model
 ##' @param ...  Not used.  Forces remaining arguments to be specified by name.
 ##' @param freeSet names of matrices containing free variables
 ##' @param verbose level of debugging output
 ##' @param engine deprecated
-##' @param fitfunction The deviance function to constrain with an inequality constraint.
+##' @param fitfunction the name of the deviance function
 ##' @param tolerance deprecated
-##' @param constraintType one of c('ineq', 'eq', 'both', 'none')
+##' @param constraintType one of c('ineq', 'none')
 ##' @references
-##' Pek, J. & Wu, H. (in press). Profile likelihood-based confidence intervals and regions for structural equation models.
-##' \emph{Psychometrica.}
+##' Neale, M. C. & Miller M. B. (1997). The use of likelihood based
+##' confidence intervals in genetic models.  \emph{Behavior Genetics,
+##' 27}(2), 113-120.
+##' 
+##' Pek, J. & Wu, H. (2015). Profile likelihood-based confidence intervals and regions for structural equation models.
+##' \emph{Psychometrica, 80}(4), 1123-1145.
+##'
+##' Wu, H. & Neale, M. C. (2012). Adjusted confidence intervals for a
+##' bounded parameter. \emph{Behavior genetics, 42}(6), 886-898.
 ##' @aliases
 ##' MxComputeConfidenceInterval-class
 
 mxComputeConfidenceInterval <- function(plan, ..., freeSet=NA_character_, verbose=0L,
 					engine=NULL, fitfunction='fitfunction',
-					tolerance=NA_real_, constraintType='ineq') {
+					tolerance=NA_real_, constraintType='none') {
 
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -562,6 +700,15 @@ mxComputeConfidenceInterval <- function(plan, ..., freeSet=NA_character_, verbos
 	verbose <- as.integer(verbose)
 	new("MxComputeConfidenceInterval", freeSet, plan, verbose, fitfunction, constraintType)
 }
+
+setMethod("updateFromBackend", signature("MxComputeConfidenceInterval"),
+	function(.Object, computes) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- updateFromBackend(slot(.Object, sl), computes)
+		}
+		.Object
+	})
 
 setMethod("displayCompute", signature(Ob="MxComputeConfidenceInterval", indent="integer"),
 	  function(Ob, indent) {
@@ -730,10 +877,11 @@ setClass(Class = "MxComputeIterate",
 	 representation = representation(
 	   maxIter = "integer",
 	   tolerance = "numeric",
-	   verbose = "integer"))
+	   verbose = "integer",
+	   maxDuration = "numeric"))
 
 setMethod("initialize", "MxComputeIterate",
-	  function(.Object, steps, maxIter, tolerance, verbose, freeSet) {
+	  function(.Object, steps, maxIter, tolerance, verbose, freeSet, maxDuration) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@steps <- steps
@@ -741,6 +889,7 @@ setMethod("initialize", "MxComputeIterate",
 		  .Object@tolerance <- tolerance
 		  .Object@verbose <- verbose
 		  .Object@freeSet <- freeSet
+		  .Object@maxDuration <- maxDuration
 		  .Object
 	  })
 
@@ -754,9 +903,11 @@ setMethod("initialize", "MxComputeIterate",
 ##' @param tolerance iterates until maximum relative change is less than tolerance
 ##' @param verbose level of debugging output
 ##' @param freeSet Names of matrices containing free variables.
+##' @param maxDuration the maximum amount of time (in seconds) to iterate
 ##' @aliases
 ##' MxComputeIterate-class
-mxComputeIterate <- function(steps, ..., maxIter=500L, tolerance=1e-9, verbose=0L, freeSet=NA_character_) {
+mxComputeIterate <- function(steps, ..., maxIter=500L, tolerance=1e-9, verbose=0L, freeSet=NA_character_,
+			     maxDuration=as.numeric(NA)) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxComputeIterate does not accept values for the '...' argument")
@@ -764,7 +915,8 @@ mxComputeIterate <- function(steps, ..., maxIter=500L, tolerance=1e-9, verbose=0
 
 	verbose <- as.integer(verbose)
 	maxIter <- as.integer(maxIter)
-	new("MxComputeIterate", steps=steps, maxIter=maxIter, tolerance=tolerance, verbose, freeSet)
+	new("MxComputeIterate", steps=steps, maxIter=maxIter, tolerance=tolerance,
+	    verbose, freeSet, maxDuration)
 }
 
 setMethod("displayCompute", signature(Ob="MxComputeIterate", indent="integer"),
@@ -772,6 +924,7 @@ setMethod("displayCompute", signature(Ob="MxComputeIterate", indent="integer"),
 		  callNextMethod();
 		  sp <- paste(rep('  ', indent), collapse="")
 		  cat(sp, "maxIter :", Ob@maxIter, '\n')
+		  cat(sp, "maxDuration :", Ob@maxDuration, '\n')
 		  cat(sp, "tolerance :", Ob@tolerance, '\n')
 		  cat(sp, "verbose :", Ob@verbose, '\n')
 		  for (step in 1:length(Ob@steps)) {
@@ -1075,7 +1228,7 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 ##' @param verbose Level of debugging output.
 ##' @param knownHessian an optional matrix of known Hessian entries
 ##' @param checkGradient whether to check the first order convergence criterion (gradient is near zero)
-##' @param hessian whether to estimate the Hessian
+##' @param hessian whether to estimate the Hessian. If FALSE then only the gradient is estimated.
 ##' @aliases
 ##' MxComputeNumericDeriv-class
 ##' @examples
@@ -1097,7 +1250,9 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 ##' factorModelFit$output$hessian
 
 mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfunction',
-				      parallel=TRUE, stepSize=0.0001, iterations=4L, verbose=0L,
+				  parallel=TRUE,
+				  stepSize=mxOption(NULL, "Gradient step size"),
+				  iterations=4L, verbose=0L,
 				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE)
 {
 	garbageArguments <- list(...)
@@ -1361,3 +1516,54 @@ updateModelCompute <- function(model, computes) {
 ##'
 ##' @param mat the matrix to invert
 imxSparseInvert <- function(mat) .Call(sparseInvert_wrapper, mat)
+
+
+
+omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=TRUE, 
+																	optionList=options()$mxOption){
+	if(length(modelName) && !is.character(modelName[1])){stop("argument 'modelName' must be a character string")}
+	compute <- NULL
+	fitNum <- ifelse(length(modelName), paste(modelName, 'fitfunction', sep="."), "fitfunction")
+	if (!useOptimizer) {
+		compute <- mxComputeSequence(list(CO=mxComputeOnce(from=fitNum, 'fit', .is.bestfit=TRUE),
+																			RE=mxComputeReportExpectation()))
+		} else{
+		steps <- list(GD=mxComputeGradientDescent(
+			fitfunction=fitNum,
+			verbose=0L,	
+			gradientAlgo=optionList[['Gradient algorithm']],
+			gradientIterations=optionList[['Gradient iterations']],
+			gradientStepSize=optionList[['Gradient step size']]))
+			if (intervals){
+				ciOpt <- mxComputeGradientDescent(
+					verbose=0L,
+					fitfunction=fitNum, 
+					nudgeZeroStarts=FALSE,
+					gradientAlgo=optionList[['Gradient algorithm']],
+					gradientIterations=optionList[['Gradient iterations']],
+					gradientStepSize=optionList[['Gradient step size']])
+				cType <- ciOpt$defaultCImethod
+				if (cType == 'ineq') {
+					ciOpt <- mxComputeTryHard(plan=ciOpt, scale=0.05)
+				}
+				steps <- c(steps, CI=mxComputeConfidenceInterval(
+					fitfunction=fitNum, 
+					constraintType=cType,
+					verbose=0L, plan=ciOpt))
+			}
+			if (optionList[["Calculate Hessian"]] == "Yes") {
+				steps <- c(steps, ND=mxComputeNumericDeriv(
+					fitfunction=fitNum, 
+					stepSize=optionList[['Gradient step size']]))
+			}
+			if (optionList[["Standard Errors"]] == "Yes") {
+				steps <- c(steps, SE=mxComputeStandardError(), HQ=mxComputeHessianQuality())
+			}
+			compute <- mxComputeSequence(c(steps,
+																		 RD=mxComputeReportDeriv(),
+																		 RE=mxComputeReportExpectation()))
+	}
+	compute@.persist <- TRUE
+	return(compute)
+}
+

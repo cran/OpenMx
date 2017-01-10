@@ -1,5 +1,5 @@
 /*
-  Copyright 2012-2014, 2016 Joshua Nathaniel Pritikin and contributors
+  Copyright 2012-2017, 2016 Joshua Nathaniel Pritikin and contributors
 
   This is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -48,6 +48,7 @@ class ba81NormalQuad {
 	int gridSize;
 	std::vector<double> Qpoint;           // gridSize
 
+	// Currently, there is always only one layer.
 	class layer {
 	private:
 		template <typename T1, typename T2, typename T3, typename T4>
@@ -1006,21 +1007,13 @@ template <typename T1, typename T2, typename T3, typename T4>
 void ba81NormalQuad::layer::globalToLocalDist(Eigen::MatrixBase<T1> &gmean, Eigen::MatrixBase<T2> &gcov,
 					      Eigen::MatrixBase<T3> &mean, Eigen::MatrixBase<T4> &cov)
 {
-	// Refactor, I must have written this same code 3-4 times now TODO
+	struct subsetOp {
+		std::vector<bool> &abilitiesMask;
+		subsetOp(std::vector<bool> &abilitiesMask) : abilitiesMask(abilitiesMask) {};
+		bool operator()(int gx) { return abilitiesMask[gx]; };
+	} op(abilitiesMask);
 
-	mean.derived().resize(numAbil());
-	cov.derived().resize(numAbil(), numAbil());
-
-	for (int gcx=0, cx=0; gcx < gcov.cols(); gcx++) {
-		if (!abilitiesMask[gcx]) continue;
-		mean[cx] = gmean[gcx];
-		for (int grx=0, rx=0; grx < gcov.rows(); grx++) {
-			if (!abilitiesMask[grx]) continue;
-			cov(rx,cx) = gcov(grx, gcx);
-			rx += 1;
-		}
-		cx += 1;
-	}
+	subsetNormalDist(gmean, gcov, op, numAbil(), mean, cov);
 }
 
 template <typename T1, typename T2>

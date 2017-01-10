@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2016 The OpenMx Project
+ *  Copyright 2007-2017 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,9 +15,6 @@
  */
 
 #include <ctype.h>
-#define R_NO_REMAP
-#include <R.h>
-#include <Rinternals.h>
 
 #include "omxState.h"
 #include "omxNPSOLSpecific.h"
@@ -26,21 +23,89 @@
 #include "omxImportFrontendState.h"
 #include "Compute.h"
 #include "npsolswitch.h"
-#include "omxBuffer.h"
 
-template <typename T1>
-void GradientOptimizerContext::allConstraintsFun(Eigen::MatrixBase<T1> &constraintOut)
+#ifdef SHADOW_DIAG
+#pragma GCC diagnostic warning "-Wshadow"
+#endif
+
+template <typename T1, typename T2, typename T3>
+void GradientOptimizerContext::allConstraintsFun(Eigen::MatrixBase<T1> &constraintOut, Eigen::MatrixBase<T2> &jacobianOut, 
+                                                 Eigen::MatrixBase<T3> &needcIn, int mode)
 {
-	omxState *globalState = fc->state;
-	int l=0;
-	for(int j = 0; j < (int) globalState->conList.size(); j++) {
-		omxConstraint &cs = *globalState->conList[j];
-		cs.refreshAndGrab(fc, omxConstraint::LESS_THAN, &constraintOut(l));
-		l += cs.size;
-	}
-
-	if (verbose >= 3) {
-		mxPrintMat("constraints", constraintOut);
+	omxState *st = fc->state;
+	int l=0, j=0, c=0, roffset=0, csize=0, sgn=0;
+	switch(mode){
+	case 0:
+		for(j = 0; j < (int) st->conListX.size(); j++) {
+			omxConstraint &cs = *st->conListX[j];
+			if(cs.linear){continue;}
+			if(needcIn(l) > 0 || !usingAnalyticJacobian){cs.refreshAndGrab(fc, omxConstraint::LESS_THAN, &constraintOut(l));}
+			l += cs.size;
+			if (verbose >= 3) {
+				mxLog("mode 0");
+				mxPrintMat("constraints", constraintOut);
+				mxLog("\n");
+			}
+		}
+		break;
+	case 1:
+		for(j = 0; j < (int) st->conListX.size(); j++) {
+			omxConstraint &cs = *st->conListX[j];
+			if(cs.linear){continue;}
+			if(needcIn(l) > 0 && cs.jacobian != NULL){
+				omxRecompute(cs.jacobian, fc);
+				csize = cs.size;
+				//For some reason we flip the sign of a constraint function's value in UserConstraint::refreshAndGrab() when it's
+				//an equality constraint--which confuses the heck out of NPSOL...:
+				sgn = (cs.opCode == omxConstraint::EQUALITY) ? -1 : 1;
+				for(c=0; c<cs.jacobian->cols; c++){
+					if(cs.jacMap[c]<0){continue;}
+					for(roffset=0; roffset<csize; roffset++){
+						jacobianOut(l+roffset,cs.jacMap[c]) = sgn * cs.jacobian->data[c * csize + roffset];
+					}
+				}
+			}
+			l += cs.size;
+		}
+		if (verbose >= 3) {
+			mxLog("mode 1");
+			mxPrintMat("Jacobian or -Jacobian", jacobianOut);
+			mxLog("\n");
+		}
+		break;
+	case 2:
+		if(verbose >= 3){
+			mxLog("mode 2");
+		}
+		for(j = 0; j < (int) st->conListX.size(); j++) {
+			omxConstraint &cs = *st->conListX[j];
+			if(cs.linear){continue;}
+			if(needcIn(l) > 0 || !usingAnalyticJacobian){
+				cs.refreshAndGrab(fc, omxConstraint::LESS_THAN, &constraintOut(l));
+				if(cs.jacobian != NULL){
+					omxRecompute(cs.jacobian, fc);
+					csize = cs.size;
+					//Likewise here:
+					sgn = (cs.opCode == omxConstraint::EQUALITY) ? -1 : 1;
+					for(c=0; c<cs.jacobian->cols; c++){
+						if(cs.jacMap[c]<0){continue;}
+						for(roffset=0; roffset<csize; roffset++){
+							//Likewise here:
+							jacobianOut(l+roffset,cs.jacMap[c]) = sgn * cs.jacobian->data[c * csize + roffset];
+						}
+					}
+				}
+			}
+			l += cs.size;
+			if (verbose >= 3) {
+				mxPrintMat("constraints", constraintOut);
+			}
+		}
+		if(verbose >= 3){
+			mxPrintMat("Jacobian or -Jacobian", jacobianOut);
+			mxLog("\n");
+		}
+		break;
 	}
 }
 
@@ -67,7 +132,6 @@ void F77_SUB(npsolObjectiveFunction)(int* mode, int* n, double* x,
 				     double* f, double* g, int* nstate)
 {
 	if (x != NPSOL_GOpt->est.data()) return;  // this is strange but necessary
-	R_CheckUserInterrupt();
 	double fit = NPSOL_GOpt->recordFit(x, mode);
 	*f = fit;
 }
@@ -78,7 +142,8 @@ void F77_SUB(npsolConstraintFunction)
 		int *ldJ, int *needc, double *x,
 		double *c, double *cJac, int *nstate)
 {
-	if(*mode==1) return;
+	//The line below prevents unnecessary calls to the allConstraintsFun() when no analytic Jacobians are used:
+	if( !(NPSOL_GOpt->usingAnalyticJacobian) && *mode==1){return;}
 
 	// "Note that if there are any nonlinear constraints then the
 	// first call to CONFUN will precede the first call to
@@ -86,7 +151,46 @@ void F77_SUB(npsolConstraintFunction)
 
 	NPSOL_GOpt->copyFromOptimizer(x);
 	Eigen::Map< Eigen::VectorXd > cE(c, *ncnln);
-	NPSOL_GOpt->allConstraintsFun(cE);
+	Eigen::Map< Eigen::MatrixXd > cJacE(cJac, *ldJ, *n);
+	Eigen::Map< Eigen::VectorXi > needcE(needc, *ncnln);
+	NPSOL_GOpt->allConstraintsFun(cE, cJacE, needcE, *mode);
+}
+
+template <typename T1> 
+void GradientOptimizerContext::linearConstraintCoefficients(Eigen::MatrixBase<T1> &lcc)
+{
+	omxState *st = fc->state;
+	int i=0, clm=0, roffset=0, k=0, sgn=0;
+	for(i=0; i < (int) st->conListX.size(); i++){
+		omxConstraint &cs = *st->conListX[i];
+		if(!(cs.linear)){continue;}
+		if(cs.jacobian == NULL){Rf_error("in %s: user must provide all linear MxConstraints with a Jacobian",cs.name);}
+		sgn = (cs.opCode == omxConstraint::EQUALITY) ? -1 : 1;
+		for(clm=0; clm<cs.jacobian->cols; clm++){
+			if(cs.jacMap[clm]<0){continue;}
+			for(roffset=0; roffset<cs.size; roffset++){
+				//Need to multiply by -1 here...?:
+				lcc(k+roffset,cs.jacMap[clm]) = sgn * cs.jacobian->data[clm * cs.size + roffset];
+			}
+		}
+		k += cs.size;
+	}
+	if (verbose >= 3) {
+		mxPrintMat("A", lcc);
+	}
+}
+
+void GradientOptimizerContext::checkForAnalyticJacobians()
+{
+	usingAnalyticJacobian = false;
+	omxState *st = fc->state;
+	for(int i=0; i < (int) st->conListX.size(); i++){
+		omxConstraint &cs = *st->conListX[i];
+		if(cs.jacobian){
+			usingAnalyticJacobian = true;
+			return;
+		}
+	}
 }
 
 static double getNPSOLFeasibilityTolerance()
@@ -95,12 +199,12 @@ static double getNPSOLFeasibilityTolerance()
 	return Global->feasibilityTolerance * 2e-2 / 5e-2;
 }
 
-static void omxNPSOL1(double *est, GradientOptimizerContext &rf, int equality, int inequality)
+static void omxNPSOL1(double *est, GradientOptimizerContext &rf, int nl_equality, int nl_inequality, int l_equality, int l_inequality)
 {
 	rf.optName = "NPSOL";
 	rf.setupAllBounds();
 	{
-		double ft = (equality+inequality)? getNPSOLFeasibilityTolerance() : 1e-5;
+		double ft = (nl_equality+nl_inequality+l_inequality+l_equality)? getNPSOLFeasibilityTolerance() : 1e-5;
 		std::string opt = string_snprintf("Feasibility tolerance %.8g", ft);
 		F77_CALL(npoptn)((char*) opt.c_str(), opt.size());
 	}
@@ -125,12 +229,12 @@ static void omxNPSOL1(double *est, GradientOptimizerContext &rf, int equality, i
 	//if (NPSOL_fitMatrix) Rf_error("NPSOL is not reentrant");
 	NPSOL_GOpt = &rf;
 
-    int nclin = 0;
+    int nclin = l_equality + l_inequality;
     int nlinwid = std::max(1, nclin);
-    int ncnln = equality + inequality;
+    int ncnln = nl_equality + nl_inequality;
     int nlnwid = std::max(1, ncnln);
  
-	if (ncnln == 0) {
+	if (ncnln + nclin == 0) { //<--We might have to move to a worse fit to satisfy even linear constraints.
 		// ensure we never move to a worse point
 		int mode = 0;
 		double fit = rf.recordFit(rf.est.data(), &mode);
@@ -157,17 +261,21 @@ static void omxNPSOL1(double *est, GradientOptimizerContext &rf, int equality, i
         int ldR = n;                // TODO: Test alternative versions of the size of R to see what's best.
  
     /* Allocate arrays */
-	Eigen::ArrayXXd A(ldA, n);  // maybe transposed?
-	Eigen::VectorXd c(nlnwid);
-	Eigen::MatrixXd cJac(ldJ, n); // maybe transposed?
-	Eigen::VectorXd clambda(nctotl);
+	Eigen::MatrixXd A(ldA, n);  // maybe transposed?
+	if(nclin){
+		A.setZero();
+		rf.linearConstraintCoefficients(A);
+	}
+	rf.constraintFunValsOut.resize(nlnwid);//Eigen::VectorXd c(nlnwid);
+	rf.constraintJacobianOut.resize(ldJ, n);//Eigen::MatrixXd cJac(ldJ, n);
+	rf.LagrMultipliersOut.resize(nctotl);//Eigen::VectorXd clambda(nctotl);
 	Eigen::VectorXd w(lenw);
-	Eigen::VectorXi istate(nctotl);
+	rf.constraintStatesOut.resize(nctotl);//Eigen::VectorXi istate(nctotl);
 	Eigen::VectorXi iw(leniw);
  
 	if (rf.warmStart) {
-		istate.setZero();
-		clambda.setZero();
+		rf.constraintStatesOut.setZero();
+		rf.LagrMultipliersOut.setZero();
 	}
 
     /*  F77_CALL(npsol)
@@ -209,18 +317,36 @@ static void omxNPSOL1(double *est, GradientOptimizerContext &rf, int equality, i
 	rf.hessOut.resize(n, n);
 	double fit; // do not pass in &fc->fit
 	int iter_out; // ignored
-	F77_CALL(npsol)(&n, &nclin, &ncnln, &ldA, &ldJ, &ldR, A.data(),
-			rf.solLB.data(), rf.solUB.data(), (void*)F77_SUB(npsolConstraintFunction),
-			(void*) F77_SUB(npsolObjectiveFunction), &rf.informOut, &iter_out,
-			istate.data(), c.data(), cJac.data(),
-			clambda.data(), &fit, rf.grad.data(), rf.hessOut.data(), rf.est.data(),
-			iw.data(), &leniw, w.data(), &lenw);
-
+	F77_CALL(npsol)(&n, &nclin, &ncnln, &ldA, &ldJ, &ldR, 
+          A.data(), rf.solLB.data(), rf.solUB.data(), 
+          (void*)F77_SUB(npsolConstraintFunction), (void*) F77_SUB(npsolObjectiveFunction), 
+          &rf.informOut, &iter_out, rf.constraintStatesOut.data(), 
+          rf.constraintFunValsOut.data(), rf.constraintJacobianOut.data(), rf.LagrMultipliersOut.data(), &fit, rf.grad.data(), rf.hessOut.data(), rf.est.data(),
+          iw.data(), &leniw, w.data(), &lenw);
+	
+	/*We tell NPSOL that all of the MxConstraints are nonlinear, because NPSOL's special handling of linear constraints doesn't seem to
+	work as documented.  However, nlinwid = max(1,nclin), and nctotl = n + nlinwid + nlnwid, so arrays that are sized to nctotl will always
+	have at least one element that NPSOL never uses.  Obviously, if ncnln==0, the only constraints will be box constraints, and there will be a
+	lot of unused elements in the constraint-related arrays:*/
+	if(ncnln==0){
+		rf.constraintFunValsOut.conservativeResize(0);
+		rf.constraintJacobianOut.conservativeResize(0,0);
+		rf.LagrMultipliersOut.conservativeResize(n);
+		rf.constraintStatesOut.conservativeResize(n);
+	}
+	else{
+		rf.LagrMultipliersOut.conservativeResize(n+ncnln);
+		rf.constraintStatesOut.conservativeResize(n+ncnln);
+	}
+	
 	// NPSOL can return the wrong fit and estimates, but hard to
 	// know what to do if there are constraints.
-	if (rf.bestEst.size() && ncnln == 0) {
+	if (rf.bestEst.size() && ncnln+nclin == 0) {
 		rf.useBestFit();
 	}
+
+	// With constraints, it's probably garbage,
+	//if (ncnln) rf.grad.setConstant(NA_REAL);
 
     NPSOL_GOpt = NULL;
 }
@@ -231,20 +357,29 @@ void omxNPSOL(GradientOptimizerContext &rf)
 	Eigen::Map< Eigen::ArrayXd > Est(est, rf.numFree);
 	Eigen::ArrayXd startingPoint = Est;
 
-	omxState *globalState = rf.getState();
-	int equality, inequality;
-	globalState->countNonlinearConstraints(equality, inequality);
+	omxState *st = rf.getState();
+	int nl_equality, nl_inequality, l_equality, l_inequality;
+	st->countNonlinearConstraints(nl_equality, nl_inequality, true);
+	st->countLinearConstraints(l_equality, l_inequality);
+	
+	rf.checkForAnalyticJacobians();
 
-	omxNPSOL1(est, rf, equality, inequality);
+	omxNPSOL1(est, rf, nl_equality, nl_inequality, l_equality, l_inequality);
 
-	if (equality + inequality == 0) return;
+	if (nl_equality + nl_inequality + l_equality + l_inequality == 0) return;
 
 	const int maxRetries = 10;
 	int retry = 0;
 	double best = std::numeric_limits<double>::max();
 	while (++retry < maxRetries) {
-		Eigen::VectorXd cE(equality + inequality);
-		rf.allConstraintsFun(cE);
+		Eigen::VectorXd cE(nl_equality + nl_inequality);
+		Eigen::MatrixXd cJactemp(nl_equality + nl_inequality, rf.est.size());
+		Eigen::VectorXi needctemp(nl_equality + nl_inequality);
+		needctemp.setOnes(nl_equality + nl_inequality);
+		//Eigen::MatrixXd cJacE(cJac, *ldJ, *n);
+		//Eigen::Map< Eigen::VectorXi > needcE(needc, *ncnln);
+		//NPSOL_GOpt->allConstraintsFun(cE, cJacE, needcE, mode);
+		rf.allConstraintsFun(cE, cJactemp, needctemp, 0);
 
 		double norm = cE.norm();
 		if (rf.verbose >= 1) {
@@ -259,7 +394,7 @@ void omxNPSOL(GradientOptimizerContext &rf)
 			best = norm;
 		}
 		if (!(cE.array().abs() < getNPSOLFeasibilityTolerance()).all()) {
-			omxNPSOL1(est, rf, equality, inequality);
+			omxNPSOL1(est, rf, nl_equality, nl_inequality, l_equality, l_inequality);
 		} else {
 			break;
 		}

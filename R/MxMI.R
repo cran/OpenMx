@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -30,6 +30,9 @@
 mxMI <- function(model, matrices=NA, full=TRUE){
 	if(single.na(matrices)){
 		matrices <- names(model$matrices) #names of them rather
+		if (is(model$expectation, "MxExpectationRAM")) {
+			matrices <- setdiff(matrices, model$expectation$F)
+		}
 	}
 	param <- omxGetParameters(model)
 	param.names <- names(param)

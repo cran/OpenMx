@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2016 The OpenMx Project
+#   Copyright 2007-2017 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ perID <- mxModel(
 
 occa <- mxModel(
     "occa", type="RAM", perID, manifestVars="Y", latentVars="lX",
-    mxData(tDataFrame, 'raw', sort=FALSE),
+    mxData(tDataFrame, 'raw'),
     mxPath('Y', arrows=2, values=1),
     mxPath('one', 'Y'),
     mxPath('one', 'lX', labels='data.X', free=FALSE),

@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2016 The OpenMx Project
+%   Copyright 2007-2017 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ J\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}reskog, K. G. & S\ifel
 
 J\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}reskog, K. G. & S\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}rbom, D. (1982). Recent developments in structural equation modeling. \emph{Journal of Marketing Research, 19,} 404-416.
 
-The OpenMx User's guide can be found at http://openmx.psyc.virginia.edu/documentation.
+The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }
 
 \examples{

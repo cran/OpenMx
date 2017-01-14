@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-gitVersion <- "v2.7.2"
+gitVersion <- "v2.7.3"
 
 mxVersion <- function (model=NULL, verbose=TRUE) {
     pvers <- try(packageVersion("OpenMx"))

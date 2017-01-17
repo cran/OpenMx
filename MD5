@@ -1,5 +1,5 @@
 6b05be98626f05e7106ef2e61cfff381 *CHANGES
-6a7263a4a837f026dff4451209b2cb55 *DESCRIPTION
+757e9ad5be7ba0355a45d527aa2a1d3d *DESCRIPTION
 0efb3ca8eaebd2a99abba8da04efa5ae *NAMESPACE
 bc7c3a09bfbed0ee70c113b99b823c9f *NEWS
 d946b83739323e4b7cffb3811038d9c6 *R/0ClassUnion.R
@@ -23,7 +23,7 @@ ef2eb192456335a9a9120a65b017a40a *R/MxCompute.R
 cd2cb0134be98bb1dfc73841db1d97f3 *R/MxConstraint.R
 9701fcb02f96afd909a6676d37034a8f *R/MxCycleDetection.R
 f40a7b80fee985b0800ef1a3b40a1347 *R/MxData.R
-9049403d9801d5325716e8ca0804384f *R/MxDataWLS.R
+34d667655fb2b49586802cedfc45f970 *R/MxDataWLS.R
 4ea2d16eb8754e33e4ac419ffe6c04d3 *R/MxDeparse.R
 d472ddb7e455cd83a51d55e33f7a40af *R/MxDependencies.R
 df8237281a47b9db5d665b5c2766ae7f *R/MxDetectCores.R
@@ -35,7 +35,7 @@ c56a934a97736b326e6f87ef05e6dbab *R/MxExpectationBA81.R
 725bb949fc6f595ef09fd137e5419543 *R/MxExpectationGREML.R
 8302fb77d54e3d9416f7da8f997e5e4e *R/MxExpectationLISREL.R
 f3cce0cf05d83d8133ec8f045653ee5d *R/MxExpectationNormal.R
-706f8d5b64c979589178bab721853f0f *R/MxExpectationRAM.R
+5e3894353e8052467014826acac36895 *R/MxExpectationRAM.R
 19179ec2ee80789c700d7dc4d180fc39 *R/MxExpectationStateSpace.R
 cd3b333846141b570a10f5dbfd6e5f73 *R/MxExponential.R
 2008b721b5692e95517b3dbfb2c78c71 *R/MxFIMLObjective.R
@@ -47,7 +47,7 @@ cd3b333846141b570a10f5dbfd6e5f73 *R/MxExponential.R
 6b686e6cffa621da17c8165ae03601bb *R/MxFitFunctionMultigroup.R
 8c6c457cb49da559427806c5fcea85a4 *R/MxFitFunctionR.R
 afe779754b412aa670a101b071296caf *R/MxFitFunctionRow.R
-c474f0dc7a4bb64e317895dc96035609 *R/MxFitFunctionWLS.R
+c16a3d6b7462ce9628bdfdbe41aa2eab *R/MxFitFunctionWLS.R
 efcde1c93c34f5d4bd6dd777c50cf3ee *R/MxFlatModel.R
 69fbd235de3d9f34de72db3516406496 *R/MxFlatSearchReplace.R
 04c0b37b55cb5c0a45046f237bcc0b35 *R/MxGraph.R
@@ -80,9 +80,9 @@ ba16f5a49f3ff2e927d1d2b0e4f3dc54 *R/MxReservedNames.R
 1f37c7961e9c53ac4976575c1f70bbff *R/MxRobustSE.R
 148c08772e5f77d8d228c878675e42d5 *R/MxRowObjective.R
 e1146735a93c834d7044f0c7849e3e60 *R/MxRun.R
-77562dd4745ab376b450e95d2d21893f *R/MxRunHelperFunctions.R
+09774730613a42cfc811e0f7de81379a *R/MxRunHelperFunctions.R
 32184d500f173344551667a482fbebf9 *R/MxSE.R
-e97b78b92da08b1e870566683803ab5a *R/MxSaturatedModel.R
+9a6ff8bf50371fda197863c3501d9043 *R/MxSaturatedModel.R
 5781afc3bf9863311ee0cf2b1527a6e1 *R/MxSearchReplace.R
 4ec8cba6063a67f1c682ee2d45b26f2a *R/MxSquareBracket.R
 154efdf22227fd5fc2038f1daf5db496 *R/MxSummary.R
@@ -92,7 +92,7 @@ e97b78b92da08b1e870566683803ab5a *R/MxSaturatedModel.R
 b537ff40c8d9724d2fe54c3ddd99291f *R/MxTypes.R
 1ce2eb7bfeb94497228471a404ead80a *R/MxUnitTesting.R
 644dd973f9fa2042d500584dbe946d01 *R/MxUntitled.R
-4e21a93a1fba11a7506a8ca3ebd05054 *R/MxVersion.R
+a902726220e471d1013ffccd9ee95bc1 *R/MxVersion.R
 34345ac1d788efd1ad539e6804b50be5 *R/MxVersion.R.in
 517ee75af7c7f6e7df009ef31812e17e *R/OriginalMx.R
 571ae782e7d58c0ba9b1826d50623961 *R/SdiagMatrix.R
@@ -213,7 +213,7 @@ b60d3f5c67ae2edf670c89a93dc9daa2 *demo/UnivariateTwinAnalysis_PathRaw.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 8085ecace0e871dbdc6b6bc6bb2d4a32 *demo/mxThreshold.R
 0e1e50da8e9548784feab2bf92d58301 *demo/omxConstrainMLThresholds.R
-968869650f0235a9864243d626a46d33 *inst/CITATION
+58d91b18b1677520c03ba71967ba5cb2 *inst/CITATION
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R
 d0455e6008f4dc52746e5418d900b9a8 *inst/models/enormous/RAM-3Factor-192Indicators-covdata-a.R
 e9693b978a952f211eda225973bc8c68 *inst/models/enormous/RAM-3Factor-192Indicators-rawdata-a.R
@@ -228,7 +228,7 @@ ef066cf821288756dddf6c0fe3074ecd *inst/models/enormous/ifa-cyh2011-sim1.R
 7d8e1a088b0e7361a7ff625a2b5dfe4d *inst/models/enormous/invert.R
 cdf9f9f79fba7f549f90e6d698d250b0 *inst/models/enormous/lib/stderrlib.R
 428eaa7c5bf33593c1e067388a811f52 *inst/models/enormous/ot2kSim.R
-373839322c387beb5da4fd108b43742a *inst/models/enormous/rampart.R
+3942821afd86073907cc037c7c5f4214 *inst/models/enormous/rampart.R
 da74f5673398c6cea26b706b44665d08 *inst/models/enormous/wu-neale-2012-lgc.R
 87098e0be9e52d1e1594cabf81e80cd8 *inst/models/failing/BivariateSaturated_WLSMatrixCov.R
 460c48bc6cf3bb4b38d3d563dbeb4d47 *inst/models/failing/CSOLNPmtcars.R
@@ -309,7 +309,7 @@ a4d3c82919c3bc46a9653fc1eaec156c *inst/models/nightly/RAM-3Factor-24Indicators-m
 8518184ec04b32ddf505a1b6eaffc1d4 *inst/models/nightly/RAM-3Factor-48Indicators-covdata-a.R
 601caf3469e14b228f3d362259bf6ea4 *inst/models/nightly/RAM-3Factor-48Indicators-rawdata-a.R
 f820191f2e5507252a9045676972fe6d *inst/models/nightly/RAM-3Factor-96Indicators-covdata-a.R
-23c0070b126c03d7f0f4edfede4b1010 *inst/models/nightly/RegimeSwitching_MatrixRawNoCholDifferentTransitions.R
+fcbcc2cfa86afb14828e4c0042435bcc *inst/models/nightly/RegimeSwitching_MatrixRawNoCholDifferentTransitions.R
 30a9f5ed83404aceb7dc0742239a0a4e *inst/models/nightly/RegimeSwitching_MatrixRawNoCholDifferentTransitionsAllFixed.R
 91761f549c50d554f88bfc795bed5271 *inst/models/nightly/StateSpaceContinuous.R
 1e573ef1be068f1cd2a3c23e22a3df4d *inst/models/nightly/brooke.R
@@ -420,7 +420,7 @@ e3ccdeff75fbb05c015fed71b4038bc3 *inst/models/passing/InitializationErrorDetecti
 4ea7638503f908439756345690f35157 *inst/models/passing/IntroSEM-MultiRegRaw.R
 6531ae27b7cb38fe3fd8583bfe0ac4be *inst/models/passing/IntroSEM-MultiRegStd.R
 0be17c73ba2285ace0ebb14ee98d65dd *inst/models/passing/IntroSEM-MultivariateRegRaw.R
-d353e6017983c6aca142ab14564867d6 *inst/models/passing/IntroSEM-OneFactorCov.R
+0b5803f567e4baa509739fd58337f059 *inst/models/passing/IntroSEM-OneFactorCov.R
 930e517d5b8e3977fcea3a60655a35d5 *inst/models/passing/IntroSEM-OneFactorRaw.R
 7b8f13fe18727285c1e2d3e2265889f1 *inst/models/passing/IntroSEM-ThreeFactorScale1Test.R
 dc0c1ffd22f235038cada8795d486d39 *inst/models/passing/IntroSEM-ThreeFactorScale2Test.R
@@ -537,7 +537,7 @@ bb19d64b48931e4d7db76cf41ac92b5e *inst/models/passing/ifa-lmp.R
 5e1bbf150d00f33e701aeb0954f2f816 *inst/models/passing/ifa-missingdata.R
 060e37072f51ab7fc9f7cdeab49ebb4c *inst/models/passing/joinErrors.R
 6641f4b5dabd78a9b11028f1d8e3e0fa *inst/models/passing/jointFactorModelsTest.R
-198548b61ddf92dff8b6cd9b90c8d23a *inst/models/passing/jointFactorWls.R
+29a5e63d533e0f0d13ef3a77bcd9d327 *inst/models/passing/jointFactorWls.R
 30bd7470d1c137169e582923a0b49e82 *inst/models/passing/lmer-1.R
 9d748bf98a23dd395d9f8fd37b7d932a *inst/models/passing/lmer-2.R
 577e52452f55fe2747fe217349082f0d *inst/models/passing/multilevelLatentRegression.R
@@ -777,7 +777,7 @@ ec2b5083c29521f57ab8bb6fa9f88ccd *man/mxComputeTryHard.Rd
 7ac3d3ba4202f25e20a336e118e2feb2 *man/mxConstraint.Rd
 d443f84f4132f9de7be2f8c3808101e3 *man/mxData.Rd
 d057fae74018a1be4fdb4f5c75a2167c *man/mxDataDynamic.Rd
-538d11c2c192807639b8f00efe87a372 *man/mxDataWLS.Rd
+f53d4c473e0bc97232cc0f475943322f *man/mxDataWLS.Rd
 b3f344e7b26676ed64fe10bbc660ae79 *man/mxEval.Rd
 6d3b36d26e559a7aa496eff2c4feb111 *man/mxExpectationBA81.Rd
 656a58f7e9b265d9a9df1a346bbb8e29 *man/mxExpectationGREML.Rd
@@ -886,8 +886,8 @@ b78e23ecf408332dbc51a181213893c9 *man/twinData.Rd
 0c82d99fb18b28d527a274d0d5765197 *man/vechs2full.Rd
 d2589997406ca19d50ddbd599e4a4b9d *src/AlgebraFunctions.h
 85bfdb3082cbd507b4c60ba89c4c4c09 *src/Compute.cpp
-8713e47626b1f58fa92e4aba1cc0d294 *src/Compute.h
-ff68c571db73d5eb48903e612ec63423 *src/ComputeGD.cpp
+60aa856148b12ef3ae6a44143d5c43c1 *src/Compute.h
+b0f0a3bcf06fb16bf42a6735882c8828 *src/ComputeGD.cpp
 4a63e612f634f79a7414b81d0a47b5de *src/ComputeNR.cpp
 da67c7ebb5e55a330bf65d76718088be *src/ComputeSD.cpp
 189d70a62148d9e6181eb1a02e4384d6 *src/ComputeSD.h
@@ -913,14 +913,15 @@ b454130cfede7240080b8cdc2bba6abe *src/matrix.h
 435a733b9c9404cd1ed4a5fa098f7333 *src/merge.cpp
 93a6459dedadc9dbe79d02c53687183b *src/merge.h
 ee718a4c303591efb02a1e8b37667d56 *src/multi_normal_sufficient.hpp
-b657126209ae8e51d4d05f2b5c8fabf9 *src/nanotimer_gettime.h
-c1b4e051ff3e6b96a4bd525396794923 *src/nanotimer_macosx.h
-7b6e5cc79f6f278d9ed5aa1476742d95 *src/nanotimer_rtposix.h
-575cc3e31cdaa0986c0284bf5066d11f *src/nanotimer_windows.h
+5e1fc9c8f40e2d3823e48e3faecc2a81 *src/nanotimer.cpp
+208cb855d10b1a2d6acf950d3ef44ce9 *src/nanotimer_gettime.h
+19d3fec1197d71d0d4457b75d451124a *src/nanotimer_macosx.h
+6a12a507e7a0abe2a33040eb098918a6 *src/nanotimer_rtposix.h
+086e17bba24e940a596990782a96c9db *src/nanotimer_windows.h
 4b7910ec3200b81a25ad63c7ad1cf7a9 *src/nlopt-internal.h
 2ff94eaad5eaed51d937d589eb673897 *src/nlopt-util.h
 6c225833bcda94a97ea0466284ed1630 *src/nlopt.h
-938eb368414f9f9e18b8f464b562b5da *src/nloptcpp.cpp
+2ea18ef3474958e733e0fb877b293698 *src/nloptcpp.cpp
 486a6679408a4bf2419921ae29950568 *src/nloptcpp.h
 c9e5a8e531fce64ac23bd9e089dfc817 *src/npsolswitch.h
 37655677cf7103ae4fa51523a0c4643f *src/omxAlgebra.cpp
@@ -931,7 +932,7 @@ a210a5872a689c0fd6b50b6947517e0a *src/omxAlgebraFitFunction.cpp
 221ecd82347b94bb6f6bf719376b6d8e *src/omxCsolnp.h
 8eb638af5543b5c36905accacbf5a915 *src/omxData.cpp
 1878d52b176b012c91cdeeef5c44b2b0 *src/omxData.h
-a4a82e00d4af582e20358355cec6ddc7 *src/omxDefines.h
+6fdabacbdb4313730aaff8915cb9c04b *src/omxDefines.h
 0cb7fe42524ef1d2823f9743f5b47d09 *src/omxExpectation.cpp
 00eefbcac423f5f53e172c39ba25b6c1 *src/omxExpectation.h
 7d63850bf988d772d14c7ac961e3577e *src/omxExpectationBA81.cpp
@@ -973,11 +974,11 @@ c38ab4f042ce9707382475746cdbb841 *src/omxStateSpaceExpectation.h
 5a2bfc34e242554f5df95d2139ed0236 *src/omxSymbolTable.cpp
 c518c0fdcb198f67942127b207111b46 *src/omxSymbolTable.h
 8c2890408ea47604465e7ee5dca623dc *src/omxWLSFitFunction.cpp
-126ae09a41dbca7a51e05425033340a7 *src/optimize.c
+53001b6557c1a4d5e74dafcfb4a59ebf *src/optimize.c
 8ab1b139438ac2f47784408fba95316c *src/options.c
 0c9778ad450068715702d455b9378d91 *src/sadmvn.f
-200e4bd7cf0b805c64bbe80387306ce7 *src/slsqp.c
-a8379ca1ec5419136e85c9e036c495e6 *src/slsqp.h
+97c03a450f63a33c165e8b8771ee6f34 *src/slsqp.c
+1489f6bdcad2b7542e7d65f545ce3062 *src/slsqp.h
 5ab91c677445cfea1dd77ea6c9f68313 *src/ssMLFit.cpp
 e2f945871653acef7489996ca2f000c0 *src/stop.c
 cf7c8cf63b832b27c13340a62aaea278 *src/subnp.cpp

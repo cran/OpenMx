@@ -16,4 +16,3 @@ what they are doing.
 The acceptable variable types
 }
 \keyword{datasets}
-

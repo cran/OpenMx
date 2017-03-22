@@ -21,4 +21,3 @@ mxAvailableOptimizers()
 \seealso{
 - \code{\link{mxOption}}(model, "Default optimizer")
 }
-

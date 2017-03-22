@@ -277,7 +277,7 @@ setClass(Class = "MxComputeGradientDescent",
 	   engine = "character",
 	     availableEngines = "character",
 	     tolerance = "numeric",
-	   nudgeZeroStarts = "logical",
+	   nudgeZeroStarts = "MxCharOrLogical",
 	   .excludeVars = "MxOptionalChar",
 	   verbose = "integer",
 	     maxMajorIter = "integer",
@@ -413,10 +413,10 @@ imxHasNPSOL <- function() .Call(hasNPSOL_wrapper)
 mxComputeGradientDescent <- function(freeSet=NA_character_, ...,
 				     engine=NULL, fitfunction='fitfunction', verbose=0L,
 				     tolerance=NA_real_, useGradient=NULL, warmStart=NULL,
-				     nudgeZeroStarts=TRUE, maxMajorIter=NULL,
+				     nudgeZeroStarts=mxOption(NULL,"Nudge zero starts"), maxMajorIter=NULL,
 				     gradientAlgo=mxOption(NULL, "Gradient algorithm"),
-				     gradientIterations=mxOption(NULL, "Gradient iterations"),
-				     gradientStepSize=mxOption(NULL, "Gradient step size")) {
+				     gradientIterations=imxAutoOptionValue("Gradient iterations"),
+				     gradientStepSize=imxAutoOptionValue("Gradient step size")) {
 
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -1143,6 +1143,211 @@ setMethod("displayCompute", signature(Ob="MxComputeEM", indent="integer"),
 	  })
 
 #----------------------------------------------------
+#Mike Hunter's "better match.arg" function
+match.barg <- function (arg, choices, several.ok = FALSE) 
+{
+	if (missing(choices)) {
+		formal.args <- formals(sys.function(sys.parent()))
+		choices <- eval(formal.args[[deparse(substitute(arg))]])
+	}
+	if (is.null(arg)) 
+		return(choices[1L])
+	else if (!is.character(arg)) 
+		stop("'arg' must be NULL or a character vector")
+	if (!several.ok) {
+		if (identical(arg, choices)) 
+			return(arg[1L])
+		if (length(arg) > 1L) 
+			stop("'arg' must be of length 1")
+	}
+	else if (length(arg) == 0L) 
+		stop("'arg' must be of length >= 1")
+	i <- pmatch(arg, choices, nomatch = 0L, duplicates.ok = TRUE)
+	if (all(i == 0L)) 
+		stop(gettextf("%s should be one of %s", omxQuotes(arg), omxQuotes(choices)
+		), domain = NA)
+	i <- i[i > 0L]
+	if (!several.ok && length(i) > 1) 
+		stop("there is more than one match in 'match.arg'")
+	choices[i]
+}
+
+mxComputeNelderMead <- function(
+	freeSet=NA_character_, fitfunction="fitfunction", verbose=0L, 
+	nudgeZeroStarts=mxOption(NULL,"Nudge zero starts"), 
+	maxIter=NULL,	...,
+	alpha=1, betao=0.5, betai=0.5, gamma=2, sigma=0.5, bignum=1e35, 
+	iniSimplexType=c("regular","right","smartRight","random"),
+	iniSimplexEdge=1, iniSimplexMat=NULL, greedyMinimize=FALSE, 
+	altContraction=FALSE, degenLimit=0, stagnCtrl=c(-1L,-1L),
+	validationRestart=TRUE,
+	xTolProx=1e-8, fTolProx=1e-8,
+	doPseudoHessian=FALSE,
+	ineqConstraintMthd=c("soft","eqMthd"), 
+	#eqConstraintMthd=c("soft","backtrack","GDsearch","l1p"),
+	eqConstraintMthd=c("soft","backtrack","l1p"),
+	backtrackCtrl=c(0.5,5)
+	){
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeNelderMead() does not accept values for the '...' argument")
+	}
+	verbose <- as.integer(verbose[1])
+	maxIter <- as.integer(maxIter[1])
+	if(is.character(nudgeZeroStarts[1])){
+		if(substr(nudgeZeroStarts[1],1,1) %in% c("Y","y")){nudgeZeroStarts <- TRUE}
+		else if(substr(nudgeZeroStarts[1],1,1) %in% c("N","n")){nudgeZeroStarts <- FALSE}
+		else{stop("unrecognized character string provided as argument 'nudgeZeroStarts'")}
+	}
+	alpha <- as.numeric(alpha[1])
+	if(alpha<=0){stop("reflection coefficient 'alpha' must be positive")}
+	betao <- as.numeric(betao[1])
+	betai <- as.numeric(betai[1])
+	if(any(betao<=0, betao>=1, betai<=0, betai>=1)){
+		stop("contraction coefficients 'betao' and 'betai' must both be within unit interval (0,1)")
+	}
+	gamma <- as.numeric(gamma[1])
+	#Allow user to provide non-positive gamma to "turn off" expanstion transformations:
+	if(gamma>0 && gamma<=alpha){
+		stop("if positive, expansion coefficient 'gamma' must be greater than reflection coefficient 'alpha'")
+	}
+	sigma <- as.numeric(sigma[1])
+	#Allow user to provide non-positive sigma to "turn off" shrinks:
+	if(sigma>=1){stop("shrink coefficient 'sigma' must be less than 1.0")}
+	bignum <- as.numeric(bignum[1])
+	iniSimplexType <- as.character(match.barg(iniSimplexType,c("regular","right","smartRight","random")))
+	iniSimplexEdge <- as.numeric(iniSimplexEdge[1])
+	if(length(iniSimplexMat)){
+		iniSimplexMat <- as.matrix(iniSimplexMat)
+		iniSimplexColnames <- colnames(iniSimplexMat)
+	}
+	else{
+		iniSimplexColnames <- NULL
+		iniSimplexMat <- NULL
+	}
+	greedyMinimize <- as.logical(greedyMinimize[1])
+	altContraction <- as.logical(altContraction[1])
+	degenLimit <- as.numeric(degenLimit[1])
+	if(degenLimit<0 || degenLimit>pi){
+		stop("'degenLimit' must be within interval [0,pi]")
+	}
+	if(length(stagnCtrl)<2){stop("'stagnCtrl' must be an integer vector of length 2")}
+	stagnCtrl <- as.integer(stagnCtrl[1:2])
+	validationRestart <- as.logical(validationRestart[1])
+	xTolProx <- as.numeric(xTolProx[1])
+	fTolProx <- as.numeric(fTolProx[1])
+	backtrackCtrl=c(0.5,5)
+	doPseudoHessian <- as.logical(doPseudoHessian[1])
+	ineqConstraintMthd <- as.character(match.barg(ineqConstraintMthd,c("soft","eqMthd")))
+	eqConstraintMthd <- as.character(match.barg(eqConstraintMthd,c("soft","backtrack","l1p")))
+	if(length(backtrackCtrl)<2){stop("'backtrackCtrl' must be a numeric vector of length 2")}
+	backtrackCtrl1 <- as.numeric(backtrackCtrl[1])
+	backtrackCtrl2 <- as.integer(backtrackCtrl[2])
+	return(new("MxComputeNelderMead", freeSet, fitfunction, verbose, nudgeZeroStarts, maxIter, alpha, 
+						 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
+						 iniSimplexColnames, validationRestart,
+						 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
+						 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian))
+}
+
+setClass(
+	Class="MxComputeNelderMead",
+	contains="BaseCompute",
+	representation=representation(
+		fitfunction="MxCharOrNumber",
+		verbose="integer",
+		nudgeZeroStarts="MxCharOrLogical",
+		maxIter="integer",
+		defaultMaxIter="logical",
+		.excludeVars="MxOptionalChar",
+		alpha="numeric",
+		betao="numeric",
+		betai="numeric",
+		gamma="numeric",
+		sigma="numeric",
+		bignum="numeric",
+		iniSimplexType="character",
+		iniSimplexEdge="numeric",
+		iniSimplexMat="MxOptionalMatrix",
+		.iniSimplexColnames="MxOptionalChar",
+		greedyMinimize="logical",
+		altContraction="logical",
+		degenLimit="numeric",
+		stagnCtrl="integer",
+		validationRestart="logical",
+		xTolProx="numeric",
+		fTolProx="numeric",
+		doPseudoHessian="logical",
+		ineqConstraintMthd="character",
+		eqConstraintMthd="character",
+		backtrackCtrl1="numeric",
+		backtrackCtrl2="integer"))
+
+#TODO: a user or developer might someday want to directly use this low-level 'initialize' method instead of the high-level constructor function,
+#so typecasting should also occur here:
+setMethod(
+	"initialize", "MxComputeNelderMead",
+	function(.Object, freeSet, fitfunction, verbose, nudgeZeroStarts, maxIter, alpha, 
+					 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
+					 iniSimplexColnames, validationRestart,
+					 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
+					 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian){
+		.Object@name <- 'compute'
+		.Object@.persist <- TRUE
+		.Object@freeSet <- freeSet
+		.Object@fitfunction <- fitfunction
+		.Object@verbose <- verbose
+		.Object@nudgeZeroStarts <- nudgeZeroStarts
+		.Object@defaultMaxIter <- ifelse(length(maxIter),FALSE,TRUE)
+		.Object@maxIter <- as.integer(maxIter)
+		.Object@.excludeVars <- c()
+		
+		.Object@alpha <- alpha
+		.Object@betao <- betao
+		.Object@betai <- betai
+		.Object@gamma <- gamma
+		.Object@sigma <- sigma
+		.Object@bignum <- bignum
+		.Object@iniSimplexType <- iniSimplexType
+		.Object@iniSimplexEdge <- iniSimplexEdge
+		if(!length(iniSimplexMat)){.Object@iniSimplexMat <- NULL}
+		else{.Object@iniSimplexMat <- iniSimplexMat}
+		.Object@.iniSimplexColnames <- iniSimplexColnames
+		.Object@greedyMinimize <- greedyMinimize
+		.Object@altContraction <- altContraction
+		.Object@degenLimit <- degenLimit
+		.Object@stagnCtrl <- stagnCtrl
+		.Object@validationRestart <- validationRestart
+		.Object@xTolProx <- xTolProx
+		.Object@fTolProx <- fTolProx
+		.Object@doPseudoHessian <- doPseudoHessian
+		.Object@ineqConstraintMthd <- ineqConstraintMthd
+		.Object@eqConstraintMthd <- eqConstraintMthd
+		.Object@backtrackCtrl1 <- backtrackCtrl1
+		.Object@backtrackCtrl2 <- backtrackCtrl2
+		.Object
+	})
+
+setMethod("qualifyNames", signature("MxComputeNelderMead"),
+					function(.Object, modelname, namespace) {
+						.Object <- callNextMethod()
+						for (sl in c('fitfunction')) {
+							slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+						}
+						if(length(.Object@iniSimplexMat)){.Object@.iniSimplexColnames <- colnames(.Object@iniSimplexMat)}
+						.Object
+					})
+
+setMethod("convertForBackend", signature("MxComputeNelderMead"),
+					function(.Object, flatModel, model) {
+						name <- .Object@name
+						if (is.character(.Object@fitfunction)) {
+							.Object@fitfunction <- imxLocateIndex(flatModel, .Object@fitfunction, .Object)
+						}
+						.Object
+					})
+
+#----------------------------------------------------
 
 setClass(Class = "MxComputeNumericDeriv",
 	 contains = "BaseCompute",
@@ -1251,7 +1456,7 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 
 mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfunction',
 				  parallel=TRUE,
-				  stepSize=mxOption(NULL, "Gradient step size"),
+				  stepSize=imxAutoOptionValue("Gradient step size"),
 				  iterations=4L, verbose=0L,
 				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE)
 {
@@ -1532,16 +1737,16 @@ omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=
 			fitfunction=fitNum,
 			verbose=0L,	
 			gradientAlgo=optionList[['Gradient algorithm']],
-			gradientIterations=optionList[['Gradient iterations']],
-			gradientStepSize=optionList[['Gradient step size']]))
+			gradientIterations=imxAutoOptionValue('Gradient iterations',optionList),
+			gradientStepSize=imxAutoOptionValue('Gradient step size',optionList)))
 			if (intervals){
 				ciOpt <- mxComputeGradientDescent(
 					verbose=0L,
 					fitfunction=fitNum, 
 					nudgeZeroStarts=FALSE,
 					gradientAlgo=optionList[['Gradient algorithm']],
-					gradientIterations=optionList[['Gradient iterations']],
-					gradientStepSize=optionList[['Gradient step size']])
+					gradientIterations=imxAutoOptionValue('Gradient iterations',optionList),
+					gradientStepSize=imxAutoOptionValue('Gradient step size',optionList))
 				cType <- ciOpt$defaultCImethod
 				if (cType == 'ineq') {
 					ciOpt <- mxComputeTryHard(plan=ciOpt, scale=0.05)
@@ -1554,7 +1759,7 @@ omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=
 			if (optionList[["Calculate Hessian"]] == "Yes") {
 				steps <- c(steps, ND=mxComputeNumericDeriv(
 					fitfunction=fitNum, 
-					stepSize=optionList[['Gradient step size']]))
+					stepSize=imxAutoOptionValue('Gradient step size',optionList)))
 			}
 			if (optionList[["Standard Errors"]] == "Yes") {
 				steps <- c(steps, SE=mxComputeStandardError(), HQ=mxComputeHessianQuality())

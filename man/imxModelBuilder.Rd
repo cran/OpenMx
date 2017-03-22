@@ -37,4 +37,3 @@ methods. For example, modelAddVariables and modelRemoveVariables
 could be their own methods. This would reduce some cut&paste
 duplication.
 }
-

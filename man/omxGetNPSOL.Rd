@@ -19,4 +19,3 @@ This function
 \dontrun{omxGetNPSOL()}
 
 }
-

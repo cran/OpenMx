@@ -14,4 +14,3 @@ imxFlattenModel(model, namespace)
 \description{
 Remove heirarchical structure from model
 }
-

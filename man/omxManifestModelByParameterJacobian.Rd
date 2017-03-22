@@ -32,4 +32,3 @@ For the thresholds the z-scores are computed by using the model-implied means an
 \seealso{
 \link{mxGetExpected}
 }
-

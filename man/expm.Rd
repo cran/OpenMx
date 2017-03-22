@@ -13,4 +13,3 @@ expm(x)
 \description{
 Matrix exponential
 }
-

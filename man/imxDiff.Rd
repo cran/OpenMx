@@ -16,4 +16,3 @@ imxDiff(a, b, slots = c("setequal", "intersect"))
 \description{
 Set difference on regular types or S4 objects
 }
-

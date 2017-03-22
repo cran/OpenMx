@@ -12,4 +12,3 @@ imxConstraintRelations
 A string vector of valid constraint binary relations.
 }
 \keyword{datasets}
-

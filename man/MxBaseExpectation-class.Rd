@@ -2,9 +2,9 @@
 % Please edit documentation in R/MxExpectation.R
 \docType{class}
 \name{MxBaseExpectation-class}
+\alias{MxBaseExpectation-class}
 \alias{$,MxBaseExpectation-method}
 \alias{$<-,MxBaseExpectation-method}
-\alias{MxBaseExpectation-class}
 \title{MxBaseExpectation}
 \description{
 The virtual base class for all expectations. Expectations contain
@@ -15,4 +15,3 @@ class and should not be used directly.
 \link{mxExpectationNormal}, \link{mxExpectationRAM}, \link{mxExpectationLISREL}, \link{mxExpectationStateSpace},
 \link{mxExpectationBA81}
 }
-

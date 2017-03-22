@@ -17,4 +17,3 @@ a list with components for the new MxModel with named parameters, and the new na
 \description{
 Assign new names to the unnamed parameters
 }
-

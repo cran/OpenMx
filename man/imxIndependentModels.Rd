@@ -12,4 +12,3 @@ imxIndependentModels(model)
 \description{
 Are submodels independent?
 }
-

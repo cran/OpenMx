@@ -13,4 +13,3 @@ what they are doing.
 \details{
 Returns a character, the default optimizer
 }
-

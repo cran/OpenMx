@@ -27,4 +27,3 @@ one of the things to try.
 \seealso{
 \code{demo("omxConstrainMLThresholds")}
 }
-

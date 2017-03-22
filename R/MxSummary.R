@@ -47,7 +47,7 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 			return(list(expectation@numStats, historySet))
 		}
 	}
-	if (is.na(expectation@data) || is.null(expectation@data)) {
+	if (length(expectation@data)==0 || is.na(expectation@data) || !.hasSlot(expectation, 'dims')) {
 		return(list(0, historySet))
 	}
 	if (is.numeric(expectation@data)) {
@@ -431,6 +431,8 @@ computeOptimizationStatistics <- function(model, numStats, useSubmodels, saturat
 	if (is.null(retval$independenceDoF)) {
 		retval$IndependenceDoF <- NA
 	}
+	retval[['saturatedParameters']] <- retval[['observedStatistics']] - retval[['saturatedDoF']]
+	retval[['independenceParameters']] <- retval[['observedStatistics']] - retval[['independenceDoF']]
 	# calculate fit statistics
 	retval <- fitStatistics(model, useSubmodels, retval)
 	return(retval)
@@ -496,12 +498,24 @@ print.summary.mxmodel <- function(x,...) {
 		print(x$CIdetail)
 		cat("\n")
 	}
-  if(length(x$GREMLfixeff)>0 && any(sapply(x$GREMLfixeff,length)>0)){
-    cat("regression coefficients:\n")
-    print(x$GREMLfixeff)
-    cat("\n")
-  }
-	cat("observed statistics: ", x$observedStatistics, '\n')
+	if(length(x$GREMLfixeff)>0 && any(sapply(x$GREMLfixeff,length)>0)){
+		cat("regression coefficients:\n")
+		print(x$GREMLfixeff)
+		cat("\n")
+	}
+	cat('Model Statistics:', '\n')
+	EP <- matrix(
+		c(x$estimatedParameters, x$saturatedParameters, x$independenceParameters,
+		x$degreesOfFreedom, x$saturatedDoF, x$independenceDoF,
+		x$Minus2LogLikelihood, x$SaturatedLikelihood, x$IndependenceLikelihood),
+		nrow=3, ncol=3,
+		dimnames=list(
+			c('       Model:', '   Saturated:', 'Independence:'),
+			c(' |  Parameters', ' |  Degrees of Freedom', paste0(' |  Fit (', x$fitUnits, ' units)'))
+		)
+	)
+	print(EP)
+	cat('Number of observations/statistics: ', x$numObs, "/", x$observedStatistics, '\n\n', sep="")
 	constraints <- x$constraints
 	if(length(constraints) > 0) {
 		for(i in 1:length(constraints)) {
@@ -512,13 +526,6 @@ print.summary.mxmodel <- function(x,...) {
 				constraints[[i]], paste("observed statistic", plural, '.', sep=''), "\n")
 		}
 	}
-	cat("estimated parameters: ", x$estimatedParameters, '\n')
-	cat("degrees of freedom: ", x$degreesOfFreedom, '\n')
-	cat("fit value (", x$fitUnits, "units ): ", x$Minus2LogLikelihood, '\n')
-	if(x$verbose==TRUE || !is.na(x$SaturatedLikelihood)){
-		cat("saturated fit value (", x$fitUnits, "units ): ", x$SaturatedLikelihood, '\n')
-	}
-	cat("number of observations: ", x$numObs, '\n')
 	if (!is.null(x$infoDefinite) && !is.na(x$infoDefinite)) {
 		if (!x$infoDefinite) {
 			cat("\n** Information matrix is not positive definite (not at a candidate optimum).\n  Be suspicious of these results. At minimum, do not trust the standard errors.\n\n")
@@ -539,7 +546,7 @@ print.summary.mxmodel <- function(x,...) {
 			chidof <- x$ChiDoF
 		}
 		chipee <- x$p
-		cat("chi-square:  ", "X2 ( df=", chidof, " ) = ", chival, ",  p = ", chipee, '\n', sep="")
+		cat("chi-square:  ", "\U03C7\U00B2 ( df=", chidof, " ) = ", chival, ",  p = ", chipee, '\n', sep="")
 	}
 	#
 	cat("Information Criteria: \n")

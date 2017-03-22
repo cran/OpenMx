@@ -22,4 +22,3 @@ imxDeparse(object, indent = "   ")
 \description{
 Deparse for MxObjects
 }
-

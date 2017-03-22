@@ -14,4 +14,3 @@ This is an internal function exported for those people who know
 what they are doing.  This function checks if a model (or its
 submodels) has at least one definition variable.
 }
-

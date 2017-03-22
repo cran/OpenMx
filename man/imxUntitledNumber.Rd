@@ -13,4 +13,3 @@ what they are doing.
 \details{
 Increments the untitled number counter and returns its value
 }
-

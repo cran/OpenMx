@@ -36,10 +36,7 @@
 #include "omxExportBackendState.h"
 #include "Compute.h"
 #include "omxBuffer.h"
-
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
+#include "EnableWarnings.h"
 
 class omxComputeNumericDeriv : public omxCompute {
 	typedef omxCompute super;
@@ -280,7 +277,6 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 	}
 
 	fitMat = omxNewMatrixFromSlot(rObj, state, "fitfunction");
-	setFreeVarGroup(fitMat->fitFunction, varGroup);
 
 	SEXP slotValue;
 
@@ -359,7 +355,10 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	omxAlgebraPreeval(fitMat, fc);
 	fc->createChildren(fitMat); // allow FIML rowwiseParallel even when parallel=false
 
-	// TODO: Check for nonlinear constraints and adjust algorithm accordingly.
+	if(wantHessian && fc->state->conListX.size()){
+		Rf_warning("due to presence of MxConstraints, Hessian matrix and standard errors may not be valid for statistical-inferential purposes");
+	}
+	// TODO: Adjust algorithm to account for constraints
 	// TODO: Allow more than one hessian value for calculation
 
 	int numChildren = 0;
@@ -482,7 +481,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	memcpy(fc->est, optima.data(), sizeof(double) * numParams);
 	fc->copyParamToModel();
 	// auxillary information like per-row likelihoods need a refresh
-	omxRecompute(fitMat, fc);
+	ComputeFit(name, fitMat, FF_COMPUTE_FIT, fc);
 	fc->wanted = newWanted;
 }
 

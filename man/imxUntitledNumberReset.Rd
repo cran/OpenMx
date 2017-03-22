@@ -13,4 +13,3 @@ what they are doing.
 \details{
 Resets the \link{imxUntitledNumber} counter
 }
-

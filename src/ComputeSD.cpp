@@ -1,11 +1,8 @@
 /* Steepest Descent optimizer for unconstrained problems*/
 
+#include "ComputeGD.h"
 #include "ComputeSD.h"
-#include "finiteDifferences.h"
-
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
+#include "EnableWarnings.h"
 
 struct fit_functional {
 	GradientOptimizerContext &goc;
@@ -47,8 +44,7 @@ void omxSD(GradientOptimizerContext &rf)
     Eigen::VectorXd majorEst = currEst;
 
     while(++iter < maxIter && !isErrorRaised()) {
-	    gradient_with_ref(rf.gradientAlgo, 1, rf.gradientIterations, rf.gradientStepSize,
-			      ff, refFit, majorEst, rf.grad);
+	    rf.numericalGradientWithRef(majorEst);
 
 	    if (rf.verbose >= 3) mxPrintMat("grad", rf.grad);
 

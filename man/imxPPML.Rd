@@ -14,4 +14,3 @@ imxPPML(model, flag = TRUE)
 \description{
 Potentially enable the PPML optimization for the given model.
 }
-

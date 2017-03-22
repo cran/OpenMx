@@ -28,10 +28,7 @@
 #include "glue.h"
 #include "omxState.h"
 #include "omxExpectationBA81.h"  // improve encapsulation TODO
-
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
+#include "EnableWarnings.h"
 
 omxData::omxData() : rownames(0), primaryKey(-1),
 		     dataObject(0), dataMat(0), meansMat(0), acovMat(0), obsThresholdsMat(0),
@@ -84,7 +81,7 @@ void omxData::connectDynamicData(omxState *currentState)
 
 	if (Rf_length(dataLoc) == 1) {
 		omxExpectation *ex = omxExpectationFromIndex(INTEGER(dataLoc)[0], currentState);
-		BA81Expect *other = (BA81Expect *) ex->argStruct;
+		BA81Expect *other = (BA81Expect *) ex;
 		numObs = other->weightSum;
 		addDynamicDataSource(ex);
 		// nothing special to do
@@ -104,7 +101,7 @@ void omxData::connectDynamicData(omxState *currentState)
 					       ex->expType);
 				continue;
 			}
-			BA81Expect *other = (BA81Expect *) ex->argStruct;
+			BA81Expect *other = (BA81Expect *) ex;
 			weightSum += other->weightSum;
 			if (!refE) {
 				refE = ex;
@@ -721,6 +718,7 @@ bool omxDefinitionVar::loadData(omxState *state, double val)
 		mxLog("Load data %f into %s[%d,%d], state[%d]",
 		      val, mat->name(), row, col, state->getId());
 	}
+	omxMarkClean(mat);
 	markDefVarDependencies(state, this);
 	return true;
 }

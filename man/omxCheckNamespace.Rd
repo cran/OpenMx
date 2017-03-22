@@ -18,4 +18,3 @@ what they are doing.
 \details{
 This function checks that the named entities in the model are valid.
 }
-

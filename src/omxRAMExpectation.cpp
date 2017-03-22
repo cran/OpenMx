@@ -17,17 +17,13 @@
 #include "omxExpectation.h"
 #include "omxFitFunction.h"
 #include "RAMInternal.h"
+#include "Compute.h"
 //#include <Eigen/LU>
+#include "EnableWarnings.h"
 
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
-
-static omxMatrix* omxGetRAMExpectationComponent(omxExpectation* ox, const char* component);
-
-static void omxCallRAMExpectation(omxExpectation* oo, FitContext *fc, const char *what, const char *how)
+void omxRAMExpectation::compute(FitContext *fc, const char *what, const char *how)
 {
-	omxRAMExpectation* oro = (omxRAMExpectation*)(oo->argStruct);
+	omxRAMExpectation* oro = this;
 
 	if (what && how && strEQ(how, "flat")) {
 		bool wantCov = false;
@@ -37,7 +33,7 @@ static void omxCallRAMExpectation(omxExpectation* oo, FitContext *fc, const char
 		if (strEQ(what, "mean")) wantMean = true;
 		if (!oro->rram) {
 			oro->rram = new RelationalRAMExpectation::state;
-			oro->rram->init(oo, fc);
+			oro->rram->init(this, fc);
 		}
 		if (wantCov)  oro->rram->computeCov(fc);
 		if (wantMean) oro->rram->computeMean(fc);
@@ -47,11 +43,11 @@ static void omxCallRAMExpectation(omxExpectation* oo, FitContext *fc, const char
 	oro->CalculateRAMCovarianceAndMeans(fc);
 }
 
-static void omxDestroyRAMExpectation(omxExpectation* oo) {
-
+omxRAMExpectation::~omxRAMExpectation()
+{
 	if(OMX_DEBUG) { mxLog("Destroying RAM Expectation."); }
 	
-	omxRAMExpectation* argStruct = (omxRAMExpectation*)(oo->argStruct);
+	omxRAMExpectation* argStruct = this;
 
 	if (argStruct->rram) delete argStruct->rram;
 
@@ -65,13 +61,13 @@ static void omxDestroyRAMExpectation(omxExpectation* oo) {
 	omxFreeMatrix(argStruct->X);
 	omxFreeMatrix(argStruct->Y);
 	omxFreeMatrix(argStruct->Ax);
-	delete argStruct;
+	omxFreeMatrix(_Z);
 }
 
 static void refreshUnfilteredCov(omxExpectation *oo)
 {
 	// Ax = ZSZ' = Covariance matrix including latent variables
-	omxRAMExpectation* oro = (omxRAMExpectation*) (oo->argStruct);
+	omxRAMExpectation* oro = (omxRAMExpectation*) oo;
 	omxMatrix* A = oro->A;
 	omxMatrix* S = oro->S;
 	omxMatrix* Ax= oro->Ax;
@@ -88,26 +84,22 @@ static void refreshUnfilteredCov(omxExpectation *oo)
     eAx.block(0, 0, eAx.rows(), eAx.cols()) = eZ * eS * eZ.transpose();
 }
 
-static void omxPopulateRAMAttributes(omxExpectation *oo, SEXP robj)
+void omxRAMExpectation::populateAttr(SEXP robj)
 {
-	omxManageProtectInsanity mpi;
-
-    refreshUnfilteredCov(oo);
-	omxRAMExpectation* oro = (omxRAMExpectation*) (oo->argStruct);
-	omxMatrix* Ax= oro->Ax;
+    refreshUnfilteredCov(this);
+    omxRAMExpectation* oro = this;
 	
 	{
 		ProtectedSEXP expCovExt(Rf_allocMatrix(REALSXP, Ax->rows, Ax->cols));
 		memcpy(REAL(expCovExt), Ax->data, sizeof(double) * Ax->rows * Ax->cols);
 		Rf_setAttrib(robj, Rf_install("UnfilteredExpCov"), expCovExt);
 	}
-	Rf_setAttrib(robj, Rf_install("numStats"), Rf_ScalarReal(omxDataDF(oo->data)));
+	Rf_setAttrib(robj, Rf_install("numStats"), Rf_ScalarReal(omxDataDF(data)));
 
 	MxRList out;
 	MxRList dbg;
 
 	if (oro->rram) {
-		RelationalRAMExpectation::state *rram = oro->rram;
 		rram->exportInternalState(dbg);
 	} else {
 		oro->CalculateRAMCovarianceAndMeans(0);
@@ -192,23 +184,9 @@ void omxRAMExpectation::CalculateRAMCovarianceAndMeans(FitContext *fc)
 	}
 }
 
-static int *getDataColumn(omxExpectation* oo)
-{
-	omxRAMExpectation *ram = (omxRAMExpectation*) (oo->argStruct);
-	return ram->getDataColumnsPtr();
-}
+omxExpectation *omxInitRAMExpectation() { return new omxRAMExpectation; }
 
-static std::vector< omxThresholdColumn > &getThresholdInfo(omxExpectation *oo)
-{
-	omxRAMExpectation *ram = (omxRAMExpectation*) (oo->argStruct);
-	return ram->getThresholdInfo();
-}
-
-void omxInitRAMExpectation(omxExpectation* oo) {
-	
-	omxState* currentState = oo->currentState;	
-	SEXP rObj = oo->rObj;
-
+void omxRAMExpectation::init() {
 	if(OMX_DEBUG) { mxLog("Initializing RAM expectation."); }
 	
 	int l, k;
@@ -216,20 +194,12 @@ void omxInitRAMExpectation(omxExpectation* oo) {
 	SEXP slotValue;
 	
 	omxMatrix *Zmat = omxInitMatrix(0, 0, TRUE, currentState);
-	omxRAMExpectation *RAMexp = new omxRAMExpectation(Zmat);
+	_Z = Zmat;
+	omxRAMExpectation *RAMexp = this;
 	RAMexp->rram = 0;
 	
-	auto origDataColumns = oo->getDataColumns();
-	auto origThresholdInfo = oo->getThresholdInfo();
+	auto oo=this;
 
-	/* Set Expectation Calls and Structures */
-	oo->computeFun = omxCallRAMExpectation;
-	oo->destructFun = omxDestroyRAMExpectation;
-	oo->componentFun = omxGetRAMExpectationComponent;
-	oo->populateAttrFun = omxPopulateRAMAttributes;
-	oo->dataColumnFun = getDataColumn;
-	oo->thresholdInfoFun = getThresholdInfo;
-	oo->argStruct = (void*) RAMexp;
 	oo->canDuplicate = true;
 	
 	ProtectedSEXP Rverbose(R_do_slot(rObj, Rf_install("verbose")));
@@ -263,8 +233,11 @@ void omxInitRAMExpectation(omxExpectation* oo) {
 	if(OMX_DEBUG) { mxLog("Using %d iterations.", RAMexp->numIters); }
 	}
 
-	ProtectedSEXP Rrampart(R_do_slot(rObj, Rf_install(".rampart")));
-	RAMexp->rampart = Rf_asInteger(Rrampart);
+	ProtectedSEXP Rrampart(R_do_slot(rObj, Rf_install(".rampartCycleLimit")));
+	RAMexp->rampartCycleLimit = Rf_asInteger(Rrampart);
+
+	ProtectedSEXP RrampartLimit(R_do_slot(rObj, Rf_install(".rampartUnitLimit")));
+	RAMexp->rampartUnitLimit = Rf_asInteger(RrampartLimit);
 
 	RAMexp->useSufficientSets = true;
 	if (R_has_slot(rObj, Rf_install(".useSufficientSets"))) {
@@ -331,15 +304,40 @@ void omxInitRAMExpectation(omxExpectation* oo) {
 	    RAMexp->means  = 	NULL;
     }
 
-	RAMexp->studyF(origDataColumns, origThresholdInfo);
+	RAMexp->studyF();
 	//mxPrintMat("RAM corrected dc", oo->getDataColumns());
 }
 
-static omxMatrix* omxGetRAMExpectationComponent(omxExpectation* ox, const char* component) {
-	
+void omxRAMExpectation::studyF()
+{
+	auto dataColumns = super::getDataColumns();
+	auto origThresholdInfo = super::getThresholdInfo();
+	EigenMatrixAdaptor eF(F);
+	latentFilter.assign(eF.cols(), false);
+	dataCols.resize(eF.rows());
+	if (!eF.rows()) return;  // no manifests
+	for (int cx =0, dx=0; cx < eF.cols(); ++cx) {
+		int dest;
+		double isManifest = eF.col(cx).maxCoeff(&dest);
+		latentFilter[cx] = isManifest;
+		if (isManifest) {
+			int newDest = dataColumns.size()? dataColumns[dest] : dest;
+			dataCols[dx] = newDest;
+			if (origThresholdInfo.size()) {
+				omxThresholdColumn adj = origThresholdInfo[dest];
+				adj.dColumn = dx;
+				thresholds.push_back(adj);
+			}
+			dx += 1;
+		}
+	}
+}
+
+omxMatrix* omxRAMExpectation::getComponent(const char* component)
+{
 	if(OMX_DEBUG) { mxLog("RAM expectation: %s requested--", component); }
 
-	omxRAMExpectation* ore = (omxRAMExpectation*)(ox->argStruct);
+	omxRAMExpectation* ore = this;
 	omxMatrix* retval = NULL;
 
 	if(strEQ("cov", component)) {
@@ -355,6 +353,16 @@ static omxMatrix* omxGetRAMExpectationComponent(omxExpectation* ox, const char* 
 
 namespace RelationalRAMExpectation {
 
+	omxExpectation *addr::getModel(FitContext *fc)
+	{
+		return omxExpectationFromIndex(model->expNum, fc->state);
+	}
+
+	omxRAMExpectation *addr::getRAMExpectation(FitContext *fc)
+	{
+		return (omxRAMExpectation*) getModel(fc);
+	};
+
 	std::vector< omxMatrix* > &addr::getBetween() const
 	{
 		return getRAMExpectationReadOnly()->between;
@@ -367,7 +375,7 @@ namespace RelationalRAMExpectation {
 
 	int addr::numVars() const
 	{
-		omxRAMExpectation *ram = (omxRAMExpectation*) model->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) model;
 		return ram->F->cols;
 	}
 
@@ -411,7 +419,7 @@ namespace RelationalRAMExpectation {
 		addr &a1 = par.st.layout[ par.gMap[px] ];
 		omxExpectation *expectation = a1.getModel(fc);
 		omxData *data = expectation->data;
-		omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 
 		EigenMatrixAdaptor eA(ram->A);
 		for (int cx=0; cx < eA.cols(); ++cx) {
@@ -441,7 +449,7 @@ namespace RelationalRAMExpectation {
 				par.rowToPlacementMap.find(std::make_pair(data1, frow));
 			placement &p2 = par.placements[ plIndex->second ];
 			omxRecompute(betA, fc);
-			omxRAMExpectation *ram2 = (omxRAMExpectation*) betA->getJoinModel()->argStruct;
+			omxRAMExpectation *ram2 = (omxRAMExpectation*) betA->getJoinModel();
 			for (int rx=0; rx < ram->A->rows; ++rx) {  //lower
 				for (int cx=0; cx < ram2->A->rows; ++cx) {  //upper
 					double val = omxMatrixElement(betA, rx, cx);
@@ -460,7 +468,7 @@ namespace RelationalRAMExpectation {
 			placement &pl = par.placements[ax];
 			addr &a1 = par.st.layout[ par.gMap[ax] ];
 			omxExpectation *expectation = a1.getModel(fc);
-			omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 			expectation->loadDefVars(a1.row);
 			omxRecompute(ram->A, fc);
 			omxRecompute(ram->S, fc);
@@ -483,7 +491,7 @@ namespace RelationalRAMExpectation {
 	{
 		allEx.insert(expectation);
 		omxData *data = expectation->data;
-		omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 
 		if (data->hasPrimaryKey()) {
 			// insert_or_assign would be nice here
@@ -570,7 +578,7 @@ namespace RelationalRAMExpectation {
 			placement &pl = placements[ax];
 			addr &a1 = st.layout[ gMap[ax] ];
 			omxExpectation *expectation = a1.getModel(fc);
-			omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 			omxData *data = expectation->data;
 
 			expectation->loadDefVars(a1.row);
@@ -590,7 +598,7 @@ namespace RelationalRAMExpectation {
 					placement &p2 = placements[ plIndex->second ];
 					omxRecompute(betA, fc);
 					betA->markPopulatedEntries();
-					omxRAMExpectation *ram2 = (omxRAMExpectation*) betA->getJoinModel()->argStruct;
+					omxRAMExpectation *ram2 = (omxRAMExpectation*) betA->getJoinModel();
 					for (int rx=0; rx < ram->A->rows; ++rx) {  //lower
 						for (int cx=0; cx < ram2->A->rows; ++cx) {  //upper
 							double val = omxMatrixElement(betA, rx, cx);
@@ -621,7 +629,7 @@ namespace RelationalRAMExpectation {
 
 	std::vector<bool> &addr::getIgnoreDefVar()
 	{
-		omxRAMExpectation *ram = (omxRAMExpectation*) model->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) model;
 		return ram->ignoreDefVar;
 	}
 
@@ -815,7 +823,7 @@ namespace RelationalRAMExpectation {
 					for (dvScoreboardSetType::iterator it = dv2.begin();
 					     it != dv2.end(); ++it) {
 						omxExpectation *ex3 = it->first;
-						omxRAMExpectation *ram3 = (omxRAMExpectation*) ex3->argStruct;
+						omxRAMExpectation *ram3 = (omxRAMExpectation*) ex3;
 						omxDefinitionVar &dv = ex3->data->defVars[ it->second ];
 						mxLog("%s at %s[%d,%d] goes from %s to %s => %d (0=no cov effect)",
 						      omxDataColumnName(ex3->data, dv.column),
@@ -829,7 +837,7 @@ namespace RelationalRAMExpectation {
 					for (dvScoreboardSetType::iterator it = dv2.begin();
 					     it != dv2.end(); ++it) {
 						omxExpectation *ex3 = it->first;
-						omxRAMExpectation *ram3 = (omxRAMExpectation*) ex3->argStruct;
+						omxRAMExpectation *ram3 = (omxRAMExpectation*) ex3;
 						ram3->ignoreDefVar[ it->second ] = false;
 					}
 				} else {
@@ -843,7 +851,7 @@ namespace RelationalRAMExpectation {
 	void state::identifyZeroVarPred(FitContext *fc)
 	{
 		for (std::set<omxExpectation*>::iterator it = allEx.begin() ; it != allEx.end(); ++it) {
-			omxRAMExpectation *ram = (omxRAMExpectation*) (*it)->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) (*it);
 			omxData *data = (*it)->data;
 			data->loadFakeData((*it)->currentState, 1.0);
 			ram->S->markPopulatedEntries();
@@ -858,7 +866,7 @@ namespace RelationalRAMExpectation {
 			addr &a1 = layout[ax];
 			omxExpectation *expectation = a1.getModel(fc);
 			omxData *data = expectation->data;
-			omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 
 			if (ram->M) {
 				int mNum = ~ram->M->matrixNumber;
@@ -882,7 +890,7 @@ namespace RelationalRAMExpectation {
 				int key = omxKeyDataElement(data, a1.row, betA->getJoinKey());
 				if (key == NA_INTEGER) continue;
 				omxExpectation *ex2 = betA->getJoinModel();
-				omxRAMExpectation *ram2 = (omxRAMExpectation*) ex2->argStruct;
+				omxRAMExpectation *ram2 = (omxRAMExpectation*) ex2;
 				omxRecompute(betA, fc);
 				EigenMatrixAdaptor eBA(betA);
 				propagateDefVar(ram, eBA, ram2, false);
@@ -898,7 +906,7 @@ namespace RelationalRAMExpectation {
 		}
 
 		for (std::set<omxExpectation*>::iterator it = allEx.begin() ; it != allEx.end(); ++it) {
-			omxRAMExpectation *ram = (omxRAMExpectation*) (*it)->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) (*it);
 			ram->dvScoreboard.clear();
 		}
 	}
@@ -918,7 +926,7 @@ namespace RelationalRAMExpectation {
 	// 2nd visitor
 	void state::planModelEval(int maxSize, FitContext *fc)
 	{
-		omxRAMExpectation *ram = (omxRAMExpectation*) homeEx->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) homeEx;
 		if (ram->forceSingleGroup) {
 			independentGroup *ig = new independentGroup(this, layout.size(), layout.size());
 			for (size_t ax=0; ax < layout.size(); ++ax) ig->place(ax);
@@ -1307,7 +1315,10 @@ namespace RelationalRAMExpectation {
 		RampartMap todo(RampartTodoCompare(this));
 		int unlinked = 0;
 
-		for (size_t ax=0; ax < layout.size(); ++ax) {
+		int loopTo = layout.size();
+		int rampartUnitLimit = ((omxRAMExpectation*) homeEx)->rampartUnitLimit;
+		if (rampartUnitLimit != NA_INTEGER) loopTo = std::min(rampartUnitLimit, loopTo);
+		for (int ax=0; ax < loopTo; ++ax) {
 			addr &a1 = layout[ax];
 			addrSetup &as1 = layoutSetup[ax];
 			if (as1.numKids != 0 || as1.numJoins != 1 || as1.clumped) continue;
@@ -1423,13 +1434,13 @@ namespace RelationalRAMExpectation {
 		parent = this;
 		homeEx = expectation;
 
-		omxRAMExpectation *ram = (omxRAMExpectation*) homeEx->argStruct;
+		omxRAMExpectation *ram = (omxRAMExpectation*) homeEx;
 		int numManifest = ram->F->rows;
 		smallCol = omxInitMatrix(1, numManifest, TRUE, homeEx->currentState);
 
 		if (fc->isClone()) {
 			omxExpectation *phomeEx = omxExpectationFromIndex(homeEx->expNum, fc->getParentState());
-			omxRAMExpectation *pram = (omxRAMExpectation*) phomeEx->argStruct;
+			omxRAMExpectation *pram = (omxRAMExpectation*) phomeEx;
 			parent = pram->rram;
 			group.reserve(parent->group.size());
 			for (size_t gx=0; gx < parent->group.size(); ++gx) {
@@ -1455,7 +1466,7 @@ namespace RelationalRAMExpectation {
 		}
 
 		if (ram->rampartEnabled()) {
-			int maxIter = ram->rampart;
+			int maxIter = ram->rampartCycleLimit;
 			int unlinked = 0;
 			int level = -1; // mainly for debugging
 			while (int more = rampartRotate(++level)) {
@@ -1473,7 +1484,7 @@ namespace RelationalRAMExpectation {
 		copyParamToModelInternal(fc->varGroup, homeEx->currentState, vec.data());
 
 		for (std::set<omxExpectation*>::iterator it = allEx.begin() ; it != allEx.end(); ++it) {
-			omxRAMExpectation *ram2 = (omxRAMExpectation*) (*it)->argStruct;
+			omxRAMExpectation *ram2 = (omxRAMExpectation*) (*it);
 			ram2->ignoreDefVar.assign((*it)->data->defVars.size(), false);
 		}
 
@@ -1508,7 +1519,7 @@ namespace RelationalRAMExpectation {
 		if (clumpObs == 0) return;
 		for (int sx=0; sx < int(sufficientSets.size()); ++sx) {
 			RelationalRAMExpectation::sufficientSet &ss = sufficientSets[sx];
-			placement &first = placements[ss.start];
+			placement &first = placements[ss.start * clumpSize];
 			computeMeanCov(dataVec.segment(first.obsStart, ss.length * clumpObs),
 				       clumpObs, ss.dataMean, ss.dataCov);
 		}
@@ -1574,7 +1585,7 @@ namespace RelationalRAMExpectation {
 		for (size_t ax=0; ax < pst.layout.size(); ++ax) {
 			addr &a1 = pst.layout[ax];
 			omxExpectation *expectation = a1.getModel(fc);
-			omxRAMExpectation *ram = (omxRAMExpectation*) expectation->argStruct;
+			omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 
 			omxData *data = expectation->data;
 			expectation->loadDefVars(a1.row);
@@ -1649,38 +1660,44 @@ namespace RelationalRAMExpectation {
 	void independentGroup::exportInternalState(MxRList &out, MxRList &dbg)
 	{
 		dbg.add("clumpSize", Rf_ScalarInteger(clumpSize));
-		if (expectedVec.size()) {
-			SEXP m1 = Rcpp::wrap(expectedVec);
-			Rf_protect(m1);
-			Rf_setAttrib(m1, R_NamesSymbol, obsNameVec);
-			out.add("mean", m1);
-		}
-		if (fullCov.nonZeros()) {
-			out.add("covariance", Rcpp::wrap(fullCov));
-		}
+		dbg.add("clumpObs", Rf_ScalarInteger(clumpObs));
+		dbg.add("numLooseClumps", Rf_ScalarInteger(numLooseClumps()));
 
-		SEXP fmean = Rcpp::wrap(fullMean);
-		dbg.add("fullMean", fmean);
-		Rf_setAttrib(fmean, R_NamesSymbol, varNameVec);
-		if (0) {
-			fmean = Rcpp::wrap(rawFullMean);
-			dbg.add("rawFullMean", fmean);
+		if (clumpObs < 500) {
+			// Can crash R because vectors are too long.
+			// Maybe could allow more, but clumpObs==4600 is too much.
+			if (expectedVec.size()) {
+				SEXP m1 = Rcpp::wrap(expectedVec);
+				Rf_protect(m1);
+				Rf_setAttrib(m1, R_NamesSymbol, obsNameVec);
+				out.add("mean", m1);
+			}
+			if (fullCov.nonZeros()) {
+				out.add("covariance", Rcpp::wrap(fullCov));
+			}
+			SEXP fmean = Rcpp::wrap(fullMean);
+			dbg.add("fullMean", fmean);
 			Rf_setAttrib(fmean, R_NamesSymbol, varNameVec);
+			if (0) {
+				fmean = Rcpp::wrap(rawFullMean);
+				dbg.add("rawFullMean", fmean);
+				Rf_setAttrib(fmean, R_NamesSymbol, varNameVec);
+			}
+			Eigen::SparseMatrix<double> A = getInputMatrix();
+			dbg.add("A", Rcpp::wrap(A));
+			if (0) {
+				// regularize internal representation
+				Eigen::SparseMatrix<double> fAcopy = asymT.IAF.transpose();
+				dbg.add("filteredA", Rcpp::wrap(fAcopy));
+			}
+			Eigen::SparseMatrix<double> fullSymS = fullS.selfadjointView<Eigen::Lower>();
+			dbg.add("S", Rcpp::wrap(fullSymS));
+			dbg.add("latentFilter", Rcpp::wrap(latentFilter));
+			SEXP dv = Rcpp::wrap(dataVec);
+			Rf_protect(dv);
+			Rf_setAttrib(dv, R_NamesSymbol, obsNameVec);
+			dbg.add("dataVec", dv);
 		}
-		Eigen::SparseMatrix<double> A = getInputMatrix();
-		dbg.add("A", Rcpp::wrap(A));
-		if (0) {
-			// regularize internal representation
-			Eigen::SparseMatrix<double> fAcopy = asymT.IAF.transpose();
-			dbg.add("filteredA", Rcpp::wrap(fAcopy));
-		}
-		Eigen::SparseMatrix<double> fullSymS = fullS.selfadjointView<Eigen::Lower>();
-		dbg.add("S", Rcpp::wrap(fullSymS));
-		dbg.add("latentFilter", Rcpp::wrap(latentFilter));
-		SEXP dv = Rcpp::wrap(dataVec);
-		Rf_protect(dv);
-		Rf_setAttrib(dv, R_NamesSymbol, obsNameVec);
-		dbg.add("dataVec", dv);
 
 		SEXP aIndex, modelStart, obsStart;
 		Rf_protect(aIndex = Rf_allocVector(INTSXP, placements.size()));
@@ -1691,11 +1708,22 @@ namespace RelationalRAMExpectation {
 			INTEGER(modelStart)[mx] = 1 + placements[mx].modelStart;
 			INTEGER(obsStart)[mx] = 1 + placements[mx].obsStart;
 		}
-		dbg.add("layout", Rcpp::DataFrame::create(Rcpp::Named("aIndex")=aIndex,
-							  Rcpp::Named("modelStart")=modelStart,
-							  Rcpp::Named("obsStart")=obsStart));
+		SEXP layoutColNames, layoutDF;
+		int numLayoutCols = 3;
+		Rf_protect(layoutColNames = Rf_allocVector(STRSXP, numLayoutCols));
+		SET_STRING_ELT(layoutColNames, 0, Rf_mkChar("aIndex"));
+		SET_STRING_ELT(layoutColNames, 1, Rf_mkChar("modelStart"));
+		SET_STRING_ELT(layoutColNames, 2, Rf_mkChar("obsStart"));
+		Rf_protect(layoutDF = Rf_allocVector(VECSXP, numLayoutCols));
+		Rf_setAttrib(layoutDF, R_NamesSymbol, layoutColNames);
+		SET_VECTOR_ELT(layoutDF, 0, aIndex);
+		SET_VECTOR_ELT(layoutDF, 1, modelStart);
+		SET_VECTOR_ELT(layoutDF, 2, obsStart);
+		markAsDataFrame(layoutDF, placements.size());
+		dbg.add("layout", layoutDF);
 
 		dbg.add("numSufficientSets", Rcpp::wrap(int(sufficientSets.size())));
+		dbg.add("fit", Rcpp::wrap(fit));
 
 		int digits = ceilf(log10f(sufficientSets.size()));
 		std::string fmt = string_snprintf("ss%%0%dd", digits);
@@ -1746,7 +1774,7 @@ namespace RelationalRAMExpectation {
 
 		int digits = ceilf(log10f(group.size()));
 		std::string fmt = string_snprintf("g%%0%dd", digits);
-		for (size_t gx=0; gx < group.size(); ++gx) {
+		for (size_t gx=0; gx < std::min(group.size(),size_t(64)); ++gx) {
 			independentGroup &ig = *group[gx];
 			MxRList info;
 			ig.exportInternalState(info, info);

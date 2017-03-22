@@ -23,4 +23,3 @@ what they are doing.
 This function should not be used in MxSummary. All summary
 information should be extracted from runstate.
 }
-

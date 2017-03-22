@@ -21,11 +21,12 @@
 #include "omxData.h"
 #include "Connectedness.h"
 #include <limits>
-#include <Rcpp.h>
-#include <Eigen/CholmodSupport>
-#include <Eigen/Cholesky>
-#include <RcppEigenWrap.h>
 #include "matrix.h"
+#include "Compute.h"
+
+#ifndef EIGEN_CHOLESKY_MODULE_H
+#error "#include <Eigen/Cholesky>"
+#endif
 
 #ifdef  __cplusplus
 extern "C" {
@@ -36,10 +37,6 @@ void F77_SUB(sadmvn)(int*, double*, double*, int*, double*, int*,
 
 #ifdef  __cplusplus
 }
-#endif
-
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
 #endif
 
 void omxSadmvnWrapper(int numVars, 
@@ -390,7 +387,8 @@ double OrdinalLikelihood::block::likelihood(FitContext *fc, int row)
 		std::string buf = mxStringifyMatrix("cor", corMat, empty);
 		buf += mxStringifyMatrix("lower", lThresh, empty);
 		buf += mxStringifyMatrix("upper", uThresh, empty);
-		if (fc) fc->recordIterationError("Multivariate normal integration failure:\n%s", buf.c_str());
+		if (fc) fc->recordIterationError("Multivariate normal integration failure in row %d:\n%s",
+						 1+row, buf.c_str());
 		return 0.0;
 	}
 	return ordLik;

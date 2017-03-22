@@ -51,13 +51,14 @@ To see the defaults, use \code{getOption('mxOptions')}.
 Before the model is submitted to the back-end, all keys and values are converted into
 strings using the \link{as.character} function.
 
-The \dQuote{Default optimizer} option can only be set globally (i.e., with \code{model=NULL}), and not specifically to a given MxModel.
+The \dQuote{Default optimizer} option can only be set globally (i.e., with \code{model=NULL}), and not locally (i.e., specifically to a given MxModel).  Although the checkpointing options may be set globally, OpenMx's behavior is only affected by locally set checkpointing options (that is, global checkpointing options are ignored at \link[=mxRun]{runtime}).
 
-Some options only affect certain optimizers.  Currently, options \dQuote{Gradient algorithm} and \dQuote{Gradient iterations} are ignored by all optimizers other than SLSQP.  Also, currently option \dQuote{Analytic Gradients} only affects SLSQP and NPSOL.  Option \dQuote{Gradient step size} is used slightly differently by SLSQP and CSOLNP, and is ignored by NPSOL (see \code{\link{mxComputeGradientDescent}()} for details).  Note that NPSOL's criterion for returning a status code of 0 versus 1 for a given solution depends partly on \dQuote{Optimality tolerance}.
+Options \dQuote{Gradient step size}, \dQuote{Gradient iterations}, and \dQuote{Function precision} have on-load global defaults of \code{"Auto"}.  If value \code{"Auto"} is in effect for any of these three options at \link[=mxRun]{runtime}, then OpenMx selects a reasonable numerical value in its place.  These automated numerical values are intended to (1) adjust for the limited precision of the algorithm for computing multivariate-normal probability integrals, and (2) calculate accurate numeric derivatives at the optimizer's solution.  If the user replaces \code{"Auto"} with a valid numerical value, then OpenMx uses that value as-is.
+
+Some options only affect certain optimizers.  Currently, options \dQuote{Gradient algorithm} and \dQuote{Gradient iterations} are ignored by all optimizers other than SLSQP.  Also, currently option \dQuote{Analytic Gradients} only affects SLSQP and NPSOL.  Option \dQuote{Gradient step size} is used slightly differently by SLSQP and CSOLNP, and is ignored by NPSOL (see \code{\link{mxComputeGradientDescent}()} for details).  If the MxModel contains\link[=MxConstraint]{MxConstraints}, OpenMx's interface to NPSOL scales \dQuote{Feasibility tolerance} by multiplying it by 0.02 and dividing it by 0.05 before passing it to NPSOL; if there are no MxConstraints, OpenMx passes NPSOL a hardcoded value of 1e-5.  Note that NPSOL's criterion for returning a status code of 0 versus 1 for a given solution depends partly on \dQuote{Optimality tolerance}.
 
 For a block of \code{n} ordinal variables, the maximum number of integration points that OpenMx may use to calculate multivariate-normal probability integrals is given by
 \code{mvnMaxPointsA + mvnMaxPointsB*n + mvnMaxPointsC*n*n}
-
 
 The maximum number of major iterations (the option  \dQuote{Major iterations}) 
 for optimization for NPSOL  can be specified either by using a 
@@ -83,6 +84,7 @@ Analytic Gradients \tab [Yes | No] \tab should the optimizer use analytic gradie
 loglikelihoodScale \tab \var{i} \tab factor by which the loglikelihood is scaled. \cr
 Parallel diagnostics \tab [Yes | No] \tab whether to issue diagnostic
 messages about use of multiple threads \cr
+Nudge zero starts \tab [TRUE | FALSE] \tab Should OpenMx "nudge"" starting values of zero to 0.1 at runtime?
 }
 
 
@@ -154,7 +156,7 @@ See \code{\link{mxModel}()}, as almost all uses of \code{mxOption()} are via an 
 
 \examples{
 # set the Numbder of Threads (cores to use)
-mxOption(NULL, "Number of Threads", detectCores() - 1)
+mxOption(NULL, "Number of Threads", parallel::detectCores() - 1)
 
 testModel <- mxModel(model = "testModel") # make a model to use for example
 testModel$options   # show the model options (none yet)

@@ -18,4 +18,3 @@ in the global namespace.
 As long as the previous statement is true, then the current
 process is a snowfall client if-and-only-if exists(".sfOption").
 }
-

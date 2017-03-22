@@ -2,11 +2,10 @@
 % Please edit documentation in R/MxGraph.R
 \docType{class}
 \name{MxDirectedGraph-class}
-\alias{MxDirectedGraph}
 \alias{MxDirectedGraph-class}
+\alias{MxDirectedGraph}
 \title{MxDirectedGraph}
 \description{
 This is an internal class and should not be used directly.
 It is a class for directed graphs.
 }
-

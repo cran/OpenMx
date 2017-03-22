@@ -114,6 +114,7 @@ pcLogLik <- function(k, means, vars, thresh, rawData, return="individual", useMi
 	dtt$yMax <- pcThresh[dtt$y + 1,2]
 	
 	# make correlation matrix for 
+	k <- max(min(k,.999),-.999)
 	corMatrix <- matrix(c(1, k, k, 1), 2, 2)
 	for (i in 1:dim(dtt)[1]){
 		dtt$mLL[i] <- (- 1 - useMinusTwo) * log(mvtnorm::pmvnorm(
@@ -313,7 +314,12 @@ univariateThresholdStatisticsHelper <- function(od, data, nvar, n, ntvar, useMin
 		for (i in 1:nvar){
 			a <- proc.time()
 			# threshold & jacobian
-			startVals <- qnorm(cumsum(table(od[,i]))/sum(!is.na(od[,i])))
+			tab <- table(od[,i])
+			if(any(tab %in% 0)){
+				msg <- paste0("Variable ", omxQuotes(names(od)[i]), " has a zero frequency category ", omxQuotes(names(tab)[tab %in% 0]), ".\nEliminate this level in your mxFactor() or combine categories in some other way.\nDo not pass go. Do not collect $200.")
+				stop(msg, call.=FALSE)
+			}
+			startVals <- qnorm(cumsum(tab)/sum(!is.na(od[,i])))
 			if (length(startVals)>2){
 				uni <- optim(startVals[1:(length(startVals) - 1)], 
 					threshLogLik, return="model", rawData=od[,i], useMinusTwo=useMinusTwo, hessian=TRUE, method="BFGS")
@@ -385,7 +391,6 @@ univariateMeanVarianceStatisticsHelper <- function(ntvar, n, ords, data, useMinu
 }
 
 mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, debug=FALSE, fullWeight=TRUE){
-	message("Calculating asymptotic summary statistics ...")
 	# version 0.2
 	#
 	#available types
@@ -394,7 +399,8 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	# error checking
 	if (!is.data.frame(data)){
 		stop("'data' must be a data frame.")
-		}
+	}
+	for (cn in colnames(data)) imxVerifyName(cn, 2)
 	# check type
 	if (!(type %in% wlsTypes)){
 		stop(
@@ -409,6 +415,9 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	nvar <- sum(ords)
 	ntvar <- ncol(data)
 	n <- dim(data)[1]
+
+	message(paste("Calculating asymptotic summary statistics for",
+		      ntvar - nvar, "continuous and", nvar, "ordinal variables ..."))
 
 	# if no ordinal variables, use continuous-only helper
 	if(nvar ==0){ #N.B. This fails for any missing data
@@ -601,16 +610,14 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 			acov=diag(1), fullWeight=NA, thresholds=thresh)
 		retVal2@acov <- satModel$output$hessian
 	}
-	
-	if(fullWeight==TRUE){
-		fw <- wls
-	} else {fw <- NA}
 	dummy <- diag(1, nrow=nrow(pcMatrix))
 	dimnames(dummy) <- dimnames(pcMatrix)
 	retVal <- mxData(dummy, type="acov", numObs=n, 
 		acov=diag(1), fullWeight=NA, thresholds=thresh)
 	retVal@observed <- pcMatrix
-	retVal@fullWeight <- fw
+	if(fullWeight==TRUE){
+		retVal@fullWeight <- wls
+	}
 	retVal@means <- matrix(meanEst, nrow=1)
 	dimnames(retVal@means) <- list(NULL, names(data))
 	if (type=="ULS"){

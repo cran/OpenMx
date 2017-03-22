@@ -2,9 +2,9 @@
 % Please edit documentation in R/MxModel.R
 \name{imxInitModel}
 \alias{imxInitModel}
-\alias{imxInitModel,MxLISRELModel-method}
 \alias{imxInitModel,MxModel-method}
 \alias{imxInitModel,MxRAMModel-method}
+\alias{imxInitModel,MxLISRELModel-method}
 \title{imxInitModel}
 \usage{
 imxInitModel(model)
@@ -16,4 +16,3 @@ imxInitModel(model)
 This is an internal function exported for those people who know
 what they are doing.
 }
-

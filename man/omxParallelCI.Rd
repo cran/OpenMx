@@ -36,4 +36,3 @@ factorModel <- mxModel("One Factor",
 factorRun <- mxRun(factorModel)
 factorCI <- omxParallelCI(factorRun) # Run CIs in parallel
 }
-

@@ -2,11 +2,11 @@
 % Please edit documentation in R/MxMatrix.R
 \name{imxCreateMatrix}
 \alias{imxCreateMatrix}
+\alias{imxCreateMatrix,MxMatrix-method}
 \alias{imxCreateMatrix,DiagMatrix-method}
 \alias{imxCreateMatrix,FullMatrix-method}
 \alias{imxCreateMatrix,IdenMatrix-method}
 \alias{imxCreateMatrix,LowerMatrix-method}
-\alias{imxCreateMatrix,MxMatrix-method}
 \alias{imxCreateMatrix,SdiagMatrix-method}
 \alias{imxCreateMatrix,StandMatrix-method}
 \alias{imxCreateMatrix,SymmMatrix-method}
@@ -48,4 +48,3 @@ imxCreateMatrix(.Object, labels, values, free, lbound, ubound, nrow, ncol,
 This is an internal function exported for those people who know
 what they are doing.
 }
-

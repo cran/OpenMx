@@ -79,23 +79,18 @@ setGeneric("genericExpConvertEntities",
 	return(standardGeneric("genericExpConvertEntities"))
 })
 
-setGeneric("genericExpGetPrecision",
-	function(.Object) {
-	return(standardGeneric("genericExpGetPrecision"))
-})
-
 setGeneric("genericGetExpected",
-	function(.Object, model, what, defvar.row) {
+	function(.Object, model, what, defvar.row, subname) {
 	return(standardGeneric("genericGetExpected"))
 })
 
 setGeneric("genericGetExpectedVector",
-	function(.Object, model, defvar.row) {
+	function(.Object, model, defvar.row, subname) {
 	return(standardGeneric("genericGetExpectedVector"))
 })
 
 setGeneric("genericGetExpectedStandVector",
-	function(.Object, model, defvar.row) {
+	function(.Object, model, defvar.row, subname) {
 	return(standardGeneric("genericGetExpectedStandVector"))
 })
 
@@ -131,7 +126,7 @@ setMethod("genericExpDependencies", "NULL",
 
 setMethod("genericExpRename", "MxBaseExpectation",
 	function(.Object, oldname, newname) {
-		return(.Object)
+		stop("Not implemented yet")
 })
 
 setMethod("genericExpRename", "NULL",
@@ -139,19 +134,14 @@ setMethod("genericExpRename", "NULL",
 		return(NULL)
 })
 
-setMethod("genericExpGetPrecision", "MxBaseExpectation",
-	function(.Object) {
-		return(list(stepSize=mxOption(NULL, "Gradient step size"), iterations=4L))
-})
-
 setMethod("genericGetExpected", "MxBaseExpectation",
-	function(.Object, model, what, defvar.row) stop("Not implemented"))
+	function(.Object, model, what, defvar.row, subname) stop("Not implemented"))
 
 setMethod("genericGetExpectedVector", "MxBaseExpectation",
-	function(.Object, model, defvar.row) stop("Not implemented"))
+	function(.Object, model, defvar.row, subname) stop("Not implemented"))
 
 setMethod("genericGetExpectedStandVector", "MxBaseExpectation",
-	function(.Object, model, defvar.row) stop("Not implemented"))
+	function(.Object, model, defvar.row, subname) stop("Not implemented"))
 
 setMethod("$", "MxBaseExpectation", imxExtractSlot)
 
@@ -207,4 +197,39 @@ expectationFunctionConvertEntities <- function(flatModel, namespace, labelsData)
 	}
 
 	return(flatModel)
+}
+
+#By the time this function is called, the optionsList will contain any locally set mxOptions:
+getPrecisionPerExpectation <- function(expectation, optionsList){
+	
+	#Which options need a proper numerical value?
+	needStepSize <- as.logical(length(grep(pattern="Auto",x=optionsList$"Gradient step size",ignore.case=T)))
+	needIters <- as.logical(length(grep(pattern="Auto",x=optionsList$"Gradient iterations",ignore.case=T)))
+	needFuncPrec <- as.logical(length(grep(pattern="Auto",x=optionsList$"Function precision",ignore.case=T)))
+	
+	#Do we have an ordinal-thresholds expectation?:
+	isOrdThresh <- (class(expectation) %in% c("MxExpectationNormal","MxExpectationLISREL","MxExpectationRAM")) && 
+		!single.na(expectation@thresholds)
+	
+	if(needStepSize){
+		if(isOrdThresh){stepSize <- 1.0e-4} #<--Default value, times 1e3
+		else{stepSize <- 1.0e-7} #<--Default value
+	} 
+	else{stepSize <- as.numeric(optionsList$"Gradient step size")}
+	
+	if(needIters){
+		#Neither 3L nor 4L agrees with the default value of 1L...but this how the definitions for 
+		#generic method "genericExpGetPrecision" were written...:
+		if(isOrdThresh){iterations <- 3L}
+		else{iterations <- 4L}
+	}
+	else{iterations <- as.integer(optionsList$"Gradient iterations")}
+	
+	if(needFuncPrec){
+		if(isOrdThresh){functionPrecision <- 1e-9}
+		else{functionPrecision <- 1e-14} #<--Default value
+	}
+	else{functionPrecision <- as.numeric(optionsList$"Function precision")}
+	
+	return(list(stepSize=stepSize, iterations=iterations, functionPrecision=functionPrecision))
 }

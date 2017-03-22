@@ -106,7 +106,7 @@ nameGDOptimizerConstraintOutput <- function(paramNames, constraintNames, GDstep,
 		#Filter extraneous elements and generate vectors of names:
 		paramNames <- paramNames[!(paramNames %in% GDstep@.excludeVars)] #<--Probably not necessary...
 		if(length(paramNames)){lmNames <- paste(paramNames,"bound",sep=".")}
-		if(length(constraintNames) && length(GDstep@output$constraintRows && length(GDstep@output$constraintCols))){
+		if(length(constraintNames) && length(GDstep@output$constraintRows) && length(GDstep@output$constraintCols)){
 			emptyConstraints <- (GDstep@output$constraintRows==0 | GDstep@output$constraintCols==0)
 			#Assuming that "empty" constraints have no function values...
 			constraintNames <- constraintNames[!emptyConstraints]
@@ -162,7 +162,7 @@ nameGDOptimizerConstraintOutput <- function(paramNames, constraintNames, GDstep,
 		
 		#Filter extraneous elements and generate vectors of names:
 		paramNames <- paramNames[!(paramNames %in% GDstep@.excludeVars)] #<--Probably not necessary...
-		if(length(constraintNames) && length(GDstep@output$constraintRows && length(GDstep@output$constraintCols))){
+		if(length(constraintNames) && length(GDstep@output$constraintRows) && length(GDstep@output$constraintCols)){
 			emptyConstraints <- (GDstep@output$constraintRows==0 | GDstep@output$constraintCols==0)
 			#Assuming that "empty" constraints have no function values...
 			constraintNames <- constraintNames[!emptyConstraints]
@@ -260,7 +260,7 @@ optimizerMessages <- list('1' = paste('The final iterate satisfies',
 		'3' = paste('The nonlinear constraints and bounds could not be satisfied.',
 		'The problem may have no feasible solution.'),
 		'4' = 'The major iteration limit was reached (Mx status BLUE).',
-		'5' = 'The Hessian at the solution does not appear to be convex (Mx status RED).',
+		'5' = 'The Hessian at the solution does not appear to be convex. See ?mxCheckIdentification for possible diagnosis (Mx status RED).',
 		'6' = paste('The model does not satisfy the first-order optimality conditions',
 		'to the required accuracy, and no improved point for the',
 		'merit function could be found during the final linesearch (Mx status RED)'),

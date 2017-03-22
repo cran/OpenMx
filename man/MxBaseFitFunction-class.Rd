@@ -2,9 +2,9 @@
 % Please edit documentation in R/MxFitFunction.R
 \docType{class}
 \name{MxBaseFitFunction-class}
+\alias{MxBaseFitFunction-class}
 \alias{$,MxBaseFitFunction-method}
 \alias{$<-,MxBaseFitFunction-method}
-\alias{MxBaseFitFunction-class}
 \title{MxBaseFitFunction}
 \description{
 The virtual base class for all fit functions. This is an internal class and should not be used directly.
@@ -14,4 +14,3 @@ The virtual base class for all fit functions. This is an internal class and shou
 \link{mxFitFunctionR}, \link{mxFitFunctionWLS}, \link{mxFitFunctionRow},
 \link{mxFitFunctionGREML}
 }
-

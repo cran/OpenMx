@@ -18,4 +18,3 @@ This function computes the gradient for each row of data.
 The returned object is a matrix with the same number of rows as the data,
 and the same number of columns as there are free parameters.
 }
-

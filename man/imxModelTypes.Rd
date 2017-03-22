@@ -12,4 +12,3 @@ imxModelTypes
 A list of supported model types
 }
 \keyword{datasets}
-

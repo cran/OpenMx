@@ -12,4 +12,3 @@ imxDataTypes
 Valid types of data that can be contained by MxData
 }
 \keyword{datasets}
-

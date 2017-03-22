@@ -11,4 +11,3 @@ Note that this compute plan actually does nothing whereas
 \code{mxComputeOnce("expectation", "nothing")} may remove the
 prediction of an expectation.
 }
-

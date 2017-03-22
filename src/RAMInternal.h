@@ -379,24 +379,19 @@ namespace RelationalRAMExpectation {
 			return tmp;
 		};
 		void setModel(omxExpectation *ex) { model=ex; };
-		omxExpectation *getModel(FitContext *fc) {
-			return omxExpectationFromIndex(model->expNum, fc->state);
-		};
+		omxExpectation *getModel(FitContext *fc);
 		int getExpNum() const { return model->expNum; };
 		omxData *getData() const { return model->data; };
 		std::vector<bool> &getIgnoreDefVar();
-		omxRAMExpectation *getRAMExpectation(FitContext *fc) {
-			return (omxRAMExpectation*) getModel(fc)->argStruct;
-		};
+		omxRAMExpectation *getRAMExpectation(FitContext *fc);
 		omxRAMExpectation *getRAMExpectationReadOnly() const {
 			// NOTE: not per-thread!
-			return (omxRAMExpectation*) model->argStruct;
+			return (omxRAMExpectation*) model;
 		};
 		std::vector< omxMatrix* > &getBetween() const;
 		typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnType;
 		const Eigen::Map<DataColumnType> getDataColumns() const {
-			const Eigen::Map<DataColumnType> vec(model->dataColumnFun(model), model->numDataColumns);
-			return vec;
+			return model->getDataColumns();
 		};
 		void dataRow(omxMatrix *out) const;
 	};
@@ -453,12 +448,13 @@ namespace RelationalRAMExpectation {
 		Eigen::SparseMatrix<double>      fullCov;
 		bool                             analyzedCov;
 		//Cholmod< Eigen::SparseMatrix<double> > covDecomp;
-		SimpCholesky< Eigen::MatrixXd >  covDecomp;
+		//SimpCholesky< Eigen::MatrixXd >  covDecomp;
 		Eigen::SparseMatrix<double>      fullS;
 		std::vector<bool>                latentFilter; // false when latent or missing
 
 		// could store coeff extraction plan in addr TODO
 		AsymTool<bool>          asymT;
+		double                           fit;  // most recent fit for debugging
 
 		independentGroup(class state *_st, int size, int _clumpSize)
 			: st(*_st), clumpSize(_clumpSize),
@@ -469,7 +465,7 @@ namespace RelationalRAMExpectation {
 			independentGroup &par = getParent();
 			int loose = par.placements.size() / clumpSize;
 			if (par.sufficientSets.size()) {
-				loose = par.sufficientSets[0].start / clumpSize;
+				loose = par.sufficientSets[0].start;
 			}
 			return loose;
 		};
@@ -541,7 +537,8 @@ namespace RelationalRAMExpectation {
 
 typedef std::set< std::pair< omxExpectation*, int> > dvScoreboardSetType;
 
-class omxRAMExpectation {
+class omxRAMExpectation : public omxExpectation {
+	typedef omxExpectation super;
 	bool trivialF;
 	unsigned Zversion;
 	omxMatrix *_Z;
@@ -553,10 +550,8 @@ class omxRAMExpectation {
 	std::vector<bool> ignoreDefVar;
 	std::vector<bool> latentFilter; // false when latent
 
- 	omxRAMExpectation(omxMatrix *Z) : trivialF(false), Zversion(0), _Z(Z) {};
-	~omxRAMExpectation() {
-		omxFreeMatrix(_Z);
-	};
+ 	omxRAMExpectation() : trivialF(false), Zversion(0), _Z(0) {};
+	virtual ~omxRAMExpectation();
 
 	omxMatrix *getZ(FitContext *fc);
 	void CalculateRAMCovarianceAndMeans(FitContext *fc);
@@ -567,9 +562,10 @@ class omxRAMExpectation {
 
 	int verbose;
 	int numIters;
-	int rampart;
+	int rampartCycleLimit;
+	int rampartUnitLimit;
 	bool useSufficientSets;
-	bool rampartEnabled() { return rampart == NA_INTEGER || rampart > 0; };
+	bool rampartEnabled() { return rampartCycleLimit == NA_INTEGER || rampartCycleLimit > 0; };
 	double logDetObserved;
 	double n;
 	double *work;
@@ -579,41 +575,22 @@ class omxRAMExpectation {
 	RelationalRAMExpectation::state *rram;
 	bool forceSingleGroup;
 
-	template <typename T>
-	void studyF(const Eigen::MatrixBase<T> &dataColumns,
-		    std::vector< omxThresholdColumn > &origThresholdInfo)
-	{
-		EigenMatrixAdaptor eF(F);
-		latentFilter.assign(eF.cols(), false);
-		dataCols.resize(eF.rows());
-		if (!eF.rows()) return;  // no manifests
-		for (int cx =0, dx=0; cx < eF.cols(); ++cx) {
-			int dest;
-			double isManifest = eF.col(cx).maxCoeff(&dest);
-			latentFilter[cx] = isManifest;
-			if (isManifest) {
-				int newDest = dataColumns.size()? dataColumns[dest] : dest;
-				dataCols[dx] = newDest;
-				if (origThresholdInfo.size()) {
-					omxThresholdColumn adj = origThresholdInfo[dest];
-					adj.dColumn = dx;
-					thresholds.push_back(adj);
-				}
-				dx += 1;
-			}
-		}
-	};
-	int *getDataColumnsPtr() const {
-		return (int*) dataCols.data();
-	}
+	void studyF();
 
-	std::vector< omxThresholdColumn > &getThresholdInfo() { return thresholds; }
+	virtual void init();
+	virtual void compute(FitContext *fc, const char *what, const char *how);
+	virtual omxMatrix *getComponent(const char*);
+	virtual void populateAttr(SEXP expectation);
+	virtual const Eigen::Map<DataColumnType> getDataColumns() {
+		return Eigen::Map<DataColumnType>(dataCols.data(), numDataColumns);
+	}
+	virtual std::vector< omxThresholdColumn > &getThresholdInfo() { return thresholds; }
 };
 
 namespace RelationalRAMExpectation {
 	inline int state::verbose() const
 	{
-		return ((omxRAMExpectation*) homeEx->argStruct)->verbose;
+		return ((omxRAMExpectation*) homeEx)->verbose;
 	}
 
 	inline int independentGroup::verbose() const { return st.verbose(); };

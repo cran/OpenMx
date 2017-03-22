@@ -2,12 +2,11 @@
 % Please edit documentation in R/MxBaseNamed.R
 \docType{class}
 \name{MxBaseNamed-class}
-\alias{MxBaseNamed}
 \alias{MxBaseNamed-class}
+\alias{MxBaseNamed}
 \title{MxBaseNamed}
 \description{
 This is an internal class and should not be used directly.  It is the
 base class for named entities.  Fit functions, expectations, and computes
 contain this class.
 }
-

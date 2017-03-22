@@ -12,4 +12,3 @@ imxFreezeModel(model)
 \description{
 Remove free parameters and fit function from model.
 }
-

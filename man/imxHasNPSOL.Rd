@@ -13,4 +13,3 @@ linked with OpenMx. Otherwise FALSE.
 \description{
 imxHasNPSOL
 }
-

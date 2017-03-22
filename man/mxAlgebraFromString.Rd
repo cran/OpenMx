@@ -30,4 +30,3 @@ A$values * (B$values + A$values)
 \seealso{
 \link{mxAlgebra}
 }
-

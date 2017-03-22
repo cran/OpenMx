@@ -31,7 +31,8 @@ setClass(Class = "MxExpectationRAM",
 	    numStats = "numeric",
 	    between = "MxOptionalCharOrNumber",
 	    verbose = "integer",
-	    .rampart = "integer",
+	    .rampartCycleLimit = "integer",
+	    .rampartUnitLimit = "integer",
 	    .useSufficientSets = "logical",
 	    .forceSingleGroup = "logical",
 	    .ignoreDefVarsHack = "logical", #remove TODO
@@ -55,7 +56,8 @@ setMethod("initialize", "MxExpectationRAM",
 		.Object@UnfilteredExpCov <- matrix()
 		.Object@between <- between
 		.Object@verbose <- verbose
-		.Object@.rampart <- as.integer(NA)
+		.Object@.rampartCycleLimit <- as.integer(NA)
+		.Object@.rampartUnitLimit <- as.integer(NA)
 		.Object@.forceSingleGroup <- FALSE
 		.Object@.ignoreDefVarsHack <- FALSE  # remove TODO
 		.Object@.identifyZeroVarPred <- TRUE
@@ -262,6 +264,9 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			.Object@thresholdColumns <- as.integer(NA)
 			.Object@thresholdLevels <- as.integer(NA)
 		}
+		if(length(.Object@dims) > nrow(fMatrix) && length(translatedNames) == nrow(fMatrix)){
+			.Object@dims <- translatedNames
+		}
 		return(.Object)
 })
 
@@ -278,11 +283,11 @@ setMethod("genericNameToNumber", signature("MxExpectationRAM"),
 	  })
 
 setMethod("genericGetExpected", signature("MxExpectationRAM"),
-	  function(.Object, model, what, defvar.row=1) {
+	  function(.Object, model, what, defvar.row=1, subname=model@name) {
 		  ret <- list()
-		  Aname <- .Object@A
-		  Sname <- .Object@S
-		  Fname <- .Object@F
+		  Aname <- paste(subname, .Object@A, sep=".")
+		  Sname <- paste(subname, .Object@S, sep=".")
+		  Fname <- paste(subname, .Object@F, sep=".")
 		  Mname <- .Object@M
 		  A <- mxEvalByName(Aname, model, compute=TRUE, defvar.row=defvar.row)
 		  S <- mxEvalByName(Sname, model, compute=TRUE, defvar.row=defvar.row)
@@ -294,25 +299,25 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 			  ret[['covariance']] <- cov
 		  }
 		  if ('means' %in% what) {
-			  if(single.na(Mname)){
-				  mean <- matrix( , 0, 0)
-			  } else {
-				  M <- mxEvalByName(Mname, model, compute=TRUE, defvar.row=defvar.row)
-				  mean <- M %*% t(solve(I-A)) %*% t(F)
+				if(single.na(Mname)){
+					mean <- matrix( , 0, 0)
+				} else {
+					Mname <- paste(subname, Mname, sep=".")
+					M <- mxEvalByName(Mname, model, compute=TRUE, defvar.row=defvar.row)
+					mean <- M %*% t(solve(I-A)) %*% t(F)
 			  }
-			  ret[['means']] <- mean
-		  }
-		  if ('thresholds' %in% what) {
-			  thrname <- .Object@thresholds
-			  if(!single.na(thrname)){
-				  thr <- mxEvalByName(thrname, model, compute=TRUE, defvar.row=defvar.row)
-			  } else {thr <- matrix( , 0, 0)}
-			  ret[['thresholds']] <- thr
-		  }
-		  ret
+				ret[['means']] <- mean
+			}
+			if ('thresholds' %in% what) {
+				thrname <- .Object@thresholds
+				if(!single.na(thrname)){
+					thrname <- paste(subname, thrname, sep=".")
+					thr <- mxEvalByName(thrname, model, compute=TRUE, defvar.row=defvar.row)
+				} else {thr <- matrix( , 0, 0)}
+				ret[['thresholds']] <- thr
+			}
+			ret
 })
-
-setMethod("genericExpGetPrecision", "MxExpectationRAM", NormalExpGetPrecision)
 
 generateRAMDepth <- function(flatModel, aMatrixName, modeloptions) {
 	mxObject <- flatModel[[aMatrixName]]

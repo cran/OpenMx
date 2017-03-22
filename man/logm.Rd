@@ -14,4 +14,3 @@ logm(x, tol = .Machine$double.eps)
 \description{
 Matrix logarithm
 }
-

@@ -38,6 +38,7 @@
 #include "omxCsolnp.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
+#include "EnableWarnings.h"
 #include "omxSadmvnWrapper.h"
 
 void markAsDataFrame(SEXP list, int rows)
@@ -298,8 +299,7 @@ SEXP MxRList::asR()
 	return ans;
 }
 
-static void
-friendlyStringToLogical(const char *key, SEXP rawValue, int *out)
+void friendlyStringToLogical(const char *key, SEXP rawValue, int *out)
 {
 	if (TYPEOF(rawValue) == LGLSXP) {
 		*out = Rf_asLogical(rawValue);
@@ -584,10 +584,19 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	if (topCompute && !isErrorRaised()) {
 		topCompute->compute(fc);
 
-		if ((fc->wanted & FF_COMPUTE_FIT) && !std::isfinite(fc->fit)) {
-			std::string diag = fc->getIterationError();
-			if (diag.size()) {
-				omxRaiseErrorf("fit is not finite (%s)", diag.c_str());
+		if (fc->wanted & FF_COMPUTE_FIT) {
+			if (!std::isfinite(fc->fit)) {
+				std::string diag = fc->getIterationError();
+				if (diag.size()) {
+					omxRaiseErrorf("fit is not finite (%s)", diag.c_str());
+				} else if (fc->getInform() == INFORM_CONVERGED_OPTIMUM ||
+					   fc->getInform() == INFORM_UNCONVERGED_OPTIMUM) {
+					omxRaiseErrorf("fit is not finite");
+				}
+			} else if (fc->skippedRows) {
+				Rf_warning("%d rows obtained probability of exactly zero; "
+					   "You may wish to try again with better starting values.", fc->skippedRows);
+				fc->fit = NA_REAL;
 			}
 		}
 	}
@@ -751,6 +760,8 @@ extern "C" {
 
 void R_init_OpenMx(DllInfo *info) {
 	R_registerRoutines(info, NULL, callMethods, NULL, NULL);
+	R_useDynamicSymbols(info, FALSE);
+	R_forceSymbols(info, TRUE);
 
 	// There is no code that will change behavior whether openmp
 	// is set for nested or not. I'm just keeping this in case it

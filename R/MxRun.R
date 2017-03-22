@@ -19,7 +19,7 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 		useOptimizer = TRUE){
 
 	if (.hasSlot(model, '.version')) {
-		mV <- model@.version
+		mV <- package_version(model@.version)
 		curV <- packageVersion('OpenMx')
 		if (curV$major != mV$major ||
 		    curV$minor != mV$minor) {
@@ -174,20 +174,26 @@ runHelper <- function(model, frontendStart,
 	expectations <- convertExpectationFunctions(flatModel, model, labelsData, dependencies)
 
 	if (length(expectations)) {
-		prec <- lapply(expectations, genericExpGetPrecision)
+		prec <- lapply(expectations, function(x){getPrecisionPerExpectation(x,options)})
 
-		functionPrecision <- Reduce(max, c(as.numeric(options[['Function precision']]),
+		functionPrecision <- Reduce(max, c(imxAutoOptionValue("Function precision",options),
 						   sapply(prec, function(x) x[['functionPrecision']])))
 		options[['Function precision']] <- as.character(functionPrecision)
 
 		if (defaultComputePlan && is(model@compute, "MxComputeSequence")) {
-			iterations <- Reduce(min, c(4L, sapply(prec, function(x) x[['iterations']])))
-			stepSize <- Reduce(max, c(sqrt(.Machine$double.eps),
-						  sapply(prec, function(x) x[['stepSize']])))
+			iterations <- ifelse(
+				is.na(suppressWarnings(as.numeric(options[["Gradient iterations"]]))),
+				Reduce(min, c(4L, sapply(prec, function(x) x[['iterations']]))),
+				as.integer(options[["Gradient iterations"]]))
+			stepSize <- ifelse(
+				is.na(suppressWarnings(as.numeric(options[["Gradient step size"]]))),
+				Reduce(max, c(sqrt(.Machine$double.eps),sapply(prec, function(x) x[['stepSize']]))),
+				as.numeric(options[["Gradient step size"]]))
 			model <- adjustDefaultNumericDeriv(model, iterations, stepSize)
 			flatModel <- adjustDefaultNumericDeriv(flatModel, iterations, stepSize)
 		}
 	}
+	else{options[["Function precision"]] <- as.character(imxAutoOptionValue("Function precision",options))}
 
 	fitfunctions <- convertFitFunctions(flatModel, model, labelsData, dependencies)
 	data <- convertDatasets(flatModel@datasets, model, flatModel)
@@ -294,7 +300,9 @@ updateModelExpectationDims <- function(model, expectations){
 	expectationNames <- names(expectations)
 	for(aname in expectationNames){
 		if(!is.null(model[[aname]])){
-			model[[aname]]@.runDims <- expectations[[aname]]@dims
+			if (.hasSlot(expectations[[aname]], 'dims')) {
+				model[[aname]]@.runDims <- expectations[[aname]]@dims
+			}
 		}
 	}
 	return(model)

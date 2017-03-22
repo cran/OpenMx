@@ -12,4 +12,3 @@ imxSparseInvert(mat)
 \description{
 This API is visible to permit testing. Please do not use.
 }
-

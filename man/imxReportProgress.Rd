@@ -15,4 +15,3 @@ imxReportProgress(info, eraseLen)
 Prints a show status string to the console without emitting a
 newline.
 }
-

@@ -2,9 +2,9 @@
 % Please edit documentation in R/MxCompute.R
 \docType{class}
 \name{BaseCompute-class}
+\alias{BaseCompute-class}
 \alias{$,BaseCompute-method}
 \alias{$<-,BaseCompute-method}
-\alias{BaseCompute-class}
 \alias{print,BaseCompute-method}
 \alias{show,BaseCompute-method}
 \title{BaseCompute}
@@ -15,4 +15,3 @@ This is an internal class and should not be used directly.
 \link{mxComputeEM}, \link{mxComputeGradientDescent}, \link{mxComputeHessianQuality},
 \link{mxComputeIterate}, \link{mxComputeNewtonRaphson}, \link{mxComputeNumericDeriv}
 }
-

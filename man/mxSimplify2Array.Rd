@@ -28,4 +28,3 @@ mxSimplify2Array(list(v1,v2,v3))
 # [4,]   NA   NA    9
 # [5,]   NA   NA   10
 }
-

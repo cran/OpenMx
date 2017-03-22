@@ -9,4 +9,3 @@ mxSetDefaultOptions()
 \description{
 Reset global options to the default
 }
-

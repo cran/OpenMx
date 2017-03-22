@@ -21,4 +21,3 @@ errors throughout OpenMx.  The "meat" of the sandwich is the covariance
 matrix of the numerically computed row derivatives of the likelihood function
 (i.e. row gradients).
 }
-

@@ -27,10 +27,326 @@
 #include "npsolswitch.h"
 #include "glue.h"
 #include "ComputeSD.h"
+#include "ComputeGD.h"
+#include <Eigen/Core>
+#include <Eigen/Cholesky>
+#include <Eigen/Dense>
 
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
+#include "EnableWarnings.h"
+
+void GradientOptimizerContext::copyBounds()
+{
+	FreeVarGroup *varGroup = fc->varGroup;
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		solLB[px] = varGroup->vars[vx]->lbound;
+		if (!std::isfinite(solLB[px])) solLB[px] = NEG_INF;
+		solUB[px] = varGroup->vars[vx]->ubound;
+		if (!std::isfinite(solUB[px])) solUB[px] = INF;
+		++px;
+	}
+}
+
+void GradientOptimizerContext::setupSimpleBounds()
+{
+	solLB.resize(numFree);
+	solUB.resize(numFree);
+	copyBounds();
+}
+
+void GradientOptimizerContext::setupIneqConstraintBounds()
+{
+	solLB.resize(numFree);
+	solUB.resize(numFree);
+	copyBounds();
+
+	omxState *globalState = fc->state;
+	int eqn, nineqn;
+	globalState->countNonlinearConstraints(eqn, nineqn, false);
+	equality.resize(eqn);
+	inequality.resize(nineqn);
+};
+
+void GradientOptimizerContext::setupAllBounds()
+{
+	omxState *st = fc->state;
+	int n = (int) numFree;
+
+	// treat all constraints as non-linear
+	int eqn, nineqn;
+	st->countNonlinearConstraints(eqn, nineqn, false);
+	int ncnln = eqn + nineqn;
+	solLB.resize(n + ncnln);
+	solUB.resize(n + ncnln);
+
+	copyBounds();
+
+	int index = n;
+	for(int constraintIndex = 0; constraintIndex < int(st->conListX.size()); constraintIndex++) {
+		omxConstraint &cs = *st->conListX[constraintIndex];
+		omxConstraint::Type type = cs.opCode;
+		switch(type) {
+		case omxConstraint::LESS_THAN:
+		case omxConstraint::GREATER_THAN:
+			for(int offset = 0; offset < cs.size; offset++) {
+				solLB[index] = NEG_INF;
+				solUB[index] = -0.0;
+				index++;
+			}
+			break;
+		case omxConstraint::EQUALITY:
+			for(int offset = 0; offset < cs.size; offset++) {
+				solLB[index] = -0.0;
+				solUB[index] = 0.0;
+				index++;
+			}
+			break;
+		default:
+			Rf_error("Unknown constraint type %d", type);
+		}
+	}
+}
+
+void GradientOptimizerContext::reset()
+{
+	feasible = false;
+	bestFit = std::numeric_limits<double>::max();
+	eqNorm = 0;
+	ineqNorm = 0;
+}
+
+int GradientOptimizerContext::countNumFree()
+{
+	int nf = 0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		++nf;
+	}
+	return nf;
+}
+
+GradientOptimizerContext::GradientOptimizerContext(FitContext *_fc, int _verbose,
+						   enum GradientAlgorithm _gradientAlgo,
+						   int _gradientIterations,
+						   double _gradientStepSize)
+	: fc(_fc), verbose(_verbose), numFree(countNumFree()),
+	  gradientAlgo(_gradientAlgo), gradientIterations(_gradientIterations),
+	  gradientStepSize(_gradientStepSize),
+	  numOptimizerThreads((fc->childList.size() && !fc->openmpUser)? fc->childList.size() : 1),
+	  gwrContext(numOptimizerThreads, numFree, _gradientAlgo, _gradientIterations, _gradientStepSize)
+{
+	optName = "?";
+	fitMatrix = NULL;
+	ControlMinorLimit = 800;
+	ControlRho = 1.0;
+	ControlTolerance = nan("uninit");
+	useGradient = false;
+	warmStart = false;
+	ineqType = omxConstraint::LESS_THAN;
+	est.resize(numFree);
+	grad.resize(numFree);
+	copyToOptimizer(est.data());
+	CSOLNP_HACK = false;
+	reset();
+}
+
+double GradientOptimizerContext::recordFit(double *myPars, int* mode)
+{
+	double fit = solFun(myPars, mode);
+	if (std::isfinite(fit) && fit < bestFit && !fc->skippedRows) {
+		bestFit = fit;
+		Eigen::Map< Eigen::VectorXd > pvec(myPars, fc->numParam);
+		bestEst = pvec;
+	}
+	return fit;
+}
+
+bool GradientOptimizerContext::hasKnownGradient() const
+{
+	return fc->ciobj && fc->ciobj->gradientKnown();
+}
+
+void GradientOptimizerContext::copyToOptimizer(double *myPars)
+{
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		myPars[px] = fc->est[vx];
+		++px;
+	}
+}
+
+void GradientOptimizerContext::useBestFit()
+{
+	fc->fit = bestFit;
+	est = bestEst;
+	// restore gradient too? TODO
+}
+
+void GradientOptimizerContext::copyFromOptimizer(double *myPars, FitContext *fc2)
+{
+	int px=0;
+	for (size_t vx=0; vx < fc2->profiledOut.size(); ++vx) {
+		if (fc2->profiledOut[vx]) continue;
+		fc2->est[vx] = myPars[px];
+		++px;
+	}
+	fc2->copyParamToModel();
+}
+
+void GradientOptimizerContext::finish()
+{
+	fc->grad.resize(fc->numParam);
+	fc->grad.setConstant(nan("unset"));
+
+	int px=0;
+	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+		if (fc->profiledOut[vx]) continue;
+		fc->est[vx] = est[px];
+		fc->grad[vx] = grad[px];
+		++px;
+	}
+	fc->copyParamToModel();
+}
+
+double GradientOptimizerContext::solFun(double *myPars, int* mode)
+{
+	Eigen::Map< Eigen::VectorXd > Est(myPars, fc->numParam);
+	if (*mode == 1) {
+		fc->iterations += 1;
+		Global->reportProgress("MxComputeGradientDescent", fc);
+	}
+	copyFromOptimizer(myPars, fc);
+
+	int want = FF_COMPUTE_FIT;
+	// eventually want to permit analytic gradient during CI
+	if (*mode > 0 && !fc->ciobj && useGradient && fitMatrix->fitFunction->gradientAvailable) {
+		fc->grad.resize(fc->numParam);
+		fc->grad.setZero();
+		want |= FF_COMPUTE_GRADIENT;
+	}
+	ComputeFit(optName, fitMatrix, want, fc);
+
+	if (fc->outsideFeasibleSet() || isErrorRaised()) {
+		*mode = -1;
+	} else {
+		feasible = true;
+		if (want & FF_COMPUTE_GRADIENT) {
+			int px=0;
+			for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
+				if (fc->profiledOut[vx]) continue;
+				grad[px++] = fc->grad[vx];
+			}
+		}
+	}
+
+	if (verbose >= 3) {
+		mxLog("fit %f (mode %d)", fc->fit, *mode);
+	}
+
+	return fc->fit;
+};
+
+// NOTE: All non-linear constraints are applied regardless of free
+// variable group.
+void GradientOptimizerContext::solEqBFun(bool wantAJ) //<--"want analytic Jacobian"
+{
+	const int eq_n = (int) equality.size();
+	omxState *st = fc->state;
+
+	if (!eq_n) return;
+	
+	/*Note that this needs to happen even if no equality constraints have analytic Jacobians, because
+	analyticEqJacTmp is copied to the Jacobian matrix the elements of which are populated by code in
+	finiteDifferences.h, which knows to numerically populate an element if it's NA:*/
+	analyticEqJacTmp.setConstant(analyticEqJacTmp.rows(),analyticEqJacTmp.cols(),NA_REAL);
+	
+	int cur=0, j=0, c=0, roffset=0;
+	for(j = 0; j < int(st->conListX.size()); j++) {
+		omxConstraint &con = *st->conListX[j];
+		if (con.opCode != omxConstraint::EQUALITY) continue;
+		
+		con.refreshAndGrab(fc, &equality(cur));
+		if(wantAJ && usingAnalyticJacobian && con.jacobian != NULL){
+			omxRecompute(con.jacobian, fc);
+			for(c=0; c<con.jacobian->cols; c++){
+				if(con.jacMap[c]<0){continue;}
+				for(roffset=0; roffset<con.size; roffset++){
+					analyticEqJacTmp(cur+roffset,con.jacMap[c]) = con.jacobian->data[c * con.size + roffset];
+				}
+			}
+		}
+		cur += con.size;
+	}
+	
+	if (verbose >= 3) {
+		mxPrintMat("equality", equality);
+	}
+};
+
+// NOTE: All non-linear constraints are applied regardless of free
+// variable group.
+void GradientOptimizerContext::myineqFun(bool wantAJ)
+{
+	const int ineq_n = (int) inequality.size();
+	omxState *st = fc->state;
+
+	if (!ineq_n) return;
+	
+	analyticIneqJacTmp.setConstant(analyticIneqJacTmp.rows(),analyticIneqJacTmp.cols(),NA_REAL);
+	
+	int cur=0, j=0, c=0, roffset=0;
+	for (j=0; j < int(st->conListX.size()); j++) {
+		omxConstraint &con = *st->conListX[j];
+		if (con.opCode == omxConstraint::EQUALITY) continue;
+		
+		con.refreshAndGrab(fc, (omxConstraint::Type) ineqType, &inequality(cur));
+		if(wantAJ && usingAnalyticJacobian && con.jacobian != NULL){
+			omxRecompute(con.jacobian, fc);
+			for(c=0; c<con.jacobian->cols; c++){
+				if(con.jacMap[c]<0){continue;}
+				for(roffset=0; roffset<con.size; roffset++){
+					analyticIneqJacTmp(cur+roffset,con.jacMap[c]) = con.jacobian->data[c * con.size + roffset];
+				}
+			}
+		}
+		cur += con.size;
+	}
+	
+	if (CSOLNP_HACK) {
+		// CSOLNP doesn't know that inequality constraints can be inactive TODO
+	} else {
+		//SLSQP seems to require inactive inequality constraint functions to be held constant at zero:
+		inequality = inequality.array().max(0.0);
+		if(wantAJ && usingAnalyticJacobian){
+			for(int i=0; i<analyticIneqJacTmp.rows(); i++){
+				/*The Jacobians of each inactive constraint are set to zero here; 
+				as their elements will be zero rather than NaN, the code in finiteDifferences.h will leave them alone:*/
+				if(!inequality[i]){analyticIneqJacTmp.row(i).setZero();}
+			}
+		}
+	}
+
+	if (verbose >= 3) {
+		mxPrintMat("inequality", inequality);
+	}
+};
+
+void GradientOptimizerContext::checkForAnalyticJacobians()
+{
+	usingAnalyticJacobian = false;
+	omxState *st = fc->state;
+	for(int i=0; i < (int) st->conListX.size(); i++){
+		omxConstraint &cs = *st->conListX[i];
+		if(cs.jacobian){
+			usingAnalyticJacobian = true;
+			return;
+		}
+	}
+}
+
+// ------------------------------------------------------------
 
 enum OptEngine {
 	OptEngine_NPSOL,
@@ -55,7 +371,7 @@ class omxComputeGD : public omxCompute {
 
 	bool useGradient;
 	SEXP hessChol;
-	bool nudge;
+	int nudge;
 
 	int warmStartSize;
 	double *warmStart;
@@ -85,7 +401,6 @@ void omxComputeGD::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	SEXP slotValue;
 	fitMatrix = omxNewMatrixFromSlot(rObj, globalState, "fitfunction");
-	setFreeVarGroup(fitMatrix->fitFunction, varGroup);
 	omxCompleteFitFunction(fitMatrix);
 
 	ScopedProtect p1(slotValue, R_do_slot(rObj, Rf_install("verbose")));
@@ -123,7 +438,8 @@ void omxComputeGD::initFromFrontend(omxState *globalState, SEXP rObj)
 	}
 
 	ScopedProtect p4(slotValue, R_do_slot(rObj, Rf_install("nudgeZeroStarts")));
-	nudge = Rf_asLogical(slotValue);
+	nudge = false;
+	friendlyStringToLogical("nudgeZeroStarts", slotValue, &nudge);
 
 	ScopedProtect p6(slotValue, R_do_slot(rObj, Rf_install("warmStart")));
 	if (!Rf_isNull(slotValue)) {
@@ -178,7 +494,10 @@ void omxComputeGD::computeImpl(FitContext *fc)
 	size_t numParam = fc->varGroup->vars.size();
 	if (excludeVars.size()) {
 		fc->profiledOut.assign(fc->numParam, false);
-		for (auto vx : excludeVars) fc->profiledOut[vx] = true;
+		for (auto vx : excludeVars) {
+			fc->profiledOut[vx] = true;
+			if (OMX_DEBUG + verbose >= 1) mxLog("excludeVar %s", fc->varGroup->vars[vx]->name);
+		}
 	}
 	if (fc->profiledOut.size()) {
 		if (fc->profiledOut.size() != fc->numParam) Rf_error("Fail");
@@ -197,24 +516,28 @@ void omxComputeGD::computeImpl(FitContext *fc)
 
 	int beforeEval = fc->getLocalComputeCount();
 
-	if (verbose >= 1) mxLog("%s: engine %s (ID %d) gradient=%s tol=%g constraints=%d",
-				name, engineName, engine, gradientAlgoName, optimalityTolerance,
-				int(fitMatrix->currentState->conListX.size()));
+	if (verbose >= 1) {
+		int numConstr = fitMatrix->currentState->conListX.size();
+		mxLog("%s: engine %s (ID %d) #P=%d gradient=%s tol=%g constraints=%d",
+		      name, engineName, engine, numParam, gradientAlgoName, optimalityTolerance,
+		      numConstr);
+	}
 
 	//if (fc->ciobj) verbose=2;
-	GradientOptimizerContext rf(fc, verbose);
+	double effectiveGradientStepSize = gradientStepSize;
+	if (engine == OptEngine_NLOPT) effectiveGradientStepSize *= GRADIENT_FUDGE_FACTOR(2.0);
+	GradientOptimizerContext rf(fc, verbose, gradientAlgo, gradientIterations, effectiveGradientStepSize);
 	threads = rf.numOptimizerThreads;
 	rf.fitMatrix = fitMatrix;
 	rf.ControlTolerance = optimalityTolerance;
 	rf.useGradient = useGradient;
-	rf.gradientAlgo = gradientAlgo;
-	rf.gradientIterations = gradientIterations;
-	rf.gradientStepSize = gradientStepSize;
 	if (maxIter == -1) {
 		rf.maxMajorIterations = -1;
 	} else {
 		rf.maxMajorIterations = fc->iterations + maxIter;
 	}
+	/*Arguably, this effort involving a warm start should be conditioned on use of NPSOL.
+	But hopefully, we'll support warm starts for other optimizers someday.*/
 	if (warmStart) {
 		if (warmStartSize != int(numParam)) {
 			Rf_warning("%s: warmStart size %d does not match number of free parameters %d (ignored)",
@@ -225,6 +548,25 @@ void omxComputeGD::computeImpl(FitContext *fc)
 			rf.warmStart = true;
 		}
 	}
+	else{
+		if(fc->wanted & FF_COMPUTE_HESSIAN && numParam == fc->numParam){
+			rf.hessOut.setZero(numParam,numParam);
+			Eigen::LLT< Eigen::MatrixXd > chol4WS(numParam);
+			fc->refreshDenseHess();
+			fc->copyDenseHess(rf.hessOut.data());
+			chol4WS.compute(rf.hessOut);
+			if(chol4WS.info() == Eigen::Success){
+				rf.hessOut = (Eigen::MatrixXd)(chol4WS.matrixU());
+				rf.warmStart = true;
+			}
+			else{
+				if(rf.verbose >= 1){
+					mxLog("Hessian not positive-definite at initial values");
+				}
+			}
+		}
+		//else if(fc->wanted & FF_COMPUTE_IHESSIAN)
+	}
 
 	switch (engine) {
         case OptEngine_NPSOL:{
@@ -232,7 +574,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		omxNPSOL(rf);
 		rf.finish();
 		fc->wanted |= FF_COMPUTE_GRADIENT;
-		if (rf.hessOut.size() && fitMatrix->currentState->conListX.size() == 0) {
+		if (rf.hessOut.size() ){
 			if (!hessChol) {
 				Rf_protect(hessChol = Rf_allocMatrix(REALSXP, numParam, numParam));
 			}
@@ -251,7 +593,6 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		break;}
         case OptEngine_CSOLNP:
 		if (rf.maxMajorIterations == -1) rf.maxMajorIterations = Global->majorIterations;
-		rf.avoidRedundentEvals = true;
 		rf.CSOLNP_HACK = true;
 		omxCSOLNP(rf);
 		rf.finish();
@@ -263,8 +604,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		}
 		break;
         case OptEngine_NLOPT:
-		rf.gradientStepSize = rf.gradientStepSize * GRADIENT_FUDGE_FACTOR(2.0);
 		if (rf.maxMajorIterations == -1) rf.maxMajorIterations = Global->majorIterations;
+		rf.checkForAnalyticJacobians();
 		omxInvokeNLOPT(rf);
 		rf.finish();
 		fc->wanted |= FF_COMPUTE_GRADIENT;
@@ -277,8 +618,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		fc->copyParamToModel();
 		rf.setupSimpleBounds();
 		rf.setupIneqConstraintBounds();
-		rf.solEqBFun();
-		rf.myineqFun();
+		rf.solEqBFun(false);
+		rf.myineqFun(false);
 		if(rf.inequality.size() == 0 && rf.equality.size() == 0) {
 			omxSD(rf);   // unconstrained problems
 			rf.finish();
@@ -400,8 +741,10 @@ class ComputeCI : public omxCompute {
 	void recordCI(Method meth, ConfidenceInterval *currentCI, int lower, FitContext &fc,
 		      int &detailRow, double val, Diagnostic diag);
 	void checkOtherBoxConstraints(FitContext &fc, ConfidenceInterval *currentCI, Diagnostic &diag);
+	void runPlan(FitContext *fc);
 public:
 	ComputeCI();
+	virtual ~ComputeCI();
 	virtual void initFromFrontend(omxState *, SEXP rObj);
 	virtual void computeImpl(FitContext *fc);
 	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
@@ -415,10 +758,22 @@ omxCompute *newComputeConfidenceInterval()
 
 ComputeCI::ComputeCI()
 {
+	plan = 0;
 	intervals = 0;
 	intervalCodes = 0;
 	detail = 0;
 	useInequality = false;
+}
+
+ComputeCI::~ComputeCI()
+{ if (plan) delete plan; }
+
+void ComputeCI::runPlan(FitContext *fc)
+{
+	plan->compute(fc);
+
+	// any derivs are only relevent to the current problem
+	fc->wanted &= ~(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN);
 }
 
 void ComputeCI::initFromFrontend(omxState *globalState, SEXP rObj)
@@ -448,7 +803,6 @@ void ComputeCI::initFromFrontend(omxState *globalState, SEXP rObj)
 	}
 
 	fitMatrix = omxNewMatrixFromSlot(rObj, globalState, "fitfunction");
-	setFreeVarGroup(fitMatrix->fitFunction, varGroup);
 	omxCompleteFitFunction(fitMatrix);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
@@ -920,7 +1274,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 			double boxSave = nearBox;
 			nearBox = NA_REAL;
 			Est = Mle;
-			plan->compute(&fc);
+			runPlan(&fc);
 			nearBox = boxSave;
 			if (verbose >= 2) {
 				omxRecompute(ciMatrix, &fc);
@@ -949,7 +1303,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 		// Could set farBox to the regular UB95, but we'd need to optimize to get it
 		Est = Mle;
 		fc.ciobj = &baobj;
-		plan->compute(&fc);
+		runPlan(&fc);
 		constr.pop();
 
 		omxRecompute(ciMatrix, &fc);
@@ -972,7 +1326,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 			Est = Mle;
 			Est[currentCI->varIndex] = nearBox; // might be infeasible
 			fc.profiledOut[currentCI->varIndex] = true;
-			plan->compute(&fc);
+			runPlan(&fc);
 			fc.profiledOut[currentCI->varIndex] = false;
 			if (fc.getInform() == 0) {
 				boundLL = fc.fit;
@@ -994,7 +1348,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 				ciobj.bound = nearBox;
 				fc.ciobj = &ciobj;
 				Est = Mle;
-				plan->compute(&fc);
+				runPlan(&fc);
 				constr.pop();
 				boundLL = fc.fit;
 				Diagnostic diag = ciobj.getDiag();
@@ -1053,7 +1407,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 		// Perspective helps? Optimizer seems to like to start further away
 		Est[currentCI->varIndex] = (9*Mle[currentCI->varIndex] + nearBox) / 10.0;
 		fc.ciobj = &bnobj;
-		plan->compute(&fc);
+		runPlan(&fc);
 		farBox = boxSave;
 		constr.pop();
 
@@ -1121,7 +1475,7 @@ void ComputeCI::regularCI(FitContext *mle, FitContext &fc, ConfidenceInterval *c
 	fc.ciobj = &ciobj;
 	//mxLog("Set target fit to %f (MLE %f)", fc->targetFit, fc->fit);
 
-	plan->compute(&fc);
+	runPlan(&fc);
 	constr.pop();
 
 	omxMatrix *ciMatrix = currentCI->getMatrix(fitMatrix->currentState);
@@ -1382,7 +1736,8 @@ class ComputeTryH : public omxCompute {
 
 	static bool satisfied(FitContext *fc);
 public:
-	//ComputeTryH();
+	ComputeTryH() : plan(0) {};
+	virtual ~ComputeTryH();
 	virtual void initFromFrontend(omxState *, SEXP rObj);
 	virtual void computeImpl(FitContext *fc);
 	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
@@ -1391,6 +1746,11 @@ public:
 
 omxCompute *newComputeTryHard()
 { return new ComputeTryH(); }
+
+ComputeTryH::~ComputeTryH()
+{
+	if (plan) delete plan;
+}
 
 void ComputeTryH::initFromFrontend(omxState *globalState, SEXP rObj)
 {
@@ -1474,6 +1834,7 @@ void ComputeTryH::computeImpl(FitContext *fc)
 		--retriesRemain;
 
 		fc->setInform(INFORM_UNINITIALIZED);
+		fc->wanted &= ~(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN);
 		plan->compute(fc);
 		if (fc->getInform() != INFORM_UNINITIALIZED && fc->getInform() != INFORM_STARTING_VALUES_INFEASIBLE &&
 		    (bestStatus == INFORM_UNINITIALIZED || fc->getInform() < bestStatus)) {

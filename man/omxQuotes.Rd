@@ -24,4 +24,3 @@ omxQuotes(c("Oh", "blah", "dee", "Oh", "blah", "da"))
 omxQuotes(c("A", "S", "F"))
 omxQuotes("Hello World")
 }
-

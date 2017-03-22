@@ -22,4 +22,3 @@ mxMakeNames(demo, unique=TRUE)
 \seealso{
 \link[base]{make.names}
 }
-

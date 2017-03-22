@@ -20,6 +20,7 @@
 
 #include "omxFitFunction.h"
 #include "omxSadmvnWrapper.h"
+#include "Compute.h"
 
 typedef struct omxFIMLRowOutput {  // Output object for each row of estimation.  Mirrors the Mx1 output vector
 	double Minus2LL;		// Minus 2 Log Likelihood
@@ -57,7 +58,7 @@ struct sufficientSet {
 	Eigen::VectorXd      dataMean;
 };
 
-struct omxFIMLFitFunction {
+struct omxFIMLFitFunction : omxFitFunction {
 	omxFIMLFitFunction *parent;
 	int rowwiseParallel;
 	omxMatrix* cov;				// Covariance Matrix
@@ -68,6 +69,7 @@ struct omxFIMLFitFunction {
 	int returnRowLikelihoods;   // Whether or not to return row-by-row likelihoods
 	int populateRowDiagnostics; // Whether or not to populated the row-by-row likelihoods back to R
 
+	int skippedRows;
 	int origStateId;
 	int curParallelism;
 	int rowBegin;
@@ -106,6 +108,11 @@ struct omxFIMLFitFunction {
 	int ordDensityCount;
 	int contDensityCount;
 
+	virtual ~omxFIMLFitFunction();
+	virtual void init();
+	virtual void compute(int ffcompute, FitContext *fc);
+	virtual void populateAttr(SEXP algebra);
+
 	// --- old stuff below
 
 	/* Structures for JointFIMLFitFunction */
@@ -127,8 +134,6 @@ struct omxFIMLFitFunction {
 	std::vector<int> identicalMissingness;
 	std::vector<int> identicalRows;
 };
-
-omxRListElement* omxSetFinalReturnsFIMLFitFunction(omxFitFunction *oo, int *numReturns);
 
 void omxPopulateFIMLFitFunction(omxFitFunction *oo, SEXP algebra);
 void omxInitFIMLFitFunction(omxFitFunction* oo, SEXP rObj);
@@ -159,7 +164,7 @@ class mvnByRow {
 	int numContinuous;
 	omxFIMLFitFunction *ofiml;
 	omxFIMLFitFunction *parent;
-	int sortedRow;
+	int sortedRow;  // it's really the unsorted row (row in the original data); rename TODO
 	bool useSufficientSets;
 
 	int rowOrdinal;
@@ -184,7 +189,7 @@ class mvnByRow {
 	mvnByRow(FitContext *_fc, omxFitFunction *_localobj,
 		 omxFIMLFitFunction *_parent, omxFIMLFitFunction *_ofiml)
 	:
-	ofo((omxFIMLFitFunction*) _localobj->argStruct),
+	ofo((omxFIMLFitFunction*) _localobj),
 		shared_ofo(ofo->parent? ofo->parent : ofo),
 		expectation(_localobj->expectation),
 		ol(ofo->ol),
@@ -277,24 +282,55 @@ class mvnByRow {
 		return true;
 	}
 
-	void record(double lik)
+	void record(double logLik, int rows)
 	{
 		if (returnRowLikelihoods) Rf_error("oops");
+		if (!std::isfinite(logLik)) {
+			ofiml->skippedRows += rows;
+		} else {
+			EigenVectorAdaptor rl(localobj->matrix);
+			//mxLog("%g += record(%g)", rl[0], lik);
+			rl[0] += logLik;
+		}
+		firstRow = false;
+		row += rows;
+	}
 
-		EigenVectorAdaptor rl(localobj->matrix);
-		//mxLog("%g += record(%g)", rl[0], lik);
-		rl[0] += lik;
+	void skipRow()
+	{
+		int oldRow = row;
+		if (returnRowLikelihoods) {
+			EigenVectorAdaptor rl(rowLikelihoods);
+			double rowLik = 0.0;
+			rl[sortedRow] = rowLik;
+			row += 1;
+			while (row < data->rows && sameAsPrevious[row]) {
+				int index = indexVector[row];
+				rl[index] = rowLik;
+				row += 1;
+			}
+		} else {
+			row += 1;
+			while (row < data->rows && sameAsPrevious[row]) {
+				row += 1;
+			}
+		}
+		ofiml->skippedRows += row - oldRow;
 		firstRow = false;
 	}
 
-	void recordRow(double contLik, double ordLik)
+	void recordRow(double contLogLik, double ordLik)
 	{
-		double rowLik = ordLik * contLik;
+		if (ordLik == 0.0 || !std::isfinite(contLogLik)) {
+			skipRow();
+			return;
+		}
 		if (OMX_DEBUG_ROWS(sortedRow)) {
-			mxLog("%d/%d ordLik %g contLik %g = rowLik %g", row, sortedRow, ordLik, contLik, rowLik);
+			mxLog("%d/%d ordLik %g contLogLik %g", row, sortedRow, ordLik, contLogLik);
 		}
 		if (returnRowLikelihoods) {
 			EigenVectorAdaptor rl(rowLikelihoods);
+			double rowLik = exp(contLogLik) * ordLik;
 			rl[sortedRow] = rowLik;
 			row += 1;
 			while (row < data->rows && sameAsPrevious[row]) {
@@ -303,7 +339,7 @@ class mvnByRow {
 			}
 		} else {
 			EigenVectorAdaptor rl(localobj->matrix);
-			double rowLogLik = log(rowLik);
+			double rowLogLik = contLogLik + log(ordLik);
 			rl[0] += rowLogLik;
 			row += 1;
 			while (row < data->rows && sameAsPrevious[row]) {
@@ -335,29 +371,44 @@ class mvnByRow {
 	void reportBadOrdLik(int loc)
 	{
 		if (fc) fc->recordIterationError("Ordinal covariance is not positive definite "
-						 "in data '%s' row %d (loc%d)", data->name, sortedRow, loc);
+						 "in data '%s' row %d (loc%d)", data->name, 1+sortedRow, loc);
 		if (verbose >= 1) ol.log();
 	}
 
-	template <typename T1, typename T2>
-	void reportBadContRow(const Eigen::MatrixBase<T1> &resid, const Eigen::MatrixBase<T2> &icov)
+	template <typename T1, typename T2, typename T3>
+	void reportBadContRow(const Eigen::MatrixBase<T1> &cdata, const Eigen::MatrixBase<T2> &resid,
+			      const Eigen::MatrixBase<T3> &icov)
 	{
-		std::string empty = std::string("");
-		std::string buf = mxStringifyMatrix("resid", resid, empty);
-		buf += mxStringifyMatrix("inverse covariance", icov, empty);
-		if (fc) fc->recordIterationError("In data '%s' row %d continuous variables are too"
-						 " far from the model implied distribution. Details:\n%s",
-						 data->name, sortedRow, buf.c_str());
+		if (cdata.size() > 50) {
+			if (fc) fc->recordIterationError("In data '%s' row %d continuous variables are too"
+							 " far from the model implied distribution",
+							 data->name, 1+sortedRow);
+		} else {
+			std::string empty = std::string("");
+			std::string buf;
+			buf += mxStringifyMatrix("data", cdata, empty);
+			buf += mxStringifyMatrix("resid", resid, empty);
+			buf += mxStringifyMatrix("covariance", icov, empty);
+			if (fc) fc->recordIterationError("In data '%s' row %d continuous variables are too"
+							 " far from the model implied distribution. Details:\n%s",
+							 data->name, 1+sortedRow, buf.c_str());
+		}
 	}
 
 	template <typename T1>
 	void reportBadContLik(int loc, const Eigen::MatrixBase<T1> &badCov)
 	{
-		std::string empty = std::string("");
-		std::string buf = mxStringifyMatrix("covariance", badCov, empty);
-		if (fc) fc->recordIterationError("Continuous covariance (loc%d) "
-						 "is not positive definite in data '%s' row %d. Detail:\n%s",
-						 loc, data->name, sortedRow, buf.c_str());
+		if (badCov.rows() > 50) {
+			if (fc) fc->recordIterationError("The continuous part of the model implied covariance (loc%d) "
+							 "is not positive definite in data '%s' row %d",
+							 loc, data->name, 1+sortedRow);
+		} else {
+			std::string empty = std::string("");
+			std::string buf = mxStringifyMatrix("covariance", badCov, empty);
+			if (fc) fc->recordIterationError("The continuous part of the model implied covariance (loc%d) "
+							 "is not positive definite in data '%s' row %d. Detail:\n%s",
+							 loc, data->name, 1+sortedRow, buf.c_str());
+		}
 	}
 };
 

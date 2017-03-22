@@ -14,4 +14,3 @@ This is the code that the backend uses to write diagnostic
 information to standard error. This function should not be called
 from R. We make it available only for testing.
 }
-

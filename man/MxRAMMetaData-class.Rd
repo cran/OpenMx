@@ -7,4 +7,3 @@
 \description{
 This is an internal class, the meta data for RAM.
 }
-

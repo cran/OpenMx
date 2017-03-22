@@ -125,6 +125,14 @@ enum omxFFCompute {
 	FF_COMPUTE_FINAL_FIT    = 1<<12
 };
 
+enum FitStatisticUnits {
+	FIT_UNITS_UNINITIALIZED=0,
+	FIT_UNITS_UNKNOWN,
+	FIT_UNITS_PROBABILITY,
+	FIT_UNITS_MINUS2LL,
+	FIT_UNITS_SQUARED_RESIDUAL  // OK?
+};
+
 #define GRADIENT_FUDGE_FACTOR(x) (pow(10.0,x))
 
 typedef struct omxMatrix omxMatrix;
@@ -139,6 +147,8 @@ typedef struct omxRFitFunction omxRFitFunction;
 typedef struct SEXPREC *SEXP;
 class MxRList;
 class omxCompute;
+class FitContext;
+class GradientOptimizerContext;
 struct Matrix;
 struct Param_Obj;
 
@@ -307,7 +317,6 @@ void subsetCovarianceStore(Eigen::MatrixBase<T2> &gcov,
 template<typename _MatrixType, int _UpLo = Eigen::Lower>
 class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
  private:
-	Eigen::MatrixXd ident;
 	Eigen::MatrixXd inverse;
 
  public:
@@ -320,14 +329,65 @@ class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
 
 	void refreshInverse()
 	{
-		if (ident.rows() != Base::m_matrix.rows()) {
-			ident.setIdentity(Base::m_matrix.rows(), Base::m_matrix.rows());
-		}
-
-		inverse = Base::solve(ident);
+		inverse.setIdentity(Base::m_matrix.rows(), Base::m_matrix.rows());
+		inverse = Base::solve(inverse);
 	};
 
 	const Eigen::MatrixXd &getInverse() const { return inverse; };
+};
+
+typedef std::vector< std::pair<SEXP, SEXP> > MxRListBase;
+class MxRList : private MxRListBase {
+ public:
+	size_t size() const { return MxRListBase::size(); }
+	SEXP asR();
+	void add(const char *key, SEXP val) {
+		SEXP rkey = Rf_mkChar(key);
+		Rf_protect(rkey);
+		Rf_protect(val);
+		push_back(std::make_pair(rkey, val));
+	};
+};
+
+class ScopedProtect { // DEPRECATED, use ProtectedSEXP
+	PROTECT_INDEX initialpix;
+ public:
+	ScopedProtect(SEXP &var, SEXP src) {
+		R_ProtectWithIndex(R_NilValue, &initialpix);
+		Rf_unprotect(1);
+		Rf_protect(src);
+		var = src;
+	}
+	~ScopedProtect() {
+		PROTECT_INDEX pix;
+		R_ProtectWithIndex(R_NilValue, &pix);
+		PROTECT_INDEX diff = pix - initialpix;
+		if (diff != 1) Rf_error("Depth %d != 1, ScopedProtect was nested", diff);
+		Rf_unprotect(2);
+	}
+};
+
+class ProtectedSEXP {
+	PROTECT_INDEX initialpix;
+	SEXP var;
+ public:
+	ProtectedSEXP(SEXP src) {
+		R_ProtectWithIndex(R_NilValue, &initialpix);
+		Rf_unprotect(1);
+		Rf_protect(src);
+		var = src;
+	}
+	~ProtectedSEXP() {
+		PROTECT_INDEX pix;
+		R_ProtectWithIndex(R_NilValue, &pix);
+		PROTECT_INDEX diff = pix - initialpix;
+		if (diff != 1) Rf_error("Depth %d != 1, ProtectedSEXP was nested", diff);
+		Rf_unprotect(2);
+	}
+        operator SEXP() const { return var; }
+ private:
+        ProtectedSEXP( const ProtectedSEXP& );
+        ProtectedSEXP& operator=( const ProtectedSEXP& );
 };
 
 #endif /* _OMXDEFINES_H_ */

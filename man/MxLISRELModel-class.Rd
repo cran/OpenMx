@@ -2,11 +2,10 @@
 % Please edit documentation in R/MxLISRELModel.R
 \docType{class}
 \name{MxLISRELModel-class}
-\alias{$<-,MxLISRELModel-method}
 \alias{MxLISRELModel-class}
+\alias{$<-,MxLISRELModel-method}
 \alias{[[<-,MxLISRELModel-method}
 \title{MxLISRELModel}
 \description{
 This is an internal class and should not be used directly.
 }
-

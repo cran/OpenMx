@@ -2,11 +2,10 @@
 % Please edit documentation in R/MxObjectiveMetaData.R
 \docType{class}
 \name{MxBaseObjectiveMetaData-class}
-\alias{MxBaseObjectiveMetaData}
 \alias{MxBaseObjectiveMetaData-class}
+\alias{MxBaseObjectiveMetaData}
 \title{MxBaseObjectiveMetaData}
 \description{
 This is an internal class and should not be used directly.
 It is the virtual base class for all objective functions meta-data
 }
-

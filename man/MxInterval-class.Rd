@@ -2,9 +2,9 @@
 % Please edit documentation in R/MxInterval.R
 \docType{class}
 \name{MxInterval-class}
+\alias{MxInterval-class}
 \alias{$,MxInterval-method}
 \alias{$<-,MxInterval-method}
-\alias{MxInterval-class}
 \alias{print,MxInterval-method}
 \alias{show,MxInterval-method}
 \title{MxInterval}
@@ -14,4 +14,3 @@ This is an internal class and should not be used directly.
 \seealso{
 \link{mxCI}
 }
-

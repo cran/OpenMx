@@ -12,4 +12,3 @@ imxDependentModels(model)
 \description{
 Are submodels dependence?
 }
-

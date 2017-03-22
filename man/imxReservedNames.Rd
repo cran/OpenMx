@@ -4,7 +4,7 @@
 \name{imxReservedNames}
 \alias{imxReservedNames}
 \title{imxReservedNames}
-\format{An object of class \code{character} of length 6.}
+\format{An object of class \code{character} of length 7.}
 \usage{
 imxReservedNames
 }
@@ -12,4 +12,3 @@ imxReservedNames
 Vector of reserved names
 }
 \keyword{datasets}
-

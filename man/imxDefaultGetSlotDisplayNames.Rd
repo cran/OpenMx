@@ -16,4 +16,3 @@ Returns a list of display-friendly object slot names
 This is an internal function exported for those people who know
 what they are doing.
 }
-

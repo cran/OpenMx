@@ -21,4 +21,3 @@ similarly used by \link{mxExpectationLISREL} in expanding \eqn{(I-B)^{-1} = I + 
 In many situations \eqn{A^2} is a zero matrix (nilpotent of order 2).  So when \eqn{A} has large
 dimension it is much faster to compute \eqn{I+A} than \eqn{(I-A)^{-1}}.
 }
-

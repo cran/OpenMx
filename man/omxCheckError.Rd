@@ -40,4 +40,3 @@ The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation
 \code{\link{omxCheckIdentical}}, \code{\link{omxCheckSetEquals}},
 \code{\link{omxCheckTrue}}, \code{\link{omxCheckEquals}}
 }
-

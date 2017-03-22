@@ -6,15 +6,16 @@
 #include "omxMatrix.h"
 #include "glue.h"
 #include "nloptcpp.h"
-#include "finiteDifferences.h"
+#include "Compute.h"
+#include "ComputeGD.h"
+//#include "finiteDifferences.h"
+
+#include <Eigen/LU>
 
 #include "nlopt.h"
 #include "slsqp.h"
 #include "nlopt-internal.h"
-
-#ifdef SHADOW_DIAG
-#pragma GCC diagnostic warning "-Wshadow"
-#endif
+#include "EnableWarnings.h"
 
 namespace SLSQP {
 
@@ -26,17 +27,6 @@ struct context {
 	context(GradientOptimizerContext &_goc) : goc(_goc) {
 		eqredundent = 0;
 	};
-};
-
-struct fit_functional {
-	GradientOptimizerContext &goc;
-	
-	fit_functional(GradientOptimizerContext &_goc) : goc(_goc) {};
-	
-	double operator()(double *x, int thrId) const {
-		int mode = 0;
-		return goc.evalFit(x, thrId, &mode);
-	}
 };
 
 static double nloptObjectiveFunction(unsigned n, const double *x, double *grad, void *f_data)
@@ -62,20 +52,9 @@ static double nloptObjectiveFunction(unsigned n, const double *x, double *grad, 
 	if (!grad) return fit;
 	
 	Eigen::Map< Eigen::VectorXd > Epoint((double*) x, n);
+	goc->numericalGradientWithRef(Epoint);
 	Eigen::Map< Eigen::VectorXd > Egrad(grad, n);
-	if (goc->getWanted() & FF_COMPUTE_GRADIENT) {
-		Egrad = goc->grad;
-	} else if (goc->hasKnownGradient()) {
-		goc->setKnownGradient(Egrad);
-		goc->grad = Egrad;
-	} else {
-		if (goc->verbose >= 3) mxLog("fd_gradient start");
-		fit_functional ff(*goc);
-		gradient_with_ref(goc->gradientAlgo, goc->numOptimizerThreads,
-                    goc->gradientIterations, goc->gradientStepSize,
-                    ff, fit, Epoint, Egrad);
-		goc->grad = Egrad;
-	}
+	Egrad = goc->grad;
 	if (goc->verbose >= 3) {
 		mxPrintMat("gradient", Egrad);
 	}
@@ -90,8 +69,18 @@ struct equality_functional {
 	template <typename T1, typename T2>
 	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result) const {
 		goc.copyFromOptimizer(x.derived().data());
-		goc.solEqBFun();
+		goc.solEqBFun(false);
 		result = goc.equality;
+	}
+	
+	template <typename T1, typename T2, typename T3>
+	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result, Eigen::MatrixBase<T3> &jacobian) const {
+		goc.copyFromOptimizer(x.derived().data());
+		goc.analyticEqJacTmp.resize(jacobian.cols(), jacobian.rows());
+		goc.solEqBFun(true);
+		result = goc.equality;
+		jacobian = goc.analyticEqJacTmp.transpose();
+		
 	}
 };
 
@@ -103,8 +92,11 @@ static void nloptEqualityFunction(unsigned m, double* result, unsigned n, const 
 	Eigen::VectorXd Eresult(ctx.origeq);
 	Eigen::MatrixXd jacobian(n, ctx.origeq);
 	equality_functional ff(goc);
-	ff(Epoint, Eresult);
-	if (grad) {
+	/*I don't think nloptEqualityFunction is ever called when 'grad' is a null pointer, 
+	but I don't want to assume that:*/
+	if(!grad){ff(Epoint, Eresult);}
+	else{
+		ff(Epoint, Eresult, jacobian);
 		goc.eqNorm = Eresult.array().abs().sum();
 		fd_jacobian(goc.gradientAlgo, goc.gradientIterations, goc.gradientStepSize,
               ff, Eresult, Epoint, jacobian);
@@ -168,9 +160,19 @@ struct inequality_functional {
 	template <typename T1, typename T2>
 	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result) const {
 		goc.copyFromOptimizer(x.derived().data());
-		goc.myineqFun();
+		goc.myineqFun(false);
 		result = goc.inequality;
 	}
+	
+	template <typename T1, typename T2, typename T3>
+	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result, Eigen::MatrixBase<T3> &jacobian) const {
+		goc.copyFromOptimizer(x.derived().data());
+		goc.analyticIneqJacTmp.resize(jacobian.cols(), jacobian.rows());
+		goc.myineqFun(true);
+		result = goc.inequality;
+		jacobian = goc.analyticIneqJacTmp.transpose();
+	}
+	
 };
 
 static void nloptInequalityFunction(unsigned m, double *result, unsigned n, const double* x, double* grad, void* f_data)
@@ -180,11 +182,13 @@ static void nloptInequalityFunction(unsigned m, double *result, unsigned n, cons
 	Eigen::Map< Eigen::VectorXd > Eresult(result, m);
 	Eigen::Map< Eigen::MatrixXd > jacobian(grad, n, m);
 	inequality_functional ff(*goc);
-	ff(Epoint, Eresult);
-	if (grad && goc->verbose >= 2) {
-		mxPrintMat("major iteration ineq", Eresult);
-	}
-	if (grad) {
+	/*nloptInequalityFunction() is routinely called when 'grad' is a null pointer:*/
+	if(!grad){ff(Epoint,Eresult);}
+	else{
+		ff(Epoint, Eresult, jacobian);
+		if (goc->verbose >= 2) {
+			mxPrintMat("major iteration ineq", Eresult);
+		}
 		goc->ineqNorm = Eresult.array().abs().sum();
 		fd_jacobian(goc->gradientAlgo, goc->gradientIterations, goc->gradientStepSize,
               ff, Eresult, Epoint, jacobian);
@@ -193,9 +197,9 @@ static void nloptInequalityFunction(unsigned m, double *result, unsigned n, cons
 			nlopt_opt opt = (nlopt_opt) goc->extraData;
 			nlopt_force_stop(opt);
 		}
-	}
-	if (goc->verbose >= 3 && grad) {
-		mxPrintMat("inequality jacobian", jacobian);
+		if (goc->verbose >= 3) {
+			mxPrintMat("inequality jacobian", jacobian);
+		}
 	}
 }
 
@@ -238,6 +242,7 @@ static void omxExtractSLSQPConstraintInfo(nlopt_slsqp_wdump wkspc, nlopt_opt opt
 		goc.LagrMultipliersOut[i] = realwkspc[Wst+i];
 	}
 	
+	M = M>0 ? M : 1;
 	for(i=M; i<M+(n*n1/2); i++){
 		if(ro==co){
 			Dmat(ro,co) = realwkspc[Wst+i];
@@ -251,6 +256,57 @@ static void omxExtractSLSQPConstraintInfo(nlopt_slsqp_wdump wkspc, nlopt_opt opt
 		}
 	}
 	goc.LagrHessianOut = Lmat * Dmat * Lmat.transpose();
+}
+
+//Ideally, this function should recalculate the gradient and Jacobian 
+//to make sure they're as numerically accurate as possible:
+static int constrainedSLSQPOptimalityCheck(GradientOptimizerContext &goc, const double feasTol){
+	int code = 0, i=0, arows=0;
+	//Nothing to do here if there are no MxConstraints:
+	if(!goc.constraintFunValsOut.size()){return(code);}
+	//First see if bounds are satisfied:
+	for(i=0; i<goc.est.size(); i++){
+		if(goc.solLB[i]-goc.est[i] > feasTol || goc.est[i]-goc.solUB[i] > feasTol){
+			code = 3;
+			break;
+		}
+	}
+	//Now see if constraints are satisfied:
+	for(i=0; i<goc.constraintFunValsOut.size(); i++){
+		//This works because we set the values of inactive inequality constraints to zero before SLSQP sees them:
+		if(fabs(goc.constraintFunValsOut[i]) > 0){
+			if(fabs(goc.constraintFunValsOut[i])>feasTol){
+				code = 3;
+			}
+			arows++;
+		}
+	}
+	if(arows && false){
+		int j=0;
+		double gradThresh = Global->getGradientThreshold(goc.getFit());
+		Eigen::MatrixXd A(arows, goc.constraintJacobianOut.cols()); //<--Jacobian of active constraints
+		A.setZero(arows, goc.constraintJacobianOut.cols());
+		for(i=0; i<goc.constraintFunValsOut.size(); i++){
+			if(fabs(goc.constraintFunValsOut[i]) > 0){
+				A.row(j) = goc.constraintJacobianOut.row(i);
+				j++;
+			}
+		}
+		if( !((A.array()==0).all()) ){
+			Eigen::FullPivLU< Eigen::MatrixXd > lua(A);
+			Eigen::MatrixXd Z = lua.kernel();
+			Eigen::VectorXd gz = Z.transpose() * goc.grad;
+			for(i=0; i<gz.size(); i++){
+				if(fabs(gz[i])>gradThresh){
+					code=6;
+					break;
+				}
+			}
+		}
+	}
+	
+	//Finish:
+	return(code);
 }
 
 };
@@ -328,6 +384,8 @@ void omxInvokeNLOPT(GradientOptimizerContext &goc)
 	
 	goc.setWanted(oldWanted);
 	
+	int constrainedCode = SLSQP::constrainedSLSQPOptimalityCheck(goc, feasibilityTolerance);
+	
 	if (code == NLOPT_INVALID_ARGS) {
 		Rf_error("NLOPT invoked with invalid arguments");
 	} else if (code == NLOPT_OUT_OF_MEMORY) {
@@ -350,10 +408,16 @@ void omxInvokeNLOPT(GradientOptimizerContext &goc)
 			goc.informOut = INFORM_NOT_AT_OPTIMUM;  // is this correct? TODO
 		}
 	} else if (code < 0) {
-		Rf_error("NLOPT unrecognized error %d; please report to developers", code);
+		// No idea what this code means, but often resolved
+		// different starting values.
+		goc.informOut = INFORM_STARTING_VALUES_INFEASIBLE;
 	} else if (code == NLOPT_MAXEVAL_REACHED) {
 		goc.informOut = INFORM_ITERATION_LIMIT;
-	} else {
+	} else if(constrainedCode==6){
+		goc.informOut = INFORM_NOT_AT_OPTIMUM;
+	} else if(constrainedCode==3){
+		goc.informOut = INFORM_NONLINEAR_CONSTRAINTS_INFEASIBLE;
+	}	else {
 		goc.informOut = INFORM_CONVERGED_OPTIMUM;
 	}
 }

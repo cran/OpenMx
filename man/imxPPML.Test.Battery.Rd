@@ -42,4 +42,3 @@ Function will test across all permutations of:
 - Path versus Matrix specification
 - All orders of permutations of latents with manifests
 }
-

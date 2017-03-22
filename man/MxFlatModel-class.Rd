@@ -2,16 +2,15 @@
 % Please edit documentation in R/MxFlatModel.R
 \docType{class}
 \name{MxFlatModel-class}
+\alias{MxFlatModel-class}
 \alias{$,MxFlatModel-method}
 \alias{$<-,MxFlatModel-method}
-\alias{MxFlatModel-class}
 \alias{[[,MxFlatModel-method}
 \alias{[[<-,MxFlatModel-method}
-\alias{names,MxFlatModel-method}
 \alias{print,MxFlatModel-method}
 \alias{show,MxFlatModel-method}
+\alias{names,MxFlatModel-method}
 \title{MxFlatModel}
 \description{
 This is an internal class and should not be used.
 }
-

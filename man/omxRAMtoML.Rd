@@ -19,4 +19,3 @@ Convert a RAM model to an ML model
 This is a legacy function that was once used to convert RAM models to ML models
 in the old (1.0 release of OpenMx) objective function style.
 }
-

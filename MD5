@@ -1,5 +1,5 @@
 6b05be98626f05e7106ef2e61cfff381 *CHANGES
-cba5dd51f1e7dcccd98234454bc6e727 *DESCRIPTION
+b66b5bec80c9e033ae73c2c0628c6f8b *DESCRIPTION
 0efb3ca8eaebd2a99abba8da04efa5ae *NAMESPACE
 e7821c7d5ccefae58d54649ec93da9fc *NEWS
 3f5139451e624925b1ebfc276df1d18e *R/0ClassUnion.R
@@ -911,7 +911,7 @@ d53b905fc5f7778d6cf8b211c5900804 *src/AlgebraFunctions.h
 3dc3c99f042f6b836d907fe2d0666199 *src/Compute.h
 4842123922409cf21fe68e5962a0d016 *src/ComputeGD.cpp
 c925bfcfbeb9807519fac3f9561639b8 *src/ComputeGD.h
-136f07721953f5eaa09e06e2f6907350 *src/ComputeNM.cpp
+ef6f37d1ede4e433d2946a83c4d4a303 *src/ComputeNM.cpp
 adac361fc3130c2b2aaec113a3c63e6d *src/ComputeNM.h
 fc451dfb7d2618b53e8e244953116be9 *src/ComputeNR.cpp
 e2ed194fa3d6aa3ce6eed62212237fdc *src/ComputeSD.cpp

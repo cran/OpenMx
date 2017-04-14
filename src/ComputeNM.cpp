@@ -30,6 +30,8 @@
 #include <Rmath.h>
 #include <R_ext/Utils.h>
 
+#include "nlopt.h"
+#include "nlopt-internal.h"
 #include "EnableWarnings.h"
 
 static const char engineName[] = "NldrMd";
@@ -286,12 +288,6 @@ void omxComputeNM::computeImpl(FitContext *fc){
 	fc->ensureParamWithinBox(nudge);
 	fc->createChildren(fitMatrix);
 	
-	//int beforeEval = fc->getLocalComputeCount();
-	
-	if (verbose >= 1){
-		//mxLog something here
-	}
-	
 	NelderMeadOptimizerContext nmoc(fc, this);
 	nmoc.verbose = verbose;
 	nmoc.maxIter = maxIter;
@@ -310,24 +306,16 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		for(k=0; k<=10; k++){
 			if(verbose){mxLog("l1p iteration %d",k);}
 			if(k>0){
-				//nmoc.iniSimplexEdge = iniSimplexEdge;
 				if(nmoc.iniSimplexMat.rows() || nmoc.iniSimplexMat.cols()){nmoc.iniSimplexMat.resize(0,0);}
 				if(nmoc.statuscode==3){break;}
 				if( !nmoc.estInfeas && nmoc.statuscode==0 ){
 					if(verbose){mxLog("l1p solution found");}
 					break;
 				}
-				/*if( !nmoc.estInfeas && nmoc.statuscode==4 ){
-					nmoc.iniSimplexEdge = sqrt((nmoc.vertices[0]-nmoc.vertices[1]).dot(nmoc.vertices[0]-nmoc.vertices[1]));
-				}*/
 				if(nmoc.estInfeas){
 					nmoc.rho *= 10;
 					if(verbose){mxLog("penalty factor rho = %f",nmoc.rho);}
 				}
-				/*if(nmoc.estInfeas && nmoc.statuscode==4){
-					nmoc.rho *= 2;
-					nmoc.iniSimplexEdge = sqrt((nmoc.vertices[nmoc.n] - nmoc.vertices[0]).dot(nmoc.vertices[nmoc.n] - nmoc.vertices[0]));
-				}*/
 				if(fc->iterations >= maxIter){
 					nmoc.statuscode = 4;
 					if(verbose){mxLog("l1p algorithm ended with status 4");}
@@ -435,9 +423,10 @@ void omxComputeNM::computeImpl(FitContext *fc){
 			if(verbose){mxPrintMat("simplex gradient: ",simplexGradient);}
 		}
 	}
-	equalityOut = nmoc.equality;
-	inequalityOut = nmoc.inequality;
 	
+	nmoc.finalize();
+	
+	fc->wanted |= FF_COMPUTE_BESTFIT;
 	
 	return;
 }
@@ -447,7 +436,7 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 	omxPopulateFitFunction(fitMatrix, out);
 	
 	MxRList output;
-	SEXP pn, cn, cr, cc, cv, vrt, fv, vinf, fpm, xpm, phess, sg;
+	SEXP pn, cn, cr, cc, cv, vrt, fv, vinf, fpm, xpm, phess, sg, bf;
 	size_t i=0;
 	
 	if( fc->varGroup->vars.size() ){
@@ -470,6 +459,7 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 		output.add("constraintRows", cr);
 		output.add("constraintCols", cc);
 	}
+	//TODO: figure out why none of the constraint-function values are getting exported to the frontend:
 	if( fc->constraintFunVals.size() ){
 		Rf_protect(cv = Rf_allocVector( REALSXP, fc->constraintFunVals.size() ));
 		memcpy( REAL(cv), fc->constraintFunVals.data(), sizeof(double) * fc->constraintFunVals.size() );
@@ -510,6 +500,10 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 	memcpy( REAL(xpm), &xproxOut, sizeof(double) );
 	output.add("domainProximityMeasure", xpm);
 	
+	Rf_protect(bf = Rf_allocVector(REALSXP, 1));
+	memcpy( REAL(bf), &bestfitOut, sizeof(double) );
+	output.add("penalizedFit", bf);
+	
 	slots->add("output", output.asR());
 	return;
 }
@@ -517,7 +511,8 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 //-------------------------------------------------------
 
 NelderMeadOptimizerContext::NelderMeadOptimizerContext(FitContext* _fc, omxComputeNM* _nmo)
-	: fc(_fc), NMobj(_nmo), numFree(countNumFree())
+	: fc(_fc), NMobj(_nmo), numFree(countNumFree()), 
+   subsidiarygoc(GradientOptimizerContext(_fc, 0L, GradientAlgorithm_Forward, 1L, 1e-5))
 {
 	est.resize(numFree);
 	copyParamsFromFitContext(est.data());
@@ -559,6 +554,16 @@ void NelderMeadOptimizerContext::countConstraintsAndSetupBounds()
 	if(!numEqC){NMobj->eqConstraintMthd = 1;}
 	equality.resize(numEqC);
 	inequality.resize(numIneqC);
+	
+	if(numEqC + numIneqC || NMobj->eqConstraintMthd==3){
+		subsidiarygoc.optName = "SLSQP";
+		subsidiarygoc.ControlTolerance = 2 * Global->optimalityTolerance;
+		subsidiarygoc.useGradient = true;
+		subsidiarygoc.maxMajorIterations = Global->majorIterations;
+		subsidiarygoc.setupSimpleBounds();
+		subsidiarygoc.checkForAnalyticJacobians();
+		//Rf_error("so far, so good");
+	}
 }
 
 int NelderMeadOptimizerContext::countNumFree()
@@ -738,7 +743,28 @@ void NelderMeadOptimizerContext::evalFirstPoint(Eigen::VectorXd &x, double &fv, 
 			fv = bignum;
 			break;
 		case 3:
-			Rf_error("'GDsearch' Not Yet Implemented");
+			gdfsIter = 0;
+			tentativpt = x;
+			if (NMobj->verbose >= 3) {
+				mxPrintMat("tentative point", tentativpt);
+			}
+			omxInvokeSLSQPfromNelderMead(this, x);
+			if (NMobj->verbose >= 3) {
+				mxPrintMat("replacement point", x);
+			}
+			checkNewPointInfeas(x, ifcr);
+			if(!ifcr.sum()){
+				infeas = 0L;
+				fv = evalFit(x);
+				if(fv==bignum){infeas=1L;}
+				return;
+			}
+			else{
+				fv = bignum;
+				infeas = 1L;
+				return;
+			}
+			//Rf_error("'GDsearch' Not Yet Implemented");
 		case 4:
 			fv = evalFit(x);
 			infeas = 1L;
@@ -798,7 +824,28 @@ void NelderMeadOptimizerContext::evalNewPoint(Eigen::VectorXd &newpt, Eigen::Vec
 				return;
 			}
 		case 3:
-			Rf_error("'GDsearch' Not Yet Implemented");
+			gdfsIter = 0;
+			tentativpt = newpt;
+			if (NMobj->verbose >= 3) {
+				mxPrintMat("tentative point", tentativpt);
+			}
+			omxInvokeSLSQPfromNelderMead(this, newpt);
+			if (NMobj->verbose >= 3) {
+				mxPrintMat("replacement point", newpt);
+			}
+			checkNewPointInfeas(newpt, ifcr);
+			if(!ifcr.sum()){
+				newInfeas = 0L;
+				fv = evalFit(newpt);
+				if(fv==bignum){newInfeas=1L;}
+				return;
+			}
+			else{
+				fv = bignum;
+				newInfeas = 1L;
+				return;
+			}
+			//Rf_error("'GDsearch' Not Yet Implemented");
 		case 4:
 			fv = evalFit(newpt);
 			newInfeas = 1L;
@@ -901,8 +948,8 @@ void NelderMeadOptimizerContext::initializeSimplex(Eigen::VectorXd startpt, doub
 	}
 	else{
 		double k = (double) n;
-		double shhp = edgeLength*(1/k/sqrt(2.0))*(-1.0 + k + sqrt(1.0+k));
-		double shhq = edgeLength*(1/k/sqrt(2.0))*(sqrt(1.0+k)-1);
+		double shhp = edgeLength*(1.0/k/sqrt(2.0))*(-1.0 + k + sqrt(1.0+k));
+		double shhq = edgeLength*(1.0/k/sqrt(2.0))*(sqrt(1.0+k)-1.0);
 		Eigen::VectorXd xu, xd;
 		double fu=0, fd=0;
 		int badu=0, badd=0;
@@ -1367,6 +1414,7 @@ void NelderMeadOptimizerContext::invokeNelderMead(){
 		
 		eucentroidPrev = eucentroidCurr;
 		itersElapsed++;
+		Global->reportProgress("MxComputeNelderMead", fc);
 	} while (!stopflag);
 	
 	est = vertices[0];
@@ -1541,6 +1589,49 @@ void NelderMeadOptimizerContext::calculatePseudoHessian()
 		mxPrintMat("pseudoHessian is ", NMobj->pseudohess);
 	}
 	return;
-}	
-	
+}
 
+
+void NelderMeadOptimizerContext::finalize()
+{
+	//The omxComputeNM object stows the possibly penalized fit value; the FitContext here recomputes the unpenalized fit value, at the
+	//best parameter values:
+	NMobj->bestfitOut = bestfit;
+	copyParamsFromOptimizer(est,fc);
+	ComputeFit(engineName, NMobj->fitMatrix, FF_COMPUTE_FIT, fc);
+	
+	omxState *st = fc->state;
+	int ineqType = omxConstraint::LESS_THAN;
+	int cur=0, j=0;
+	Eigen::VectorXd cfv(numEqC + numIneqC);
+	
+	for (j=0; j < int(st->conListX.size()); j++) {
+		omxConstraint &con = *st->conListX[j];
+		con.refreshAndGrab(fc, (omxConstraint::Type) ineqType, &cfv(cur));
+		cur += con.size;
+	}
+	
+	fc->constraintFunVals = cfv;
+}
+
+
+double nmgdfso(unsigned n, const double *x, double *grad, void *f_data)
+{
+	NelderMeadOptimizerContext *nmoc = (NelderMeadOptimizerContext *) f_data;
+	nlopt_opt opt = (nlopt_opt) nmoc->extraData;
+	unsigned i;
+	double ssq=0, currdiff=0;
+	if(grad){
+		if(nmoc->gdfsIter >= nmoc->subsidiarygoc.maxMajorIterations){
+			nlopt_force_stop(opt);
+		}
+		(nmoc->gdfsIter)++;
+	}
+	for(i=0; i < n; i++){
+		currdiff = x[i] - nmoc->tentativpt[i];
+		if(grad){grad[i] = 2*currdiff;}
+		currdiff *= currdiff;
+		ssq += currdiff;
+	}
+	return(ssq);
+}

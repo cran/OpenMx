@@ -252,11 +252,15 @@ runHelper <- function(model, frontendStart,
 		names(parameters), names(constraints), model@compute, output)
 	
 	theFitUnits <- model$output$fitUnits
-	if(options[["Standard Errors"]] == "Yes" && length(theFitUnits) > 0 && theFitUnits %in% "r'Wr" ){
-		wlsSEs <- imxWlsStandardErrors(model)
-		model@output$standardErrors <- wlsSEs$SE
-		model@output$hessian <- 2*solve(wlsSEs$Cov) #puts in same units as m2ll Hessian
-		wlsChi <- imxWlsChiSquare(model, J=wlsSEs$Jac)
+	if(length(theFitUnits) > 0 && theFitUnits %in% "r'Wr" ){
+		if(options[["Standard Errors"]] == "Yes"){
+			wlsSEs <- imxWlsStandardErrors(model)
+			model@output$standardErrors <- wlsSEs$SE
+			model@output$hessian <- 2*solve(wlsSEs$Cov) #puts in same units as m2ll Hessian
+			wlsChi <- imxWlsChiSquare(model, J=wlsSEs$Jac)
+		} else {
+			wlsChi <- list(Chi=NA, ChiDoF=NA)
+		}
 		model@output$chi <- wlsChi$Chi
 		model@output$chiDoF <- wlsChi$ChiDoF
 	}

@@ -14,8 +14,8 @@
 #   limitations under the License.
 
 library(OpenMx)
-#No need to run this test with other than the on-load default GD optimizer:
-if(mxOption(NULL,"Default optimizer")!="CSOLNP"){stop("SKIP")}
+#This test involves CIs, so use it with SLSQP, since the inequality-constrained formulation is theoretically more correct:
+if(mxOption(NULL,"Default optimizer")!="SLSQP"){stop("SKIP")}
 #Need to use stricter convergence tolerances to avoid status Red:
 foo <- mxComputeNelderMead(iniSimplexType="smartRight", nudgeZeroStarts=FALSE, xTolProx=1e-8, fTolProx=1e-8,
 													 doPseudoHessian=T)
@@ -34,7 +34,7 @@ colnames(x) <- "x"
 print(mean(x))
 print(var(x))
 
-#Run with CSOLNP:
+#Run with SLSQP:
 varmodGD <- mxModel(
 	"mod",
 	mxData(observed=x,type="raw"),
@@ -84,7 +84,7 @@ varrun$output$confidenceIntervals
 omxCheckCloseEnough(
 	varrunGD$output$confidenceIntervals,
 	varrun$output$confidenceIntervals,
-	0.1 #<--This tolerance could be made a lot smaller if SLSQP were used for CIs...
+	0.01
 )
 
 omxCheckTrue(length(varrun$compute$steps$GD$output$paramNames))
@@ -95,3 +95,28 @@ omxCheckTrue(length(varrun$compute$steps$GD$output$pseudoHessian))
 omxCheckTrue(length(varrun$compute$steps$GD$output$simplexGradient))
 omxCheckTrue(length(varrun$compute$steps$GD$output$rangeProximityMeasure))
 omxCheckTrue(length(varrun$compute$steps$GD$output$domainProximityMeasure))
+omxCheckTrue(length(varrun$compute$steps$GD$output$penalizedFit))
+
+#Try using inequality-constrained formulation of CI problem:
+plan$steps$CI$constraintType <- "ineq"
+varmod2 <- mxModel(
+	"mod",
+	plan,
+	mxData(observed=x,type="raw"),
+	mxMatrix(type="Full",nrow=1,ncol=1,free=T,values=0,labels="mu",name="Mu"),
+	mxMatrix(type="Full",nrow=1,ncol=1,free=T,values=4,labels="sigma2",name="Sigma2",lbound=0),
+	mxExpectationNormal(covariance="Sigma2",means="Mu",dimnames=c("x")),
+	mxAlgebra(sqrt(Sigma2),name="Sigma"),
+	mxCI(c("mu","sigma2")),
+	mxFitFunctionML()
+)
+varrun2 <- mxRun(varmod2,intervals=T)
+varrunGD$output$confidenceIntervals
+varrun2$output$confidenceIntervals
+omxCheckCloseEnough(
+	varrunGD$output$confidenceIntervals,
+	varrun2$output$confidenceIntervals,
+	0.01 
+)
+#The change in fit is off by 0.05, which is the on-load default feasibility tolerance:
+omxCheckCloseEnough(varrun2$compute$steps$CI$output$detail$fit - varrun2$output$fit - 0.05, rep(qchisq(0.95,1),4), 1e-6)

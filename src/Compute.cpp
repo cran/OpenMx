@@ -1521,9 +1521,8 @@ class omxComputeOnce : public omxCompute {
 
 class ComputeEM : public omxCompute {
 	typedef omxCompute super;
-	std::vector< omxExpectation* > expectations;
-	const char *predict;
-	omxCompute *fit1;  // maybe rename to mstep TODO
+	omxCompute *estep;
+	omxCompute *mstep;
 	omxMatrix *fit3;   // rename to observedFit
 	int EMcycles;
 	int maxIter;
@@ -1569,7 +1568,6 @@ class ComputeEM : public omxCompute {
 	size_t maxHistLen;
 	int semProbeCount;
 
-	void setExpectationPrediction(FitContext *fc, const char *context);
 	void observedFit(FitContext *fc);
 	template <typename T1>
 	void accelLineSearch(bool major, FitContext *fc, Eigen::MatrixBase<T1> &preAccel);
@@ -1853,27 +1851,15 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	super::initFromFrontend(globalState, rObj);
 
-	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("expectation")));
-	for (int wx=0; wx < Rf_length(slotValue); ++wx) {
-		int objNum = INTEGER(slotValue)[wx];
-		omxExpectation *expectation = globalState->expectationList[objNum];
-		omxCompleteExpectation(expectation);
-		expectations.push_back(expectation);
-	}
-
-	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("predict")));
-	{
-		// Should accept a vector here TODO
-		if (Rf_length(slotValue) != 1) Rf_error("Not implemented");
-		SEXP elem;
-		Rf_protect(elem = STRING_ELT(slotValue, 0));
-		predict = CHAR(elem);
-	}
+	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("estep")));
+	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
+	estep = omxNewCompute(globalState, CHAR(s4class));
+	estep->initFromFrontend(globalState, slotValue);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("mstep")));
 	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
-	fit1 = omxNewCompute(globalState, CHAR(s4class));
-	fit1->initFromFrontend(globalState, slotValue);
+	mstep = omxNewCompute(globalState, CHAR(s4class));
+	mstep->initFromFrontend(globalState, slotValue);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("observedFit")));
 	fit3 = globalState->algebraList[ INTEGER(slotValue)[0] ];
@@ -2037,15 +2023,6 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 	origEigenvalues = NULL;
 }
 
-void ComputeEM::setExpectationPrediction(FitContext *fc, const char *context)
-{
-	for (size_t wx=0; wx < expectations.size(); ++wx) {
-		omxExpectation *expectation = expectations[wx];
-		if (verbose >= 4) mxLog("ComputeEM: expectation[%d] %s predict %s", (int) wx, expectation->name, context);
-		omxExpectationCompute(fc, expectation, context);
-	}
-}
-
 template <typename T>
 bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase<T> &rijWork)
 {
@@ -2060,15 +2037,15 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 	if (verbose >= 3) mxLog("ComputeEM: probe %d of %s offset %.6f",
 				1+paramProbeCount[vx], fc->varGroup->vars[vx]->name, offset);
 
-	setExpectationPrediction(fc, predict);
+	estep->compute(fc);
+	fc->wanted &= ~FF_COMPUTE_HESSIAN;  // discard garbage
 	int informSave = fc->getInform();  // not sure if we want to hide inform here TODO
-	fit1->compute(fc);
+	mstep->compute(fc);
 	if (fc->getInform() > INFORM_UNCONVERGED_OPTIMUM) {
 		if (verbose >= 3) mxLog("ComputeEM: probe failed with code %d", fc->getInform());
 		failed = true;
 	}
 	fc->setInform(informSave);
-	setExpectationPrediction(fc, "nothing");
 
 	rijWork.col(paramProbeCount[vx]) = (Est - optimum) / offset;
 
@@ -2158,13 +2135,14 @@ void ComputeEM::computeImpl(FitContext *fc)
 		++ EMcycles;
 		memcpy(&prevEst[0], fc->est, sizeof(double) * fc->numParam);
 		if (verbose >= 4) mxLog("ComputeEM[%d]: E-step", EMcycles);
-		setExpectationPrediction(fc, predict);
+		estep->compute(fc);
+		fc->wanted &= ~FF_COMPUTE_HESSIAN;  // discard garbage
 
 		{
 			if (verbose >= 4) mxLog("ComputeEM[%d]: M-step", EMcycles);
-			FitContext *fc1 = new FitContext(fc, fit1->varGroup);
+			FitContext *fc1 = new FitContext(fc, mstep->varGroup);
 			int startIter = fc1->iterations;
-			fit1->compute(fc1);
+			mstep->compute(fc1);
 			fc1->wanted &= ~FF_COMPUTE_HESSIAN;  // discard garbage
 			mstepIter = fc1->iterations - startIter;
 			totalMstepIter += mstepIter;
@@ -2172,7 +2150,6 @@ void ComputeEM::computeImpl(FitContext *fc)
 			fc1->updateParentAndFree();
 		}
 
-		setExpectationPrediction(fc, "nothing");
 		if (accel) {
 			if (!lbound.size()) {
 				// bounds might have changed
@@ -2298,7 +2275,7 @@ void ComputeEM::dEstep(FitContext *fc, Eigen::MatrixBase<T1> &x, Eigen::MatrixBa
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_GRADIENT, fc);
 	}
 	result = fc->grad;
-	Global->reportProgress("MxComputeEM", fc);
+	reportProgress(fc);
 }
 
 void ComputeEM::Oakes(FitContext *fc)
@@ -2308,7 +2285,9 @@ void ComputeEM::Oakes(FitContext *fc)
 	int wanted = fc->wanted;
 	const int freeVars = (int) fc->varGroup->vars.size();
 
-	setExpectationPrediction(fc, predict);
+	estep->compute(fc);
+	fc->wanted &= ~FF_COMPUTE_HESSIAN;  // discard garbage
+
 	fc->grad = Eigen::VectorXd::Zero(fc->numParam);
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_PREOPTIMIZE, fc);
@@ -2330,7 +2309,6 @@ void ComputeEM::Oakes(FitContext *fc)
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
-	setExpectationPrediction(fc, "nothing");
 
 	fc->refreshDenseHess();
 	double *hess = fc->getDenseHessUninitialized();
@@ -2470,7 +2448,9 @@ void ComputeEM::MengRubinFamily(FitContext *fc)
 	//mxLog("rij symm");
 	//pda(rij.data(), freeVars, freeVars);
 
-	setExpectationPrediction(fc, predict);
+	estep->compute(fc);
+	fc->wanted &= ~FF_COMPUTE_HESSIAN;  // discard garbage
+
 	int wanted = fc->wanted;
 	fc->wanted = 0;
 	fc->infoMethod = infoMethod;
@@ -2479,7 +2459,6 @@ void ComputeEM::MengRubinFamily(FitContext *fc)
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
-	setExpectationPrediction(fc, "nothing");
 
 	Rf_protect(inputInfoMatrix = Rf_allocMatrix(REALSXP, freeVars, freeVars));
 	double *hess = REAL(inputInfoMatrix);
@@ -2532,7 +2511,7 @@ void ComputeEM::collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList 
 	super::collectResults(fc, lcr, out);
 
 	std::vector< omxCompute* > clist(1);
-	clist[0] = fit1;
+	clist[0] = mstep;
 
 	collectResultsHelper(fc, clist, lcr, out);
 }
@@ -2586,7 +2565,8 @@ ComputeEM::~ComputeEM()
 {
 	if (accel) delete accel;
 
-	delete fit1;
+	delete estep;
+	delete mstep;
 
 	for (size_t hx=0; hx < estHistory.size(); ++hx) {
 		delete [] estHistory[hx];
@@ -2622,8 +2602,9 @@ void omxComputeOnce::initFromFrontend(omxState *globalState, SEXP rObj)
 		int objNum = INTEGER(slotValue)[wx];
 		if (objNum >= 0) {
 			omxMatrix *algebra = globalState->algebraList[objNum];
-			if (!algebra->fitFunction) Rf_error("ComputeOnce can only handle fit functions");
-			omxCompleteFitFunction(algebra);
+			if (algebra->fitFunction) {
+				omxCompleteFitFunction(algebra);
+			}
 			algebras.push_back(algebra);
 		} else {
 			omxExpectation *expectation = globalState->expectationList[~objNum];
@@ -2642,6 +2623,9 @@ void omxComputeOnce::initFromFrontend(omxState *globalState, SEXP rObj)
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("what")));
 	int whatLen = Rf_length(slotValue);
 	if (algebras.size()) {
+		if (whatLen == 0) {
+			fit = true;
+		}
 		for (int wx=0; wx < whatLen; ++wx) {
 			SEXP elem;
 			Rf_protect(elem = STRING_ELT(slotValue, wx));
@@ -2699,15 +2683,10 @@ void omxComputeOnce::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	for (int ax=0; ax < (int) algebras.size(); ++ax) {
 		omxFitFunction *ff = algebras[ax]->fitFunction;
-		if (!ff) {
-			Rf_error("ComputeOnce can only handle fit functions");
-			continue;
-		}
-
-		if (gradient && !ff->gradientAvailable) {
+		if (gradient && (!ff || !ff->gradientAvailable)) {
 			Rf_error("Gradient requested but not available");
 		}
-		if ((hessian || ihessian || hgprod) && !ff->hessianAvailable) {
+		if ((hessian || ihessian || hgprod) && (!ff || !ff->hessianAvailable)) {
 			// add a separate flag for hgprod TODO
 			Rf_error("Hessian requested but not available");
 		}
@@ -2754,17 +2733,24 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 
 		for (size_t wx=0; wx < algebras.size(); ++wx) {
 			omxMatrix *algebra = algebras[wx];
-			omxAlgebraPreeval(algebra, fc);
-			ComputeFit("Once", algebra, want, fc);
-			if (infoMat) {
-				fc->postInfo();
+			if (algebra->fitFunction) {
+				omxAlgebraPreeval(algebra, fc);
+				ComputeFit("Once", algebra, want, fc);
+				if (infoMat) {
+					fc->postInfo();
+				}
+			} else {
+				omxMarkDirty(algebra);
+				omxRecompute(algebra, fc);
 			}
 		}
 	} else if (expectations.size()) {
 		if (predict.size() > 1) Rf_error("Not implemented");
+		const char *pr1 = "nothing"; // better to default to 0 ?
+		if (predict.size()) pr1 = predict[0];
 		for (size_t wx=0; wx < expectations.size(); ++wx) {
 			omxExpectation *expectation = expectations[wx];
-			omxExpectationCompute(fc, expectation, predict[0], how);
+			omxExpectationCompute(fc, expectation, pr1, how);
 		}
 	}
 }

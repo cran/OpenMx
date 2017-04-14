@@ -5,15 +5,15 @@
 \alias{MxComputeEM-class}
 \title{Fit a model using DLR's (1977) Expectation-Maximization (EM) algorithm}
 \usage{
-mxComputeEM(expectation, predict, mstep, observedFit = "fitfunction", ...,
-  maxIter = 500L, tolerance = 1e-09, verbose = 0L,
-  freeSet = NA_character_, accel = "varadhan2008",
-  information = NA_character_, infoArgs = list())
+mxComputeEM(expectation = NULL, predict = NA_character_, mstep,
+  observedFit = "fitfunction", ..., maxIter = 500L, tolerance = 1e-09,
+  verbose = 0L, freeSet = NA_character_, accel = "varadhan2008",
+  information = NA_character_, infoArgs = list(), estep = NULL)
 }
 \arguments{
-\item{expectation}{a vector of expectation names}
+\item{expectation}{a vector of expectation names (DEPRECATED)}
 
-\item{predict}{what to predict from the observed data (available options depend on the expectation)}
+\item{predict}{what to predict from the observed data (DEPRECATED)}
 
 \item{mstep}{a compute plan to optimize the completed data model}
 
@@ -34,6 +34,8 @@ mxComputeEM(expectation, predict, mstep, observedFit = "fitfunction", ...,
 \item{information}{name of information matrix approximation method}
 
 \item{infoArgs}{arguments to control the information matrix method}
+
+\item{estep}{a compute plan to perform the expectation step}
 }
 \description{
 The EM algorithm constitutes the following steps: Start with an

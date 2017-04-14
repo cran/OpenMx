@@ -50,8 +50,8 @@ public:
 	Eigen::MatrixXd verticesOut;
 	Eigen::VectorXd fvalsOut;
 	Eigen::VectorXi vertexInfeasOut;
-	double fproxOut, xproxOut;
-	Eigen::MatrixXd equalityOut, inequalityOut;
+	double fproxOut, xproxOut, bestfitOut;
+	//Eigen::MatrixXd equalityOut, inequalityOut;
 
 	Eigen::MatrixXd pseudohess, phpts, phFvals, Xout;
 	Eigen::VectorXi phInfeas;
@@ -122,12 +122,10 @@ public:
 	void printProblemState();
 	void printNewPoint(Eigen::VectorXd &x, double fv, int isbad);
 	void calculatePseudoHessian();
-	/*void restart();
-	void validationRestart();*/
+	void finalize();
 	
 	std::vector<Eigen::VectorXd> vertices;	
 	Eigen::VectorXd est;
-	//Eigen::MatrixXd vertices;
 	Eigen::VectorXd fvals;
 	Eigen::VectorXi vertexInfeas;
 	Eigen::VectorXd solLB;
@@ -140,9 +138,14 @@ public:
 	Eigen::VectorXd xr, xe, xoc, xic;
 	Eigen::VectorXd oldWorstVertex;
 	Eigen::MatrixXd iniSimplexMat;
-	//Eigen::MatrixXd pseudohess;
-	
-	
-	
+	Eigen::VectorXd tentativpt;
+	//Eigen::VectorXd gdpt;
+
+	GradientOptimizerContext subsidiarygoc;
+	void *extraData;
+	int gdfsIter;
 	
 };
+
+double nmgdfso(unsigned n, const double *x, double *grad, void *f_data);
+void omxInvokeSLSQPfromNelderMead(NelderMeadOptimizerContext* nmoc, Eigen::VectorXd &gdpt);

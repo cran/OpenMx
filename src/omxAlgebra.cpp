@@ -326,4 +326,3 @@ omxMatrix* omxNewAlgebraFromOperatorAndArgs(int opCode, omxMatrix* args[], int n
 	return om;
 	
 }
-

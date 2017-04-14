@@ -8,6 +8,7 @@
 #include "nloptcpp.h"
 #include "Compute.h"
 #include "ComputeGD.h"
+#include "ComputeNM.h"
 //#include "finiteDifferences.h"
 
 #include <Eigen/LU>
@@ -263,7 +264,7 @@ static void omxExtractSLSQPConstraintInfo(nlopt_slsqp_wdump wkspc, nlopt_opt opt
 static int constrainedSLSQPOptimalityCheck(GradientOptimizerContext &goc, const double feasTol){
 	int code = 0, i=0, arows=0;
 	//Nothing to do here if there are no MxConstraints:
-	if(!goc.constraintFunValsOut.size()){return(code);}
+	if(!goc.constraintFunValsOut.size() || goc.doingCI()){return(code);}
 	//First see if bounds are satisfied:
 	for(i=0; i<goc.est.size(); i++){
 		if(goc.solLB[i]-goc.est[i] > feasTol || goc.est[i]-goc.solUB[i] > feasTol){
@@ -281,9 +282,13 @@ static int constrainedSLSQPOptimalityCheck(GradientOptimizerContext &goc, const 
 			arows++;
 		}
 	}
-	if(arows && false){
+	if(arows){ //&& false){
 		int j=0;
-		double gradThresh = Global->getGradientThreshold(goc.getFit());
+		//Per its documentation, this is NPSOL's criterion for first-order optimality conditions:
+		double gradThresh = 10 * sqrt(Global->optimalityTolerance) * ( 1 + fmax(1 + fabs(goc.getFit()), sqrt(goc.grad.dot(goc.grad)) ) );
+		if (goc.verbose >= 2) {
+			mxLog("gradient 'threshold': %f", gradThresh);
+		}
 		Eigen::MatrixXd A(arows, goc.constraintJacobianOut.cols()); //<--Jacobian of active constraints
 		A.setZero(arows, goc.constraintJacobianOut.cols());
 		for(i=0; i<goc.constraintFunValsOut.size(); i++){
@@ -296,12 +301,11 @@ static int constrainedSLSQPOptimalityCheck(GradientOptimizerContext &goc, const 
 			Eigen::FullPivLU< Eigen::MatrixXd > lua(A);
 			Eigen::MatrixXd Z = lua.kernel();
 			Eigen::VectorXd gz = Z.transpose() * goc.grad;
-			for(i=0; i<gz.size(); i++){
-				if(fabs(gz[i])>gradThresh){
-					code=6;
-					break;
-				}
+			double rgnorm = sqrt(gz.dot(gz));
+			if (goc.verbose >= 2) {
+				mxLog("reduced-gradient norm: %f", rgnorm);
 			}
+			if(rgnorm > gradThresh){code=6;}
 		}
 	}
 	
@@ -422,3 +426,56 @@ void omxInvokeNLOPT(GradientOptimizerContext &goc)
 	}
 }
 
+
+void omxInvokeSLSQPfromNelderMead(NelderMeadOptimizerContext* nmoc, Eigen::VectorXd &gdpt)
+{
+	double *est = gdpt.data();
+	
+	nlopt_opt opt = nlopt_create(NLOPT_LD_SLSQP, nmoc->numFree);
+	nmoc->extraData = opt;
+	nlopt_set_lower_bounds(opt, nmoc->solLB.data());
+	nlopt_set_upper_bounds(opt, nmoc->solUB.data());
+	nlopt_set_ftol_rel(opt, nmoc->subsidiarygoc.ControlTolerance);
+	nlopt_set_ftol_abs(opt, std::numeric_limits<double>::epsilon());
+	nlopt_set_min_objective(opt, nmgdfso, nmoc);
+	
+	double feasibilityTolerance = nmoc->NMobj->feasTol;
+	SLSQP::context ctx(nmoc->subsidiarygoc);
+	if (nmoc->numEqC + nmoc->numIneqC) {
+		ctx.origeq = nmoc->numEqC;
+		if (nmoc->numIneqC > 0){
+			nmoc->subsidiarygoc.inequality.resize(nmoc->numIneqC);
+			std::vector<double> tol(nmoc->numIneqC, feasibilityTolerance);
+			nlopt_add_inequality_mconstraint(opt, nmoc->numIneqC, SLSQP::nloptInequalityFunction, &(nmoc->subsidiarygoc), tol.data());
+		}
+		
+		if (nmoc->numEqC > 0){
+			nmoc->subsidiarygoc.equality.resize(nmoc->numEqC);
+			std::vector<double> tol(nmoc->numEqC, feasibilityTolerance);
+			nlopt_add_equality_mconstraint(opt, nmoc->numEqC, SLSQP::nloptEqualityFunction, &ctx, tol.data());
+		}
+	}
+	
+	struct nlopt_slsqp_wdump wkspc;
+	wkspc.realwkspc = (double*)calloc(1, sizeof(double)); //<--Just to initialize it; it'll be resized later.
+	opt->work = (nlopt_slsqp_wdump*)&wkspc;
+	
+	double fit = 0;
+	int code = nlopt_optimize(opt, est, &fit);
+	if(nmoc->verbose){
+		mxLog("subsidiary SLSQP job returned NLOPT code %d", code);
+	}
+	if (ctx.eqredundent) {
+		nlopt_remove_equality_constraints(opt);
+		int eq = nmoc->numEqC - ctx.eqredundent;
+		std::vector<double> tol(eq, feasibilityTolerance);
+		nlopt_add_equality_mconstraint(opt, eq, SLSQP::nloptEqualityFunction, &ctx, tol.data());
+		
+		code = nlopt_optimize(opt, est, &fit);
+	}
+	
+	opt->work = NULL;
+	nlopt_destroy(opt);
+	
+	return;
+}

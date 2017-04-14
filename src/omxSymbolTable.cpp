@@ -94,4 +94,5 @@ const omxAlgebraTableEntry omxAlgebraSymbolTable[] = {
 {90,	"Row sums",	"rowSums",	 1,	omxRowSums},
 {91,	"Column sums",	"colSums",	 1,	omxColSums},
 {92,	"Evaluate on grid",	"mxEvaluateOnGrid",	 2,	evaluateOnGrid},
+{93,	"Element-wise robust log",	"mxRobustLog",	 1,	omxElementRobustLog},
 };

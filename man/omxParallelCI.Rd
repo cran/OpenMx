@@ -4,12 +4,14 @@
 \alias{omxParallelCI}
 \title{omxParallelCI}
 \usage{
-omxParallelCI(model, run = TRUE)
+omxParallelCI(model, run = TRUE, verbose = 0L)
 }
 \arguments{
 \item{model}{an MxModel with confidence intervals in it}
 
 \item{run}{whether to run the model or just return the parallelized interval models}
+
+\item{verbose}{verbosity level to be passed to mxCompute* objects}
 }
 \value{
 an MxModel object

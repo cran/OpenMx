@@ -22,7 +22,7 @@ mxComputeNelderMead(
 	xTolProx=1e-8, fTolProx=1e-8,
 	doPseudoHessian=FALSE,
 	ineqConstraintMthd=c("soft","eqMthd"), 
-	eqConstraintMthd=c("soft","backtrack","l1p"),
+	eqConstraintMthd=c("GDsearch","soft","backtrack","l1p"),
 	backtrackCtrl=c(0.5,5))
 }
 \arguments{
@@ -35,7 +35,7 @@ mxComputeNelderMead(
   \item{alpha}{Numeric reflection coefficient.  Must be positive.  Defaults to 1.0.}
   \item{betao, betai}{Numeric outside- and inside-contraction coefficients, respectively.  Both must be within unit interval (0,1).  Both default to 0.5.}
   \item{gamma}{Numeric expansion coefficient.  If positive, must be greater than \code{alpha}.  If non-positive, expansion transformations will not be carried out.  Defaults to 2.0.}
-  \item{sigma}{Numeric shrink coefficient.  Cannot exceed 1.0.  If non-positive, shrink coefficients will not be carried out, and failed contractions will instead be followed by a simplex restart.  Defaults to 0.5.}
+  \item{sigma}{Numeric shrink coefficient.  Cannot exceed 1.0.  If non-positive, shrink transformations will not be carried out, and failed contractions will instead be followed by a simplex restart.  Defaults to 0.5.}
   \item{bignum}{Numeric value with which the fitfunction value is to be replaced if the fit is non-finite or is evaluated at infeasible parameter values.  Defaults to 1e35.}
   \item{iniSimplexType}{Character string naming the method by which to construct the initial simplex from the free-parameter start values.  Defaults to "regular".}
   \item{iniSimplexEdge}{Numeric edge-length of the initial simplex.  Defaults to 1.0.}
@@ -49,7 +49,7 @@ mxComputeNelderMead(
   \item{fTolProx}{Numeric "range-convergence" criterion; defaults to 1e-8.  See below for details.}
   \item{doPseudoHessian}{Logical; defaults to \code{FALSE}.}
   \item{ineqConstraintMthd}{"Inequality constraint method;" character string. Defaults to "soft".}
-  \item{eqConstraintMthd}{"Equality constraint method;" character string. Defaults to "soft".}
+  \item{eqConstraintMthd}{"Equality constraint method;" character string. Defaults to "GDsearch".}
   \item{backtrackCtrl}{Numeric vector of length two.  See below for details.}
 }
 \details{
@@ -67,7 +67,7 @@ If \code{greedyMinimize=FALSE}, "greedy expansion" (Singer & Singer, 2004) is us
 
 If argument \code{altContraction=TRUE}, the "modified contraction step" of Gill et al. (1982, Chapter 4) is used, and the candidate point is contracted toward the best vertex instead of toward the subcentroid.
 
-If positive, the first element of argument \code{stagnCtrl} sets a threshold for the number of successive iterations in which the best vertex of the simplex does not change, after which the algorithm is said to be "stagnant" (in a sense similar to that of Kelley, 1999).  To attempt to remedy the stagnation, the simplex is restarted.  If positive, the second element of argument \code{stagnCtrl} sets threshold for the number of restarts conducted, beyond which stagnation no longer triggers a restart.  The rationale for the second element is that when the optimizer is close to convergence, the best vertex may not change, but restarting may be counterproductive, and in any event requires many function evaluations.
+If positive, the first element of argument \code{stagnCtrl} sets a threshold for the number of successive iterations in which the best vertex of the simplex does not change, after which the algorithm is said to be "stagnant" (in a sense similar to that of Kelley, 1999).  To attempt to remedy the stagnation, the simplex is restarted.  If positive, the second element of argument \code{stagnCtrl} sets threshold for the number of restarts conducted, beyond which stagnation no longer triggers a restart.  The rationale for the second element is that the best vertex may not change for many iterations when the optimizer is close to convergence, under which circumstances restarting would be counterproductive, and in any event would require additional fitfunction evaluations.
 
 If argument \code{validationRestart=TRUE}, then when the optimizer has successfully converged, it will restart the simplex and attempt to improve upon the tentative solution it already found.  This validation restart (Gill et al., 1982, Chapter 4) always re-initializes the simplex as a regular simplex, with edge-length equal to the distance between the best and worst vertices of the tentative solution.  Optimization proceeds until convergence to a solution with a better fit value, or \eqn{2n} iterations have elapsed.
 
@@ -77,10 +77,10 @@ If argument \code{doPseudoHessian=TRUE} and there are no equality \link[=mxConst
 
 OpenMx's implementation of Nelder-Mead can handle nonlinear inequality \link[=mxConstraint]{MxConstraints} reasonably well.  Its default method for doing so, with argument \code{ineqConstraintMthd="soft"}, imposes a "soft" feasibility constraint by assigning a fitfunction value of \code{bignum} to points that violate the constraints by more than \link{mxOption} 'Feasibility tolerance'.  Alternately, with argument \code{ineqConstraintMthd="eqMthd"}, inequality \link[=mxConstraint]{MxConstraints} can be handled by the same method provided to argument \code{eqConstraintMthd}, whether or not equality \link[=mxConstraint]{MxConstraints} are present.
 
-OpenMx's implementation of Nelder-Mead respects equality \link[=mxConstraint]{MxConstraints}, but as of this writing handles them rather poorly,  unless \emph{all} vertices of the initial simplex are feasible.  Its default method for equalities is the same as that for inequalities, i.e. a "soft" feasibility constraint.  If argument \code{eqConstraintMthd="backtrack"}, then the optimizer attempts to backtrack from an infeasible point to a feasible point in a manner similar to that of Ghiasi et al. (2008), except that it used with \emph{all} new points, and not just those encountered via reflection, expansion and contraction.  In this case, the displacement from the prior point to the candidate point is reduced by the proportion provided as the first element of argument \code{backtrackCtrl}, and thus a new candidate point is considered.  This process is repeated until feasibility of the candidate point is restored, or the number of attempts exceeds the second element of argument \code{backtrackCtrl}.  If argument \code{eqConstraintMthd="l1p"}, Nelder-Mead is used as part of an \eqn{l_1}-penalty algorithm, which as of this writing is experimental and subject to change in future releases of OpenMx.
+OpenMx's implementation of Nelder-Mead respects equality \link[=mxConstraint]{MxConstraints}, but does not handle them especially well.  Its effectiveness at handling equalities may be improved by providing a matrix to argument \code{iniSimplexMat} that ensures \emph{all} of the initial vertices are feasible.  If argument \code{eqConstraintMthd="GDsearch"} (the default), then whenever Nelder-Mead evaluates the fitfunction at an infeasible point, it initiates a subsidiary optimization that uses \link[=mxComputeGradientDescent]{SLSQP} to find the nearest (in squared Euclidean distance) feasible point, and replaces that feasible point for the infeasible one.  The user should note that the function evaluations that occur during this subsidiary optimization are counted toward the total number of fitfunction evaluations during the call to \code{\link{mxRun}()}.  The effectiveness of the 'GDsearch' method is often improved by setting \link{mxOption} 'Feasibility tolerance' to a stricter (smaller) value than the on-load default.  The method specified by \code{eqConstraintMthd="soft"} is described in the preceding paragraph.  If argument \code{eqConstraintMthd="backtrack"}, then the optimizer attempts to backtrack from an infeasible point to a feasible point in a manner similar to that of Ghiasi et al. (2008), except that it used with \emph{all} new points, and not just those encountered via reflection, expansion and contraction.  In this case, the displacement from the prior point to the candidate point is reduced by the proportion provided as the first element of argument \code{backtrackCtrl}, and thus a new candidate point is considered.  This process is repeated until feasibility of the candidate point is restored, or the number of attempts exceeds the second element of argument \code{backtrackCtrl}.   If argument \code{eqConstraintMthd="l1p"}, Nelder-Mead is used as part of an \eqn{l_1}{l1}-penalty algorithm, which as of this writing is somewhat experimental and may change in future releases of OpenMx.
 }
 \value{
-Returns an object of class '\link{MxComputeNelderMead}'.
+Returns an object of class 'MxComputeNelderMead'.
 }
 
 \references{

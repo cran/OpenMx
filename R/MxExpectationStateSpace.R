@@ -394,6 +394,69 @@ getAllModelNames <- function(model){
 	return(ret)
 }
 
+#--------------------------------------------------------------------
+
+setMethod("genericGetExpected", signature("MxExpectationStateSpace"),
+		function(.Object, model, what, defvar.row=1, subname=model@name) {
+			ret <- list()
+			if(length(defvar.row) > 1){
+				stop("'defvar.row' must be (1) a single integer, (2) 'all', or (3) Inf")
+			}
+			if(defvar.row == Inf){
+				if(!single.na(.Object@t)){
+					stop("Found continuous time model.\nAsymptotic expectations are not yet implemented for continuous time models.")
+				}
+				if(imxHasDefinitionVariable(model)){
+					stop("Found definition variables.\nAsymptotic expectations are not valid for models with definition variables.")
+				}
+				#stop("Frau Bl\u00FCcher! This is not yet implemented.")
+				Aname <- paste(subname, .Object@A, sep=".")
+				Qname <- paste(subname, .Object@Q, sep=".")
+				Cname <- paste(subname, .Object@C, sep=".")
+				Rname <- paste(subname, .Object@R, sep=".")
+				A <- mxEvalByName(Aname, model, compute=TRUE)
+				Q <- mxEvalByName(Qname, model, compute=TRUE)
+				C <- mxEvalByName(Cname, model, compute=TRUE)
+				R <- mxEvalByName(Rname, model, compute=TRUE)
+				I <- diag(1, nrow=nrow(A)*nrow(A))
+				ImA <- try(solve(I - A %x% A))
+				if(class(ImA) %in% "try-error"){
+					stop("Could not invert I - A %x% A\nAsymptotic expectations are not valid in this case.")
+				}
+				Pinf <- ImA %*% matrix(c(Q), ncol=1)
+				Pinf <- matrix(Pinf, nrow=nrow(A), ncol=nrow(A))
+				Sinf <- C %*% Pinf %*% t(C) + R
+				if ('covariance' %in% what) {
+					ret[['covariance']] <- Sinf
+				}
+				if ('means' %in% what) {
+					ret[['means']] <- 'Not implemented'
+				}
+				if ('thresholds' %in% what) {
+					thr <- matrix( , 0, 0)
+					ret[['thresholds']] <- thr
+				}
+			} else {
+				ks <- mxKalmanScores(model, frontend=FALSE)
+				if(defvar.row =="all"){
+					defvar.row <- 1:(nrow(ks$xPredicted)-1)
+				} else {
+					defvar.row <- defvar.row + 1
+				}
+				if ('covariance' %in% what) {
+					ret[['covariance']] <- ks$SPredicted[ , , defvar.row, drop=FALSE]
+				}
+				if ('means' %in% what) {
+					ret[['means']] <- ks$yPredicted[defvar.row, , drop=FALSE]
+				}
+				if ('thresholds' %in% what) {
+					thr <- matrix( , 0, 0)
+					ret[['thresholds']] <- thr
+				}
+			}
+			ret
+})
+
 
 #--------------------------------------------------------------------
 checkSSMargument <- function(x, xname) {
@@ -526,7 +589,10 @@ kalmanBackendScoreHelper <- function(model, data=NA){
 	if(!single.na(data)){
 		model@data <- mxData(data, type='raw')
 	}
-	model <- omxSetParameters(model, labels=names(coef(model)), free=FALSE)
+	param <- coef(model)
+	if(length(param) > 0){
+		model <- omxSetParameters(model, labels=names(param), free=FALSE)
+	}
 	e <- model@expectation
 	model <- mxModel(model=model, name='KalmanScoring',
 		mxExpectationStateSpace(

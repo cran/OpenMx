@@ -463,6 +463,9 @@ print.summary.mxmodel <- function(x,...) {
 		params$ubound[is.na(params$ubound)] <- ""
 		params$lboundMet <- NULL
 		params$uboundMet <- NULL
+		if (!is.null(x$bootstrapSE) && length(x$bootstrapSE) == nrow(params)) {
+			params[['Std.Error']] <- x$bootstrapSE
+		}
 		if (!x$verbose) {
 			if (all(is.na(params[['Std.Error']]))) {
 				params[['Std.Error']] <- NULL
@@ -482,6 +485,13 @@ print.summary.mxmodel <- function(x,...) {
 				params <- cbind(before, 'A'=stars)
 			}
 		}
+		if (!is.null(x$bootstrapQuantile) && nrow(x$bootstrapQuantile) == nrow(params)) {
+			bq <- x$bootstrapQuantile
+			params <- cbind(params, bq)
+		}
+		cmap <- 1:ncol(params)
+		isBound <- colnames(params) %in% paste0(c('l','u'),'bound')
+		params <- params[,c(cmap[!isBound], cmap[isBound]),drop=FALSE]
 		print(params)
 		cat('\n')
 	}
@@ -786,6 +796,35 @@ refToDof <- function(model) {
 	}
 }
 
+ecdftable <- function(data){
+	x <- sort(unique(data))
+	Pn <- sapply(x,function(z){mean(data<=z,na.rm=T)})
+	return(cbind(x,Pn))
+}
+
+summarizeBootstrap <- function(mle, bootData, bq, summaryType) {
+	if (summaryType == 'quantile') {
+		t(apply(bootData, 2, quantile, probs=bq))
+	} else if (summaryType == 'bcbci') {
+		zcrit <- qnorm(bq)
+		out <- matrix(NA, nrow=length(mle), ncol=length(bq),
+			      dimnames=list(names(mle),
+					    sapply(bq, function(x) sprintf("%.1f%%", round(100*min(x), 1)))))
+		for(i in 1:length(mle)) {
+			ecdf.curr <- ecdftable(bootData[,i])
+			z0 <- qnorm(mean(bootData[,i] <= mle[i]))
+			for (qx in 1:length(bq)) {
+				phi <- pnorm(2*z0 + zcrit[qx])
+				out[i,qx] <- max(c(-Inf,subset(ecdf.curr[,1], ecdf.curr[,2]<=phi)))
+			}
+		}
+		out
+	} else {
+		warning(paste("boot.SummaryType =", omxQuotes(summaryType),
+			      "is not recognized"))
+	}
+}
+
 summary.MxModel <- function(object, ..., verbose=FALSE) {
 	model <- object
 	dotArguments <- list(...)
@@ -812,6 +851,35 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 	if (!is.null(model@compute$steps[['ND']]) && model@compute$steps[['ND']]$checkGradient &&
 	    !is.null(model@compute$steps[['ND']]$output$gradient)) {
 		retval$seSuspect <- !model@compute$steps[['ND']]$output$gradient[,'symmetric']
+	}
+	if (is(model@compute, "MxComputeBootstrap")) {
+		bq <- c(.25,.75)
+		if (!is.null(dotArguments[["boot.quantile"]])) {
+			bq <- sort(as.numeric(dotArguments[["boot.quantile"]]))
+		}
+		summaryType <- 'bcbci'
+		if (!is.null(dotArguments[["boot.SummaryType"]])) {
+			summaryType <- dotArguments[["boot.SummaryType"]]
+		}
+		cb <- model@compute
+		if (!is.null(cb@output$raw) && is.na(cb@only) && cb@output$numParam == nrow(retval$parameters)) {
+			raw <- cb@output$raw
+			mask <- raw[,'statusCode'] %in% cb@OK
+			bootData <- raw[mask, 3:(nrow(retval$parameters)+2), drop=FALSE]
+			if (nrow(bootData) >= 3 && sum(mask) < .95*nrow(raw)) {
+				pct <- round(100*sum(mask) / nrow(raw))
+				warning(paste0("Only ",pct,"% of the bootstrap replications ",
+					       "converged. Accuracy is much less than the ", nrow(raw),
+					       " replications requested"), call.=FALSE)
+			}
+			if (sum(mask) >= 3) {
+				retval$bootstrapSE <- apply(bootData, 2, sd)
+				retval$bootstrapQuantile <-
+					summarizeBootstrap(retval$parameters[, 'Estimate'], bootData, bq, summaryType)
+			}
+		}
+	} else if (any(grep('^boot\\.', names(dotArguments)))) {
+		warning("No bootstrap data found. See ?mxBootstrap")
 	}
 	retval$GREMLfixeff <- GREMLFixEffList(model)
 	retval$infoDefinite <- model@output$infoDefinite
@@ -1007,7 +1075,7 @@ logLik.MxModel <- function(object, ...) {
   else{out$Raw.SE <- "not requested"}
   return(out)
 }
-mxStandardizeRAMpaths <- function(model, SE=FALSE){
+mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
 	if (model@.wasRun && model@.modifiedSinceRun){
 		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
 			     "since it was run.")
@@ -1033,39 +1101,77 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE){
     inde.subs.flag <- TRUE
   }}
   covParam <- NULL
-  #If user requests SEs, check to be sure they can and should be computed:
   if(SE){
-    if(length(model@constraints)>0){
-      msg <- paste("standard errors will not be computed because model '",model@name,"' contains at least one mxConstraint",sep="")
-      warning(msg)
-      SE <- FALSE
-    }
-    if(SE & length(model@output$hessian)==0){
-      if(!model@.wasRun){
-        msg <- paste("standard errors will not be computed because model '",model@name,"' has not yet been run",sep="")
-        warning(msg)
-        SE <- FALSE
-      }
-      else{
-        warning("argument 'SE=TRUE' requires model to have a nonempty 'hessian' output slot; continuing with 'SE' coerced to 'FALSE'")
-        SE <- FALSE
-    }}
-    libraries <- rownames(installed.packages())
-    pkgcheck <- ("numDeriv" %in% libraries)
-    if(SE & !pkgcheck){
-      warning("argument 'SE=TRUE' requires package 'numDeriv' to be installed; continuing with 'SE' coerced to 'FALSE'")
-      SE <- FALSE
-    }
-    if(SE){
-      if(model@output$infoDefinite){
-        #solve() will fail if Hessian is computationally singular;
-        #chol2inv() will still fail if Hessian is exactly singular.
-        covParam <- 2*chol2inv(chol(model@output$hessian))
-        dimnames(covParam) <- dimnames(model@output$hessian)
-      }
-      #An indefinite Hessian usually means some SEs will be NaN:
-      else{covParam <- 2*solve(model@output$hessian)}
-  }}
+  	#If user requests SEs and provided no covariance matrix, check to be sure SEs can and should be computed:
+  	if(!length(cov)){
+  		if(length(model@constraints)>0){
+  			msg <- paste("standard errors will not be computed because model '",model@name,"' contains at least one mxConstraint",sep="")
+  			warning(msg)
+  			SE <- FALSE
+  		}
+  		if(SE & length(model@output$hessian)==0){
+  			if(!model@.wasRun){
+  				msg <- paste("standard errors will not be computed because model '",model@name,"' has not yet been run, and no matrix was provided for argument 'cov'",sep="")
+  				warning(msg)
+  				SE <- FALSE
+  			}
+  			else{
+  				warning("argument 'SE=TRUE' requires model to have a nonempty 'hessian' output slot, or a non-NULL value for argument 'cov'; continuing with 'SE' coerced to 'FALSE'")
+  				SE <- FALSE
+  			}}
+  		libraries <- rownames(installed.packages())
+  		pkgcheck <- ("numDeriv" %in% libraries)
+  		if(SE & !pkgcheck){
+  			warning("argument 'SE=TRUE' requires package 'numDeriv' to be installed; continuing with 'SE' coerced to 'FALSE'")
+  			SE <- FALSE
+  		}
+  		if(SE){
+  			if(!is.na(model@output$infoDefinite) && model@output$infoDefinite){
+  				#solve() will fail if Hessian is computationally singular;
+  				#chol2inv() will still fail if Hessian is exactly singular.
+  				covParam <- 2*chol2inv(chol(model@output$hessian))
+  				dimnames(covParam) <- dimnames(model@output$hessian)
+  			}
+  			#An indefinite Hessian usually means some SEs will be NaN:
+  			else{covParam <- 2*solve(model@output$hessian)}
+  		}
+  	}
+  	#If user requests SEs and provided a covariance matrix:
+  	else{
+  		#Conceivably, the user could provide a sampling covariance matrix that IS valid in the presence of MxConstraints...
+  		if(length(model@constraints)>0){
+  			msg <- paste("standard errors may be invalid because model '",model@name,"' contains at least one mxConstraint",sep="")
+  			warning(msg)
+  		}
+  		#Sanity checks on the value of argument 'cov':
+  		if(!is.matrix(cov)){ #<--Is it a matrix?
+  			cov <- try(as.matrix(cov),silent=T)
+  			if("try-error" %in% class(cov) || !is.matrix(cov)){ #<--If its not a matrix, can it be coerced to one?
+  				stop("non-NULL value to argument 'cov' must be (or be coercible to) a matrix")
+  			}
+  		}
+  		if(nrow(cov)!=ncol(cov)){ #<--Is it square?
+  			msg <- paste("non-NULL value to argument 'cov' must be a square matrix; it has ",nrow(cov)," rows and ",ncol(cov)," columns",sep="")
+  			stop(msg)
+  		}
+  		#Do its row and column names match?:
+  		if(!length(rownames(cov)) || !length(colnames(cov)) || any(rownames(cov) != colnames(cov))){
+  			stop("non-NULL value to argument 'cov' must have matching and complete rownames and colnames")
+  		}
+  		paramnames <- names(omxGetParameters(model))
+  		if(nrow(cov) != length(paramnames)){ #<--Do its dimensions match the number of free parameters?
+  			msg <- paste("value of argument 'cov' has dimension ",nrow(cov),", but '",model@name,"' has ",length(paramnames)," free parameters",sep="")
+  			stop(msg)
+  		}
+  		covnames <- colnames(cov)
+  		#Do its row and column names match the free-parameter labels (ignoring permutations)?:
+  		if(any(sort(covnames) != sort(paramnames))){
+  			msg <- paste("the dimnames of the matrix provided for argument 'cov' do not match the free-parameter labels of '",model@name,"'",sep="")
+  			stop(msg)
+  		}
+  		covParam <- cov[paramnames,paramnames]
+  	}
+  }
   #Check if single-group model uses RAM expectation, and proceed if so:
   if(length(model@submodels)==0){
     if(class(model$expectation)!="MxExpectationRAM"){stop(paste("model '",model@name,"' does not use RAM expectation",sep=""))}

@@ -260,7 +260,7 @@ void GradientOptimizerContext::solEqBFun(bool wantAJ) //<--"want analytic Jacobi
 	/*Note that this needs to happen even if no equality constraints have analytic Jacobians, because
 	analyticEqJacTmp is copied to the Jacobian matrix the elements of which are populated by code in
 	finiteDifferences.h, which knows to numerically populate an element if it's NA:*/
-	analyticEqJacTmp.setConstant(analyticEqJacTmp.rows(),analyticEqJacTmp.cols(),NA_REAL);
+	analyticEqJacTmp.setConstant(NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for(j = 0; j < int(st->conListX.size()); j++) {
@@ -294,7 +294,7 @@ void GradientOptimizerContext::myineqFun(bool wantAJ)
 
 	if (!ineq_n) return;
 	
-	analyticIneqJacTmp.setConstant(analyticIneqJacTmp.rows(),analyticIneqJacTmp.cols(),NA_REAL);
+	analyticIneqJacTmp.setConstant(NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for (j=0; j < int(st->conListX.size()); j++) {
@@ -518,7 +518,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 
 	if (verbose >= 1) {
 		int numConstr = fitMatrix->currentState->conListX.size();
-		mxLog("%s: engine %s (ID %d) #P=%d gradient=%s tol=%g constraints=%d",
+		mxLog("%s: engine %s (ID %d) #P=%lu gradient=%s tol=%g constraints=%d",
 		      name, engineName, engine, numParam, gradientAlgoName, optimalityTolerance,
 		      numConstr);
 	}
@@ -908,7 +908,7 @@ void ComputeCI::recordCI(Method meth, ConfidenceInterval *currentCI, int lower, 
 	}
 	INTEGER(VECTOR_ELT(detail, 4+fc.numParam))[detailRow] = meth;
 	INTEGER(VECTOR_ELT(detail, 5+fc.numParam))[detailRow] = diag;
-	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = 1 + fc.getInform();
+	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = fc.wrapInform();
 	++detailRow;
 }
 
@@ -1592,21 +1592,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 	SET_VECTOR_ELT(detail, 5+mle->numParam,
 		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
 				  OMX_STATIC_ARRAY_SIZE(diagLabels), diagLabels));
-	const char *statusCodeLabels[] = { // see ComputeInform type
-		"OK", "OK/green",
-		"infeasible linear constraint",
-		"infeasible non-linear constraint",
-		"iteration limit",
-		"not convex",
-		"nonzero gradient",
-		"bad deriv",
-		"?",
-		"internal error",
-		"infeasible start"
-	};
-	SET_VECTOR_ELT(detail, 6+mle->numParam,
-		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
-				  OMX_STATIC_ARRAY_SIZE(statusCodeLabels), statusCodeLabels));
+	SET_VECTOR_ELT(detail, 6+mle->numParam, allocInformVector(totalIntervals));
 
 	SEXP detailCols;
 	Rf_protect(detailCols = Rf_allocVector(STRSXP, numDetailCols));

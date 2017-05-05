@@ -1464,6 +1464,11 @@ namespace RelationalRAMExpectation {
 			flattenOneRow(homeEx, row, maxSize);
 			if (isErrorRaised()) return;
 		}
+		for (auto *ex : allEx) {
+			if (!ex->data->hasWeight()) continue;
+			Rf_error("%s: row weights provided in '%s' are not compatible with joins",
+				 expectation->name, ex->data->name);
+		}
 
 		if (ram->rampartEnabled()) {
 			int maxIter = ram->rampartCycleLimit;
@@ -1697,6 +1702,9 @@ namespace RelationalRAMExpectation {
 			Rf_protect(dv);
 			Rf_setAttrib(dv, R_NamesSymbol, obsNameVec);
 			dbg.add("dataVec", dv);
+		} else {
+			Rf_warning("%s: group %d too large to transfer to back to R",
+				   st.homeEx->name, arrayIndex+1);
 		}
 
 		SEXP aIndex, modelStart, obsStart;

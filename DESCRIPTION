@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2017-05-05
+Date: 2017-06-16
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -71,15 +71,15 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxErrorHandling.R' 'MxDetectCores.R' 'MxSaturatedModel.R'
         'omxBrownie.R' 'omxConstrainThresholds.R' 'omxGetNPSOL.R'
         'MxFitFunctionR.R' 'MxRObjective.R'
-        'MxExpectationHiddenMarkov.R' 'MxExpectationStateSpace.R'
-        'MxExpectationBA81.R' 'MxFitFunctionGREML.R'
-        'MxExpectationGREML.R' 'MxMI.R' 'MxFactorScores.R'
-        'MxRobustSE.R' 'MxAvailableOptimizers.R' 'MxTryHard.R' 'MxSE.R'
-        'MxAutoStart.R' 'zzz.R'
-Version: 2.7.11
+        'MxExpectationHiddenMarkov.R' 'MxExpectationMixture.R'
+        'MxExpectationStateSpace.R' 'MxExpectationBA81.R'
+        'MxFitFunctionGREML.R' 'MxExpectationGREML.R' 'MxMI.R'
+        'MxFactorScores.R' 'MxRobustSE.R' 'MxAvailableOptimizers.R'
+        'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'zzz.R'
+Version: 2.7.12
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-05-05 15:38:37 UTC; joshua
+Packaged: 2017-06-16 17:38:58 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -108,4 +108,4 @@ Author: Steven M. Boker [aut],
   Manjunath B G [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2017-05-05 23:06:11 UTC
+Date/Publication: 2017-06-17 00:06:47 UTC

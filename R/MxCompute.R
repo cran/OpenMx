@@ -1183,7 +1183,8 @@ mxComputeNelderMead <- function(
 	doPseudoHessian=FALSE,
 	ineqConstraintMthd=c("soft","eqMthd"), 
 	eqConstraintMthd=c("GDsearch","soft","backtrack","l1p"),
-	backtrackCtrl=c(0.5,5)
+	backtrackCtrl=c(0.5,5),
+	centerIniSimplex=FALSE
 	){
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -1240,11 +1241,13 @@ mxComputeNelderMead <- function(
 	if(length(backtrackCtrl)<2){stop("'backtrackCtrl' must be a numeric vector of length 2")}
 	backtrackCtrl1 <- as.numeric(backtrackCtrl[1])
 	backtrackCtrl2 <- as.integer(backtrackCtrl[2])
+	centerIniSimplex <- as.logical(centerIniSimplex[1])
 	return(new("MxComputeNelderMead", freeSet, fitfunction, verbose, nudgeZeroStarts, maxIter, alpha, 
 						 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
 						 iniSimplexColnames, validationRestart,
 						 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
-						 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian))
+						 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian,
+						 centerIniSimplex))
 }
 
 setClass(
@@ -1278,7 +1281,8 @@ setClass(
 		ineqConstraintMthd="character",
 		eqConstraintMthd="character",
 		backtrackCtrl1="numeric",
-		backtrackCtrl2="integer"))
+		backtrackCtrl2="integer",
+		centerIniSimplex="logical"))
 
 #TODO: a user or developer might someday want to directly use this low-level 'initialize' method instead of the high-level constructor function,
 #so typecasting should also occur here:
@@ -1288,7 +1292,8 @@ setMethod(
 					 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
 					 iniSimplexColnames, validationRestart,
 					 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
-					 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian){
+					 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian,
+					 centerIniSimplex){
 		.Object@name <- 'compute'
 		.Object@.persist <- TRUE
 		.Object@freeSet <- freeSet
@@ -1322,6 +1327,7 @@ setMethod(
 		.Object@eqConstraintMthd <- eqConstraintMthd
 		.Object@backtrackCtrl1 <- backtrackCtrl1
 		.Object@backtrackCtrl2 <- backtrackCtrl2
+		.Object@centerIniSimplex <- centerIniSimplex
 		.Object
 	})
 
@@ -1603,7 +1609,7 @@ setClass(Class = "MxComputeBootstrap",
 	     replications = "integer",
 	     verbose = "integer",
 	     parallel = "logical",
-	     OK = "character",
+	     OK = "ordered",
 	     only = "integer"
 	 ))
 
@@ -1701,7 +1707,7 @@ mxComputeBootstrap <- function(data, plan, replications=200, ...,
 	}, "")
 
 	new("MxComputeBootstrap", freeSet, data, plan, as.integer(replications),
-	    as.integer(verbose), parallel, OK, only)
+	    as.integer(verbose), parallel, as.statusCode(OK), only)
 }
 
 setMethod("displayCompute", signature(Ob="MxComputeBootstrap", indent="integer"),
@@ -1745,6 +1751,51 @@ setMethod("initialize", "MxComputeReportExpectation",
 
 mxComputeReportExpectation <- function(freeSet=NA_character_) {
 	new("MxComputeReportExpectation", freeSet)
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeGenerateData",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 expectation = "MxCharOrNumber"
+	 ))
+
+setMethod("initialize", "MxComputeGenerateData",
+	  function(.Object, expectation) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@expectation <- expectation
+		  .Object
+	  })
+
+setMethod("qualifyNames", signature("MxComputeGenerateData"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod();
+		.Object@expectation <- imxConvertIdentifier(.Object@expectation, modelname, namespace)
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeGenerateData"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@expectation)) {
+			.Object@expectation <- imxLocateIndex(flatModel, .Object@expectation, .Object)
+		}
+		.Object
+	})
+
+##' Generate data
+##'
+##' Generate data specified by the model expectations.
+##'
+##' @param expectation a character vector of expectations to generate data for
+##' @aliases
+##' MxComputeGenerateData-class
+
+mxComputeGenerateData <- function(expectation='expectation') {
+	new("MxComputeGenerateData", expectation)
 }
 
 #----------------------------------------------------

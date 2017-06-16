@@ -336,12 +336,12 @@ ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
 		for(avar in ordvars){
 			delthr <- thresh[,avar]
 			usethr <- 1:sum(!is.na(delthr))  # assumes NA indicates unused threshold
-			if (!is.null(origData)) {
+			if (!is.null(origData) && !is.null(origData[[avar]])) {
 				usethr <- 1:(length(levels(origData[[avar]])) - 1L)
 			}
 			delthr <- delthr[usethr]
 			levthr <- 1L:(length(usethr)+1L)
-			if (!is.null(origData)) {
+			if (!is.null(origData)  && !is.null(origData[[avar]])) {
 				levthr <- levels(origData[[avar]])
 			}
 			delvar <- cut(as.vector(data[,avar]), c(-Inf, delthr, Inf), labels=levthr)
@@ -351,7 +351,42 @@ ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
 	return(data)
 }
 
-generateRelationalData <- function(model, returnModel) {
+generateRelationalData <- function(model, returnModel, .backend) {
+	if (.backend) {
+		plan <- mxComputeGenerateData()
+		modelE <- mxModel(model, plan)
+		modelE <- mxRun(modelE, silent=TRUE)
+		simData <- modelE$compute$output
+
+		datalist <- modelE@runstate$datalist
+		for (dName in names(datalist)) {
+			if (is.null(simData[[dName]])) {
+				simData[[dName]] <- datalist[[dName]]$observed
+			} else {
+				orig <- datalist[[dName]]$observed
+				toCopy <- setdiff(colnames(orig), colnames(simData[[dName]]))
+				for (col in toCopy) {
+					simData[[dName]][[col]] <- orig[[col]]
+				}
+			}
+		}
+
+		names(simData) <- substr(names(simData), 1, nchar(names(simData))-5) #strip .data
+
+		if (!returnModel) {
+			return(simData)
+		} else {
+			for (modelName in names(simData)) {
+				if (modelName == model$name) {
+					model@data@observed <- simData[[modelName]]
+				} else {
+					model[[modelName]]@data@observed <- simData[[modelName]]
+				}
+			}
+			return(model)
+		}
+	}
+
 	plan <- mxComputeSequence(list(
 	    mxComputeOnce('expectation', 'distribution', 'flat'),
 	    mxComputeReportExpectation()
@@ -416,7 +451,12 @@ generateRelationalData <- function(model, returnModel) {
 	}
 }
 
-mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE) {
+mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE,
+			   ..., .backend=TRUE) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxGenerateData does not accept values for the '...' argument")
+	}
 	if (is(model, 'data.frame')) {
 		wlsData <- mxDataWLS(model)
 		fake <- mxModel("fake",
@@ -431,10 +471,11 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 	fellner <- is(model$expectation, "MxExpectationRAM") && length(model$expectation$between);
 	if (!fellner) {
 		origData <- NULL
-		if (!is.null(model@data)) {
+		if (!is.null(model@data) && model@data@type == 'raw') {
 			origData <- model@data@observed
 			if (missing(nrows)) nrows <- nrow(origData)
 		}
+		if (is.null(nrows)) stop("You must specify nrows")
 		data <- genericGenerateData(model$expectation, model, nrows)
 		if (use.miss && !is.null(origData) && all(colnames(data) %in% colnames(origData))) {
 			del <- is.na(origData[,colnames(data),drop=FALSE])
@@ -455,7 +496,7 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 		if (!missing(nrows)) {
 			stop("Specification of the number of rows is not supported for relational models")
 		}
-		generateRelationalData(model, returnModel)
+		generateRelationalData(model, returnModel, .backend)
 	}
 }
 

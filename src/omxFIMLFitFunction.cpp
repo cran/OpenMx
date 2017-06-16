@@ -1057,7 +1057,8 @@ void omxFIMLFitFunction::init()
 
 	cov = omxGetExpectationComponent(expectation, "cov");
 	if(cov == NULL) { 
-		omxRaiseError("No covariance expectation in FIML evaluation.");
+		omxRaiseErrorf("%s: covariance not found in expectation '%s'",
+			       name(), expectation->name);
 		return;
 	}
 
@@ -1166,5 +1167,10 @@ void omxFIMLFitFunction::init()
         newObj->halfCov = omxInitMatrix(covCols, covCols, TRUE, off->matrix->currentState);
         newObj->reduceCov = omxInitMatrix(covCols, covCols, TRUE, off->matrix->currentState);
         omxCopyMatrix(newObj->ordContCov, newObj->cov);
+
+	if (!expectation->thresholdsMat) {
+		omxRaiseErrorf("%s: ordinal data found in %d columns but no thresholds",
+			 expectation->name, numOrdinal);
+	}
     }
 }

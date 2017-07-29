@@ -4,10 +4,12 @@
 \alias{imxRowGradients}
 \title{imxRowGradients}
 \usage{
-imxRowGradients(model)
+imxRowGradients(model, robustSE = FALSE)
 }
 \arguments{
 \item{model}{An OpenMx model object that has been run}
+
+\item{robustSE}{Logical; are the row gradients being requested to calculate robust standard errors?}
 }
 \description{
 This is an internal function exported for those people who know

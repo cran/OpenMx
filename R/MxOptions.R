@@ -23,7 +23,7 @@ mxOption <- function(model, key, value, reset = FALSE) {
 		}
 		return(processDefaultOptionList(key, value))
 	}
-	if (length(value) > 1 && key!="No Sort Data") {
+	if (length(value) > 1 && key!="No Sort Data" && key != "Status OK") {
 		msg <- paste("argument 'value' must be either NULL or of length 1.",
 			"You gave me an object of length", length(value))
 		stop(msg)
@@ -75,6 +75,7 @@ mxOption <- function(model, key, value, reset = FALSE) {
 		"mxOption(NULL, '", key, "', '", value,"')", sep = ""))
         # to use NLOPT, use: mxOption(NULL, 'Default optimizer', 'NLOPT')
 	}
+	if (key == "Status OK") value <- as.statusCode(value)
 	model@options[[key]] <- value
 	return(model)
 }
@@ -89,12 +90,7 @@ processDefaultOptionList <- function(key, value) {
 			omxQuotes(key), "that cannot be found in",
 			"getOption('mxOptions')"))
 	}
-	if (!identical(optionsNames[[match]], key)) {
-		stop(paste("argument 'key' has a value",
-			omxQuotes(key), "but the option is named",
-			omxQuotes(optionsNames[[match]]), ": please correct",
-			"the capitalization and re-run mxOption()."))
-	}
+	key <- optionsNames[[match]] # repair capitalization
 	if (missing(value)) return(defaultOptions[[key]])
 	defaultOptions[[key]] <- value
 	options('mxOptions' = defaultOptions)
@@ -176,7 +172,8 @@ otherOptions <- list(
     "Gradient step size" = "Auto",#1.0e-7,
     "Parallel diagnostics" = "No",
     "Debug protect stack" = "No",
-		"Nudge zero starts" = "Yes"
+    "Nudge zero starts" = "Yes",
+    "Status OK"= as.statusCode(c("OK", "OK/green"))
 )
 
 limitMajorIterations <- function(options, numParam, numConstraints) {
@@ -186,6 +183,25 @@ limitMajorIterations <- function(options, numParam, numConstraints) {
 	}
 	options[["Major iterations"]] <- as.character(mIters)
 	options
+}
+
+imxGetNumThreads <- function() {
+	if (imxSfClient()) {
+		return(1L)
+	} else {
+		thrlimit <- as.integer(Sys.getenv("OMP_NUM_THREADS"))
+		if (!is.na(thrlimit)) {
+			return(thrlimit)
+		} else {
+			detect <- omxDetectCores()
+			if(is.na(detect)) detect <- 1L
+					# Due to demand by CRAN maintainers, we default to 2 cores
+					# when OMP_NUM_THREADS is not set. This seems like a bad
+					# policy to the OpenMx team, but we have no choice.
+			else detect <- 2L
+			return(detect)
+		}
+	}
 }
 
 generateOptionsList <- function(model, constraints, useOptimizer) {
@@ -215,22 +231,7 @@ generateOptionsList <- function(model, constraints, useOptimizer) {
 		options[["useOptimizer"]] <- "No"
 	}
 	if (is.null(options[["Number of Threads"]]) || options[["Number of Threads"]] == 0) {
-		if (imxSfClient()) {
- 			options[["Number of Threads"]] <- 1L 
-		} else {
-			thrlimit <- as.integer(Sys.getenv("OMP_NUM_THREADS"))
-			if (!is.na(thrlimit)) {
-				options[["Number of Threads"]] <- thrlimit
-			} else {
-				detect <- omxDetectCores()
-				if(is.na(detect)) detect <- 1L
-				# Due to demand by CRAN maintainers, we default to 2 cores
-				# when OMP_NUM_THREADS is not set. This seems like a bad
-				# policy to the OpenMx team, but we have no choice.
-				else detect <- 2L
-				options[["Number of Threads"]] <- detect 
-			}
-		}
+		options[["Number of Threads"]] <- imxGetNumThreads()
 	}
 	if (identical(options[["Standard Errors"]], "Yes") &&
 		identical(options[["Calculate Hessian"]], "No")) {

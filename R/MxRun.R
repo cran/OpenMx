@@ -346,7 +346,7 @@ as.statusCode <- function(code) {
 	}
 	if (is.numeric(code) || is.null(code)) {
 		mxFactor(code, levels=c(0:7,9:10), labels=lev)
-	} else if (is.character(code)) {
+	} else if (is.character(code) || all(is.na(code))) {
 		mxFactor(code, lev)
 	} else {
 		stop(paste("Don't know how to convert type", typeof(code),
@@ -357,18 +357,18 @@ as.statusCode <- function(code) {
 mxBootstrap <- function(model, replications=200, ...,
                         data=NULL, plan=NULL, verbose=0L,
                         parallel=TRUE, only=as.integer(NA),
-			OK=c("OK", "OK/green")) {
-  if (!is(model$compute, "MxComputeBootstrap")) {
-    if (missing(plan)) {
-      plan <- model$compute
+			OK=mxOption(model, "Status OK"), checkHess=FALSE) {
+    if (!missing(plan)) {
+	    stop("The 'plan' argument is deprecated. Use mxModel(model, plan) and then mxBootstrap")
     }
+    if (!is(model$compute, "MxComputeBootstrap")) {
+	    if (missing(checkHess)) checkHess <- as.logical(NA)
+	    model <- ProcessCheckHess(model, checkHess)
     if (missing(data)) {
       data <- enumerateDatasets(model)
     }
-    plan <- mxComputeBootstrap(data, plan)
+    plan <- mxComputeBootstrap(data, model@compute)
   } else {
-    if (!missing(plan)) stop(paste("Model", omxQuotes(model@name), "already has",
-                                   "a", omxQuotes(class(model$class)), "plan"))
     plan <- model$compute
   }
 
@@ -379,7 +379,7 @@ mxBootstrap <- function(model, replications=200, ...,
   plan$OK <- as.statusCode(OK)
   
   model <- mxModel(model, plan)
-  mxRun(model)
+  mxRun(model, suppressWarnings=TRUE)
 }
 
 omxGetBootstrapReplications <- function(model) {
@@ -392,6 +392,7 @@ omxGetBootstrapReplications <- function(model) {
 		     "instead of MxComputeBootstrap. Have you run this model",
 		     "through mxBootstrap already?"))
   }
+   assertModelFreshlyRun(model)
   cb <- model@compute
   if (is.null(cb@output$raw)) {
 	  stop(paste("No bootstrap data found. Please run this model",
@@ -410,7 +411,7 @@ omxGetBootstrapReplications <- function(model) {
   mask <- raw[,'statusCode'] %in% cb@OK
   bootData <- raw[mask, 3:(length(coef(model))+2), drop=FALSE]
   if (sum(mask) < 3) {
-	  stop(paste("Less than 3 replications are available.",
+	  stop(paste("Fewer than 3 replications are available.",
 		     "Use mxBootstrap to increase the number of replications."))
   }
    if (sum(mask) < .95*length(mask)) {

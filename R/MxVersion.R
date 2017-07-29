@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-gitVersion <- "v2.7.12"
+gitVersion <- "v2.7.13"
 
 mxVersion <- function (model=NULL, verbose=TRUE) {
 	pvers <- pkg_globals$myVersion
@@ -25,6 +25,8 @@ mxVersion <- function (model=NULL, verbose=TRUE) {
 			msg = paste(msg, "\nMacOS:", system("sw_vers -productVersion", intern=TRUE))
 		}
 		msg = paste(msg, "\nDefault optimiser: ", mxOption(NULL, "Default optimizer"), sep="")
+		msg = paste(msg, "\nNPSOL-enabled?: ", ifelse(imxHasNPSOL(),"Yes","No"), sep="")
+		msg = paste(msg, "\nOpenMP-enabled?: ", ifelse(imxHasOpenMP(),"Yes","No"), sep="")
 		if (!is.null(model)) {
 			thisModelsOptimiser = mxOption(model, "Default optimizer")
 		    if(!is.null(thisModelsOptimiser)){

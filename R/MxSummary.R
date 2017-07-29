@@ -936,13 +936,17 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 	return(retval)
 }
 
-logLik.MxModel <- function(object, ...) {
-	model <- object
+assertModelFreshlyRun <- function(model) {
 	if (model@.wasRun && model@.modifiedSinceRun) {
 		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
-			     "since it was run. The log likelihood may be out-of-date.")
+			     "since it was run.")
 		warning(msg)
 	}
+}
+
+logLik.MxModel <- function(object, ...) {
+	model <- object
+	assertModelFreshlyRun(model)
 	ll <- NA
 	if (!is.null(model@output) & !is.null(model@output$Minus2LogLikelihood)) {
 		ll <- -0.5*model@output$Minus2LogLikelihood
@@ -1079,11 +1083,8 @@ logLik.MxModel <- function(object, ...) {
   return(out)
 }
 mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
-	if (model@.wasRun && model@.modifiedSinceRun){
-		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
-			     "since it was run.")
-		warning(msg)
-	}
+	assertModelFreshlyRun(model)
+
   #If SE=T,need to check for independent submodels because they will have their own Hessians;
   #recur main function as appropriate:
   inde.subs.flag <- FALSE
@@ -1094,6 +1095,7 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
       (sapply(model@submodels,function(x){class(x$expectation)})=="MxExpectationRAM" | 
          sapply(model@submodels,function(x){length(x@submodels)>0}))
     if(sum(inde.subs)>0){
+    	out2 <- NULL
       #if ALL submodels are either independent RAM models or non-RAM models:
       if(all(RAM.subs==inde.subs)){ 
         out <- lapply(model@submodels[which(inde.subs)],mxStandardizeRAMpaths,SE=T)
@@ -1182,13 +1184,18 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
   }
   #Handle multi-group model:
   if(length(model@submodels)>0){
+  	out <- NULL
+  	if(class(model$expectation)=="MxExpectationRAM"){
+  		out <- list(.mxStandardizeRAMhelper(model=model,SE=SE,ParamsCov=covParam,ignoreSubmodels=TRUE))
+  		names(out)[1] <- model@name
+  	}
     if(!inde.subs.flag){
-      out <- lapply(
+      out <- c(out,lapply(
         model@submodels[which(
           (sapply(model@submodels,function(x){class(x$expectation)})=="MxExpectationRAM" | 
           sapply(model@submodels,function(x){length(x@submodels)>0}))
           )],
-        .mxStandardizeRAMhelper,SE=SE,ParamsCov=covParam)
+        .mxStandardizeRAMhelper,SE=SE,ParamsCov=covParam))
       if(length(out)==0){stop(paste("model '",model@name,"' does not use RAM expectation",sep=""))}
       return(out)
     }
@@ -1200,7 +1207,7 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
             !sapply(model@submodels,function(x){x@independent})
         )],
         .mxStandardizeRAMhelper,SE=SE,ParamsCov=covParam)
-      out <- as.list(c(out1,out2))
+      out <- c(out,out1,out2)
       if(length(out)==0){stop(paste("model '",model@name,"' contains no submodels that use RAM expectation",sep=""))}
       out <- out[names(model@submodels[which(
         (sapply(model@submodels,function(x){class(x$expectation)})=="MxExpectationRAM" | 
@@ -1219,11 +1226,6 @@ mxBootstrapStdizeRAMpaths <- function(model, bq=c(.25,.75), method=c('bcbci','qu
 			"MxModel ",omxQuotes(model@name),
 			" does not use RAM expectation\n(to use mxBootstrapStdizeRAMpaths() on a RAM submodel, run the function directly on that submodel",sep="")
 		stop(msg)
-	}
-	if (model@.wasRun && model@.modifiedSinceRun){
-		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
-								 "since it was run.")
-		warning(msg)
 	}
 	method <- match.arg(method)
 	realstdpaths <- .mxStandardizeRAMhelper(model=model,SE=FALSE,ParamsCov=NULL,inde.subs.flag=FALSE,ignoreSubmodels=TRUE)

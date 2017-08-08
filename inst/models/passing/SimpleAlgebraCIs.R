@@ -28,8 +28,9 @@ factorModel <- mxModel("One Factor", type="RAM",
     mxPath(from=latents, to=manifests, free=c(FALSE,TRUE,TRUE,TRUE,TRUE), values=1),
     mxPath(from=manifests, arrows=2, lbound=.0001),
     mxPath(from=latents, arrows=2, free=TRUE, values=1.0),
-    mxPath(from="one", to=manifests, arrows=1, free=T, values=colMeans(demoOneFactor)),
-    mxData(demoOneFactor, type="raw"),
+    mxData(cov(demoOneFactor), type="cov", numObs=500),
+    # mxPath(from="one", to=manifests, arrows=1, free=T, values=colMeans(demoOneFactor)),
+    # mxData(demoOneFactor, type="raw"),
     mxMatrix("Iden", nrow=nVars, name="I"),
     mxMatrix("Full", free=FALSE, values=diag(nrow=nManifest, ncol=nVars), name="Eff"),
     mxAlgebra(Eff%*%solve(I-A), name="Z"),
@@ -38,25 +39,13 @@ factorModel <- mxModel("One Factor", type="RAM",
     mxCI(c("P"))
 )
 factorFit <- mxRun(factorModel, intervals=FALSE)
-omxCheckCloseEnough(factorFit$output$fit, 934.095, .01)
-
-factorBoot <- mxBootstrap(factorFit, 100L, OK=c("OK","OK/green", "nonzero gradient/red"))
-omxCheckError(mxBootstrapEval(P, factorFit, compute=T),
-	      "Compute plan MxComputeSequence found in model 'One Factor' instead of MxComputeBootstrap. Have you run this model through mxBootstrap already?")
+omxCheckCloseEnough(factorFit$output$fit, -3660.596, .01)
 
 if (mxOption(NULL, 'Default optimizer') != "SLSQP") {ctype = 'none'} else {ctype = 'ineq'}
 
 factorFitCI <- mxRun(mxModel(factorFit, mxComputeConfidenceInterval(plan=mxComputeGradientDescent(), constraintType = ctype)), suppressWarnings = TRUE)
 factorSummCI <- summary(factorFitCI)
 summary(factorFitCI)
-
-set.seed(42L)
-bci <- mxBootstrapEval(P, factorBoot, bq=c(.025,.975))
-print(bci)
-omxCheckCloseEnough(factorFitCI$output$confidenceIntervals[,'lbound'] - bci[,"2.5%"],
-                    rep(0,5), .05)
-omxCheckCloseEnough(factorFitCI$output$confidenceIntervals[,'ubound'] - bci[,"97.5%"],
-                    rep(0,5), .03)
 
 omxCheckCloseEnough(coef(factorFit), coef(factorFitCI))
 omxCheckCloseEnough(factorFit$output$fit, factorFitCI$output$fit, 0)

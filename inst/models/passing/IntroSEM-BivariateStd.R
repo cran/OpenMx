@@ -62,11 +62,7 @@ biRegModel <- mxModel("Bivariate Regression of y on x1 and x2",
     mxData(observed=multiData1Cov, type="cov", numObs=500)
     )
 
-biRegModelOut <- mxRun(biRegModel)
-
-omxCheckError(confint(biRegModelOut, parm="foobar"), "Parameter 'foobar' not recognized")
-
-ci <- confint(biRegModelOut)
+biRegModelOut <- mxRun(biRegModel, suppressWarnings=TRUE)
 
 # ensure summary looks in model's runstate
 biRegModelOut$compute$steps[["GD"]]$engine <- 'XYZ'
@@ -94,4 +90,3 @@ omxCheckCloseEnough(1851.391, biRegModelOut$output$minimum, 0.001)
 
 omxCheckEquals(brmSum$optimizerEngine, mxOption(NULL, "Default optimizer"))
 
-omxCheckCloseEnough(unlist(ci['b1',]), c(.339, .556), .01)

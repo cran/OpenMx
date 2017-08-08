@@ -62,8 +62,6 @@ typedef int ComputeInform;
 	// An input parameter was invalid'
 #define INFORM_STARTING_VALUES_INFEASIBLE 10
 
-SEXP allocInformVector(int size);
-
 enum ComputeInfoMethod {
 	INFO_METHOD_DEFAULT,
 	INFO_METHOD_HESSIAN,
@@ -157,10 +155,6 @@ class FitContext {
 	FitStatisticUnits fitUnits;
 	int skippedRows;
 	double *est;
-	Eigen::Map< Eigen::VectorXd > getEst() {
-		Eigen::Map< Eigen::VectorXd > vec(est, numParam);
-		return vec;
-	}
 	std::vector<bool> profiledOut;
 	Eigen::VectorXd grad;
 	int infoDefinite;
@@ -199,10 +193,6 @@ class FitContext {
 	void log(int what);
 	void setInform(int _in) { inform = _in; };
 	int getInform() { return inform; };
-	int wrapInform() {
-		if (inform == INFORM_UNINITIALIZED) return NA_INTEGER;
-		return 1 + inform;
-	};
 	bool haveReferenceFit(omxMatrix *fitMat) {
 		if (std::isfinite(fit)) return true;
 		if (inform == INFORM_UNINITIALIZED) {

@@ -211,8 +211,8 @@ bool condOrdByRow::eval()
 				double logDet = covDecomp.log_determinant();
 				double cterm = M_LN_2PI * ss.dataMean.size();
 				//mxLog("[%d] iqf %f tr1 %f logDet %f cterm %f", ssx, iqf, tr1, logDet, cterm);
-				double ll = ss.rows * (iqf + logDet + cterm) + (ss.rows-1) * tr1;
-				record(-0.5 * ll + ss.rows * log(ordLik), ss.length);
+				double ll = ss.length * (iqf + logDet + cterm) + (ss.length-1) * tr1;
+				record(-0.5 * ll + ss.length * log(ordLik), ss.length);
 				contLogLik = 0.0;
 				continue;
 			}
@@ -569,7 +569,6 @@ static void recordGap(int rx, int &prev, std::vector<int> &identical)
 	prev = rx;
 }
 
-// assumes integral row weights TODO
 static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 {
 	omxExpectation *ex = off->expectation;
@@ -588,14 +587,8 @@ static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 	if (perRow == 0) return;
 
 	Eigen::VectorXd dvec(perRow * ss.length);
-	Eigen::VectorXi wvec(ss.length);
-	ss.rows = 0;
-	double *rowWeight = data->getWeightColumn();
-
 	for (int row=0; row < ss.length; ++row) {
 		int sortedRow = indexVector[from + row];
-		wvec[row] = rowWeight? rowWeight[sortedRow] : 1;
-		ss.rows += wvec[row];
 		for (int cx=0,dx=0; cx < dc.size(); ++cx) {
 			if (isOrdinal[cx]) continue;
 			int col = dc[cx];
@@ -607,7 +600,7 @@ static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 		}
 	}
 
-	computeMeanCovWeighted(dvec, perRow, wvec, ss.dataMean, ss.dataCov);
+	computeMeanCov(dvec, perRow, ss.dataMean, ss.dataCov);
 }
 
 static void addSufficientSet(omxFitFunction *off, int from, int to)
@@ -623,7 +616,6 @@ static void addSufficientSet(omxFitFunction *off, int from, int to)
 
 static void sortData(omxFitFunction *off)
 {
-	//mxLog("%s: sortData", off->matrix->name());
 	omxFIMLFitFunction* ofiml = ((omxFIMLFitFunction*)off);
 	auto& indexVector = ofiml->indexVector;
 	indexVector.clear();
@@ -845,12 +837,7 @@ static void setParallelism(FitContext *fc, omxData *data, omxFIMLFitFunction *pa
 	parent->curParallelism = parallelism;
 }
 
-void omxFIMLFitFunction::invalidateCache()
-{
-	builtCache = false;
-	indexVector.clear();
-	openmpUser = false;
-}
+#define ELAPSED_HISTORY_SIZE 5
 
 void omxFIMLFitFunction::compute(int want, FitContext *fc)
 {
@@ -858,8 +845,8 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 	omxFIMLFitFunction* ofiml = this;
 
 	if (want & FF_COMPUTE_INITIAL_FIT) return;
-
-	if (!builtCache) {
+	if (want & FF_COMPUTE_PREOPTIMIZE) {
+		ofiml->inUse = true;
 		if (fc->isClone()) {
 			omxMatrix *pfitMat = fc->getParentState()->getMatrixFromIndex(off->matrix);
 			ofiml->parent = (omxFIMLFitFunction*) pfitMat->fitFunction;
@@ -867,13 +854,8 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 			ofiml->curElapsed = NA_INTEGER;
 		} else {
 			off->openmpUser = ofiml->rowwiseParallel != 0;
-			if (!indexVector.size()) sortData(off);
+			if (!ofiml->indexVector.size()) sortData(off);
 		}
-		builtCache = true;
-	}
-
-	if (want & FF_COMPUTE_PREOPTIMIZE) {
-		inUse = true;
 		return;
 	}
 	if (want & FF_COMPUTE_FINAL_FIT && !ofiml->inUse) return;
@@ -929,9 +911,7 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 			omxFIMLFitFunction *ofo = getChildFIMLObj(fc, fitMatrix, tx);
 			ofo->skippedRows = 0;
 		}
-#if WANT_OPENMP
 #pragma omp parallel for num_threads(myParent->curParallelism) reduction(||:failed)
-#endif
 		for(int i = 0; i < myParent->curParallelism; i++) {
 			FitContext *kid = fc->childList[i];
 			omxMatrix *childMatrix = kid->lookupDuplicate(fitMatrix);
@@ -1031,7 +1011,6 @@ omxFitFunction *omxInitFIMLFitFunction()
 
 void omxFIMLFitFunction::init()
 {
-	builtCache = false;
 	auto *off = this;
 	auto *newObj = this;
 
@@ -1059,8 +1038,7 @@ void omxFIMLFitFunction::init()
 
 	cov = omxGetExpectationComponent(expectation, "cov");
 	if(cov == NULL) { 
-		omxRaiseErrorf("%s: covariance not found in expectation '%s'",
-			       name(), expectation->name);
+		omxRaiseError("No covariance expectation in FIML evaluation.");
 		return;
 	}
 
@@ -1169,10 +1147,5 @@ void omxFIMLFitFunction::init()
         newObj->halfCov = omxInitMatrix(covCols, covCols, TRUE, off->matrix->currentState);
         newObj->reduceCov = omxInitMatrix(covCols, covCols, TRUE, off->matrix->currentState);
         omxCopyMatrix(newObj->ordContCov, newObj->cov);
-
-	if (!expectation->thresholdsMat) {
-		omxRaiseErrorf("%s: ordinal data found in %d columns but no thresholds",
-			 expectation->name, numOrdinal);
-	}
     }
 }

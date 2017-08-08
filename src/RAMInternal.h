@@ -358,7 +358,6 @@ namespace RelationalRAMExpectation {
 		// are considered a compound component of this model.
 		std::vector<int> clump;
 		bool clumped;
-		bool heterogenousMean;
 	};
 
 	class addr {
@@ -443,7 +442,6 @@ namespace RelationalRAMExpectation {
 		// make dataColumn optional TODO
 		Eigen::ArrayXi                   dataColumn; // for OLS profiled constant parameters
 		Eigen::VectorXd                  dataVec;
-		Eigen::VectorXd                  simDataVec;
 		Eigen::VectorXd                  fullMean;
 		Eigen::VectorXd                  rawFullMean;
 		Eigen::VectorXd                  expectedVec;
@@ -480,7 +478,6 @@ namespace RelationalRAMExpectation {
 		Eigen::SparseMatrix<double> getInputMatrix() const;
 		void computeCov1(FitContext *fc);
 		void computeCov2();
-		void simulate();
 		void exportInternalState(MxRList &out, MxRList &dbg);
 		independentGroup &getParent();
 	};
@@ -515,12 +512,11 @@ namespace RelationalRAMExpectation {
 	private:
 		int flattenOneRow(omxExpectation *expectation, int frow, int &maxSize);
 		template <typename T>
-		bool placeSet(std::set<std::vector<T> > &toPlace, independentGroup *ig);
+		void placeSet(std::set<std::vector<T> > &toPlace, independentGroup *ig);
 		void planModelEval(int maxSize, FitContext *fc);
 		void identifyZeroVarPred(FitContext *fc);
 		int rampartRotate(int level);
 		template <typename T> void oertzenRotate(std::vector<T> &t1);
-		template <typename T> void unapplyRotationPlan(T accessor);
 		template <typename T> void applyRotationPlan(T accessor);
 		template <typename T> void appendClump(int ax, std::vector<T> &clump);
 		template <typename T> void propagateDefVar(omxRAMExpectation *ram,
@@ -536,7 +532,6 @@ namespace RelationalRAMExpectation {
 		bool hasRotationPlan() const { return rotationPlan.size() != 0; }
 		void exportInternalState(MxRList &dbg);
 		state &getParent() { return *parent; };
-		void simulate(FitContext *fc, MxRList &out);
 	};
 };
 
@@ -544,6 +539,7 @@ typedef std::set< std::pair< omxExpectation*, int> > dvScoreboardSetType;
 
 class omxRAMExpectation : public omxExpectation {
 	typedef omxExpectation super;
+	bool trivialF;
 	unsigned Zversion;
 	omxMatrix *_Z;
 	Eigen::VectorXi dataCols;  // composition of F permutation and expectation->dataColumns
@@ -554,7 +550,7 @@ class omxRAMExpectation : public omxExpectation {
 	std::vector<bool> ignoreDefVar;
 	std::vector<bool> latentFilter; // false when latent
 
- 	omxRAMExpectation() : Zversion(0), _Z(0) {};
+ 	omxRAMExpectation() : trivialF(false), Zversion(0), _Z(0) {};
 	virtual ~omxRAMExpectation();
 
 	omxMatrix *getZ(FitContext *fc);
@@ -589,9 +585,6 @@ class omxRAMExpectation : public omxExpectation {
 		return Eigen::Map<DataColumnType>(dataCols.data(), numDataColumns);
 	}
 	virtual std::vector< omxThresholdColumn > &getThresholdInfo() { return thresholds; }
-	virtual void invalidateCache();
-	virtual void generateData(FitContext *fc, MxRList &out);
-	virtual void flatten(FitContext *fc);
 };
 
 namespace RelationalRAMExpectation {

@@ -260,7 +260,7 @@ void GradientOptimizerContext::solEqBFun(bool wantAJ) //<--"want analytic Jacobi
 	/*Note that this needs to happen even if no equality constraints have analytic Jacobians, because
 	analyticEqJacTmp is copied to the Jacobian matrix the elements of which are populated by code in
 	finiteDifferences.h, which knows to numerically populate an element if it's NA:*/
-	analyticEqJacTmp.setConstant(NA_REAL);
+	analyticEqJacTmp.setConstant(analyticEqJacTmp.rows(),analyticEqJacTmp.cols(),NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for(j = 0; j < int(st->conListX.size()); j++) {
@@ -294,7 +294,7 @@ void GradientOptimizerContext::myineqFun(bool wantAJ)
 
 	if (!ineq_n) return;
 	
-	analyticIneqJacTmp.setConstant(NA_REAL);
+	analyticIneqJacTmp.setConstant(analyticIneqJacTmp.rows(),analyticIneqJacTmp.cols(),NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for (j=0; j < int(st->conListX.size()); j++) {
@@ -518,7 +518,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 
 	if (verbose >= 1) {
 		int numConstr = fitMatrix->currentState->conListX.size();
-		mxLog("%s: engine %s (ID %d) #P=%lu gradient=%s tol=%g constraints=%d",
+		mxLog("%s: engine %s (ID %d) #P=%d gradient=%s tol=%g constraints=%d",
 		      name, engineName, engine, numParam, gradientAlgoName, optimalityTolerance,
 		      numConstr);
 	}
@@ -908,7 +908,7 @@ void ComputeCI::recordCI(Method meth, ConfidenceInterval *currentCI, int lower, 
 	}
 	INTEGER(VECTOR_ELT(detail, 4+fc.numParam))[detailRow] = meth;
 	INTEGER(VECTOR_ELT(detail, 5+fc.numParam))[detailRow] = diag;
-	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = fc.wrapInform();
+	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = 1 + fc.getInform();
 	++detailRow;
 }
 
@@ -1539,8 +1539,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 		return;
 	}
 
-	omxState *state = fitMatrix->currentState;
-	Global->unpackConfidenceIntervals(state);
+	Global->unpackConfidenceIntervals(mle->state);
 
 	// Not strictly necessary, but makes it easier to run
 	// mxComputeConfidenceInterval alone without other compute
@@ -1566,16 +1565,9 @@ void ComputeCI::computeImpl(FitContext *mle)
 	Rf_protect(intervalCodes = Rf_allocMatrix(INTSXP, numInts, 2));
 
 	int totalIntervals = 0;
-	{
-		Eigen::Map< Eigen::ArrayXXd > interval(REAL(intervals), numInts, 3);
-		interval.fill(NA_REAL);
-		for(int j = 0; j < numInts; j++) {
-			ConfidenceInterval *oCI = Global->intervalList[j];
-			omxMatrix *ciMat = oCI->getMatrix(state);
-			omxRecompute(ciMat, mle);
-			interval(j, 1) = omxMatrixElement(ciMat, oCI->row, oCI->col);
-			totalIntervals += (oCI->bound != 0.0).count();
-		}
+	for(int j = 0; j < numInts; j++) {
+		ConfidenceInterval *oCI = Global->intervalList[j];
+		totalIntervals += (oCI->bound != 0.0).count();
 	}
 
 	int numDetailCols = 7 + mle->numParam;
@@ -1600,7 +1592,21 @@ void ComputeCI::computeImpl(FitContext *mle)
 	SET_VECTOR_ELT(detail, 5+mle->numParam,
 		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
 				  OMX_STATIC_ARRAY_SIZE(diagLabels), diagLabels));
-	SET_VECTOR_ELT(detail, 6+mle->numParam, allocInformVector(totalIntervals));
+	const char *statusCodeLabels[] = { // see ComputeInform type
+		"OK", "OK/green",
+		"infeasible linear constraint",
+		"infeasible non-linear constraint",
+		"iteration limit",
+		"not convex",
+		"nonzero gradient",
+		"bad deriv",
+		"?",
+		"internal error",
+		"infeasible start"
+	};
+	SET_VECTOR_ELT(detail, 6+mle->numParam,
+		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
+				  OMX_STATIC_ARRAY_SIZE(statusCodeLabels), statusCodeLabels));
 
 	SEXP detailCols;
 	Rf_protect(detailCols = Rf_allocVector(STRSXP, numDetailCols));
@@ -1618,6 +1624,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 
 	markAsDataFrame(detail, totalIntervals);
 
+	omxState *state = fitMatrix->currentState;
 	FitContext fc(mle, mle->varGroup);
 	FreeVarGroup *freeVarGroup = fc.varGroup;
 
@@ -1647,9 +1654,13 @@ void ComputeCI::computeImpl(FitContext *mle)
 	mle->copyParamToModel();
 
 	Eigen::Map< Eigen::ArrayXXd > interval(REAL(intervals), numInts, 3);
+	interval.fill(NA_REAL);
 	int* intervalCode = INTEGER(intervalCodes);
 	for(int j = 0; j < numInts; j++) {
 		ConfidenceInterval *oCI = Global->intervalList[j];
+		omxMatrix *ciMat = oCI->getMatrix(state);
+		omxRecompute(ciMat, mle);
+		interval(j, 1) = omxMatrixElement(ciMat, oCI->row, oCI->col);
 		interval(j, 0) = std::min(oCI->val[ConfidenceInterval::Lower], interval(j, 1));
 		interval(j, 2) = std::max(oCI->val[ConfidenceInterval::Upper], interval(j, 1));
 		intervalCode[j] = oCI->code[ConfidenceInterval::Lower];

@@ -31,7 +31,7 @@ row 1 and extra rows filled with NA}
 
 \item{verbose}{the level of runtime diagnostics (default 0L)}
 
-\item{weightColumn}{the name of the column in the data containing the row weights (DEPRECATED)}
+\item{weightColumn}{the name of the column in the data containing the row weights (default NA)}
 
 \item{EstepItem}{a simple matrix of item parameters for the
 E-step. This option is mainly of use for debugging derivatives.}
@@ -108,11 +108,12 @@ interest to developers.
 When a two-tier covariance matrix is recognized, this expectation
 automatically enables analytic dimension reduction (Cai, 2010).
 
-The optional `weightColumn' is superceded by the weight
-argument in \link{mxData}. For data with many repeated
-response patterns, model evaluation time can be
+The optional `weightColumn' argument names a column in
+\link{mxData} that contains the per-row weights. For data with
+many repeated response patterns, model evaluation time can be
 reduced. An easy way to transform your data into this form is to
-use \link[rpf]{compressDataFrame}. Non-integer weights are supported except for
+use \link[rpf]{compressDataFrame}.  By default, each row is given
+unit weight. Non-integer weights are supported except for
 \link[rpf]{EAPscores}.
 
 mxExpectationBA81 requires \link{mxComputeEM}. During a typical

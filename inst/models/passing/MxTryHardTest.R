@@ -88,6 +88,7 @@ omxCheckTrue(!length(factorFitCI$compute$steps$CI$output$detail))
 omxCheckTrue(!length(factorFitCI$output$confidenceIntervals))
 omxCheckTrue(!length(factorFitCI$output$confidenceIntervalCodes))
 omxCheckTrue(!length(factorFitCI$output$standardErrors))
+omxCheckTrue(length(factorFitCI$output$calculatedHessian))
 omxCheckTrue(!(factorFitCI$compute$.persist))
 
 factorFitCI <- mxTryHard(factorModel, fit2beat=-2863, extraTries=3, intervals=T, checkHess=F)
@@ -96,6 +97,7 @@ omxCheckTrue(length(factorFitCI$compute$steps$CI$output$detail))
 omxCheckTrue(length(factorFitCI$output$confidenceIntervals))
 omxCheckTrue(length(factorFitCI$output$confidenceIntervalCodes))
 omxCheckTrue(!length(factorFitCI$output$standardErrors))
+omxCheckTrue(length(factorFitCI$output$calculatedHessian))
 omxCheckTrue(!(factorFitCI$compute$.persist))
 
 factorFitCI <- mxTryHard(factorModel, fit2beat=-2863, extraTries=3, intervals=F, checkHess=T)
@@ -156,18 +158,16 @@ omxCheckTrue(!(factorFitCI$compute$.persist))
 
 factorModel <- mxOption(factorModel,"Standard Errors","Yes")
 
-factorFitCI <- omxCheckWarning(
-	mxTryHard(factorModel, fit2beat=-2863, extraTries=3, intervals=FALSE, checkHess=F),
+omxCheckWarning(
+	factorFitCI <- mxTryHard(factorModel, fit2beat=-2863, extraTries=3, intervals=FALSE, checkHess=F),
 	'the "Standard Errors" option is enabled and the "Calculate Hessian" option is disabled, which may result in poor-accuracy standard errors'
 )
 omxCheckEquals(names(factorFitCI$compute$steps),c("GD","SE","HQ","RD","RE"))
 omxCheckTrue(!length(factorFitCI$compute$steps$CI$output$detail))
 omxCheckTrue(!length(factorFitCI$output$confidenceIntervals))
 omxCheckTrue(!length(factorFitCI$output$confidenceIntervalCodes))
-if (mxOption(NULL, "Default optimizer") == 'NPSOL') {
-  omxCheckTrue(length(factorFitCI$output$standardErrors))
-  omxCheckTrue(length(factorFitCI$output$calculatedHessian))
-}
+omxCheckTrue(length(factorFitCI$output$standardErrors))
+omxCheckTrue(!length(factorFitCI$output$calculatedHessian))
 omxCheckTrue(!(factorFitCI$compute$.persist))
 
 omxCheckWarning(
@@ -178,9 +178,8 @@ omxCheckEquals(names(factorFitCI$compute$steps),c("GD","CI","SE","HQ","RD","RE")
 omxCheckTrue(length(factorFitCI$compute$steps$CI$output$detail))
 omxCheckTrue(length(factorFitCI$output$confidenceIntervals))
 omxCheckTrue(length(factorFitCI$output$confidenceIntervalCodes))
-if (mxOption(NULL, "Default optimizer") == 'NPSOL') {
-  omxCheckTrue(length(factorFitCI$output$standardErrors))
-}
+omxCheckTrue(length(factorFitCI$output$standardErrors))
+omxCheckTrue(!length(factorFitCI$output$calculatedHessian))
 omxCheckTrue(!(factorFitCI$compute$.persist))
 
 factorFitCI <- mxTryHard(factorModel, fit2beat=-2863, extraTries=3, intervals=F, checkHess=T)

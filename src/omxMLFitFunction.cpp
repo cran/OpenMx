@@ -313,8 +313,7 @@ omxFitFunction *MLFitState::initMorph()
 		return omxChangeFitType(oo, "imxFitFunciontStateSpace");
 	}
 
-	if (strEQ(expectation->expType, "MxExpectationHiddenMarkov") ||
-	    strEQ(expectation->expType, "MxExpectationMixture")) {
+	if (strEQ(expectation->expType, "MxExpectationHiddenMarkov")) {
 		return omxChangeFitType(oo, "imxFitFunciontHiddenMarkov");
 	}
 

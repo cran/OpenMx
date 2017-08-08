@@ -336,12 +336,12 @@ ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
 		for(avar in ordvars){
 			delthr <- thresh[,avar]
 			usethr <- 1:sum(!is.na(delthr))  # assumes NA indicates unused threshold
-			if (!is.null(origData) && !is.null(origData[[avar]])) {
+			if (!is.null(origData)) {
 				usethr <- 1:(length(levels(origData[[avar]])) - 1L)
 			}
 			delthr <- delthr[usethr]
 			levthr <- 1L:(length(usethr)+1L)
-			if (!is.null(origData)  && !is.null(origData[[avar]])) {
+			if (!is.null(origData)) {
 				levthr <- levels(origData[[avar]])
 			}
 			delvar <- cut(as.vector(data[,avar]), c(-Inf, delthr, Inf), labels=levthr)
@@ -351,42 +351,7 @@ ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
 	return(data)
 }
 
-generateRelationalData <- function(model, returnModel, .backend) {
-	if (.backend) {
-		plan <- mxComputeGenerateData()
-		modelE <- mxModel(model, plan)
-		modelE <- mxRun(modelE, silent=TRUE)
-		simData <- modelE$compute$output
-
-		datalist <- modelE@runstate$datalist
-		for (dName in names(datalist)) {
-			if (is.null(simData[[dName]])) {
-				simData[[dName]] <- datalist[[dName]]$observed
-			} else {
-				orig <- datalist[[dName]]$observed
-				toCopy <- setdiff(colnames(orig), colnames(simData[[dName]]))
-				for (col in toCopy) {
-					simData[[dName]][[col]] <- orig[[col]]
-				}
-			}
-		}
-
-		names(simData) <- substr(names(simData), 1, nchar(names(simData))-5) #strip .data
-
-		if (!returnModel) {
-			return(simData)
-		} else {
-			for (modelName in names(simData)) {
-				if (modelName == model$name) {
-					model@data@observed <- simData[[modelName]]
-				} else {
-					model[[modelName]]@data@observed <- simData[[modelName]]
-				}
-			}
-			return(model)
-		}
-	}
-
+generateRelationalData <- function(model, returnModel) {
 	plan <- mxComputeSequence(list(
 	    mxComputeOnce('expectation', 'distribution', 'flat'),
 	    mxComputeReportExpectation()
@@ -451,19 +416,7 @@ generateRelationalData <- function(model, returnModel, .backend) {
 	}
 }
 
-simulate.MxModel <- function(object, nsim = 1, seed = NULL, ...) {
-	if (!is.null(seed)) {
-		set.seed(seed)
-	}
-	mxGenerateData(object, nsim)
-}
-
-mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE,
-			   ..., .backend=TRUE) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxGenerateData does not accept values for the '...' argument")
-	}
+mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE) {
 	if (is(model, 'data.frame')) {
 		wlsData <- mxDataWLS(model)
 		fake <- mxModel("fake",
@@ -475,23 +428,13 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 		if(is.null(nrows)){nrows <- wlsData@numObs}
 		return(mxGenerateData(fake, nrows, returnModel))
 	}
-	if (is.null(model$expectation) && is(model$fitfunction, 'MxFitFunctionMultigroup')) {
-		if (!returnModel) stop("Must employ returnModel=TRUE for multigroup models")
-		todo <- sub(".fitfunction", "", model$fitfunction$groups, fixed=TRUE)
-		for (s1 in todo) {
-			model <- mxModel(model, mxGenerateData(model[[s1]], returnModel=TRUE, nrows=nrows,
-							       use.miss=use.miss, .backend=.backend))
-		}
-		return(model)
-	}
 	fellner <- is(model$expectation, "MxExpectationRAM") && length(model$expectation$between);
 	if (!fellner) {
 		origData <- NULL
-		if (!is.null(model@data) && model@data@type == 'raw') {
+		if (!is.null(model@data)) {
 			origData <- model@data@observed
-			if (length(nrows)==0) nrows <- nrow(origData)
+			if (missing(nrows)) nrows <- nrow(origData)
 		}
-		if (is.null(nrows)) stop("You must specify nrows")
 		data <- genericGenerateData(model$expectation, model, nrows)
 		if (use.miss && !is.null(origData) && all(colnames(data) %in% colnames(origData))) {
 			del <- is.na(origData[,colnames(data),drop=FALSE])
@@ -509,10 +452,10 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 		if (!use.miss) {
 			stop("use.miss=FALSE is not implemented for relational models")
 		}
-		if (length(nrows)) {
+		if (!missing(nrows)) {
 			stop("Specification of the number of rows is not supported for relational models")
 		}
-		generateRelationalData(model, returnModel, .backend)
+		generateRelationalData(model, returnModel)
 	}
 }
 

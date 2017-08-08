@@ -99,7 +99,6 @@ class BA81Expect : public omxExpectation {
 	const char *getLatentIncompatible(BA81Expect *other);
 
 	void refreshPatternLikelihood(bool hasFreeLatent);
-	virtual void invalidateCache();
 };
 
 template <typename Tmean, typename Tcov>

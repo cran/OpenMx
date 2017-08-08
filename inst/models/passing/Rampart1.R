@@ -138,7 +138,7 @@ if (!more.noise) {
 }
 #print(student$expectation$debug$rampartUsage)
 
-if (.Platform$OS.type != 'windows' && parallel::detectCores() > 1) {
+if (.Platform$OS.type != 'windows' && detectCores() > 1) {
 	omxCheckTrue(student$compute$steps[['GD']]$output$maxThreads > 1)
 }
 
@@ -150,9 +150,9 @@ if (0) {
 }
 
 got <- mxGenerateData(student)
-omxCheckTrue(setequal(names(got), c("school", "teacher", "student")))
-omxCheckTrue(setequal(colnames(got[['school']]),
-                      colnames(student$school$data$observed)))
+omxCheckEquals(names(got), c("school", "teacher", "student"))
+omxCheckEquals(colnames(got[['school']]),
+	       colnames(student$school$data$observed))
 omxCheckTrue(all(got[['school']]$C != student$school$data$observed$C))
 
 omxCheckError(mxGenerateData(student, 10, returnModel=TRUE),

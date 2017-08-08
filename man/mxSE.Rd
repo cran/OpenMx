@@ -4,7 +4,7 @@
 \alias{mxSE}
 \title{Compute standard errors in OpenMx}
 \usage{
-mxSE(x, model, details = FALSE, cov, ...)
+mxSE(x, model, details = FALSE, ...)
 }
 \arguments{
 \item{x}{the parameter to get SEs on (reference or expression)}
@@ -12,8 +12,6 @@ mxSE(x, model, details = FALSE, cov, ...)
 \item{model}{the \code{\link{mxModel}} to use.}
 
 \item{details}{logical. Whether to provide further details, e.g. the full sampling covariance matrix of x.}
-
-\item{cov}{optional matrix of covariances among the free parameters. If missing, the inverse Hessian from the fitted model is used.}
 
 \item{...}{further named arguments passed to \code{\link{mxEval}}}
 }
@@ -32,8 +30,6 @@ much like mxEval. When the \code{details} argument is TRUE, the full
 sampling covariance matrix of \code{x} is also returned as part of a list.
 The square root of the diagonals of this sampling covariance matrix are
 the standard errors.
-
-When supplying the \code{cov} argument, take care that the free parameter covariance matrix is given, not the information matrix.  These two are inverses of one another.
 }
 \examples{
 library(OpenMx)

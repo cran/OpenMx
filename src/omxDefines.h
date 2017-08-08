@@ -112,7 +112,6 @@ enum omxFFCompute {
 	FF_COMPUTE_GRADIENT     = 1<<5,
 	FF_COMPUTE_HESSIAN      = 1<<6,
 	FF_COMPUTE_IHESSIAN     = 1<<7,
-	FF_COMPUTE_DERIV        = FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN,
 
 	// Use this to obtain a Hessian or Inverse Hessian evaluated at the MLE.
 	// Check FitContext::wanted to see which one you got. It may be
@@ -178,7 +177,7 @@ static inline bool doubleEQ(double d1, double d2)
 	return memcmp(&d1, &d2, sizeof(double)) == 0;
 }
 
-#if defined(_OPENMP) && WANT_OPENMP
+#ifdef _OPENMP
 
 #include <omp.h>
 
@@ -235,9 +234,13 @@ static OMXINLINE void omx_omp_set_lock(omp_lock_t* __attribute__((unused)) lock)
 
 static OMXINLINE void omx_omp_unset_lock(omp_lock_t* __attribute__((unused)) lock) {}
 
-static inline int omp_get_thread_num() { return 0; }
 
 #endif // #ifdef _OPENMP
+
+
+#ifndef _OPENMP
+static inline int omp_get_thread_num() { return 0; }
+#endif
 
 #include <Eigen/Core>
 

@@ -48,7 +48,6 @@ static const omxExpectationTableEntry omxExpectationSymbolTable[] = {
 	{"MxExpectationBA81", &omxInitExpectationBA81},
 	{"MxExpectationGREML", &omxInitGREMLExpectation},
 	{"MxExpectationHiddenMarkov", &InitHiddenMarkovExpectation},
-	{"MxExpectationMixture", &InitMixtureExpectation},
 };
 
 void omxFreeExpectationArgs(omxExpectation *ox) {
@@ -173,11 +172,6 @@ void omxExpectation::loadFromR()
 			ox->numOrdinal = 0;
 		}
 	}
-}
-
-void omxExpectation::generateData(FitContext *, MxRList &out)
-{
-	Rf_error("%s: generateData not implemented for '%s'", name, expType);
 }
 
 omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os) {

@@ -1,8 +1,3 @@
-# ===========
-# = HISTORY =
-# ===========
-# 2017-04-14 05:07PM TBATES THIS SCRIPT doesn't run - needs new WLS objective
-
 #
 #   Copyright 2007-2012 The OpenMx Project
 #
@@ -46,7 +41,7 @@ require(MASS)
 
 
 set.seed(200)
-rs = .5
+rs=.5
 xy <- mvrnorm (1000, c(0,0), matrix(c(1,rs,rs,1),2,2))
 testData <- xy
 selVars <- c("X","Y")
@@ -58,9 +53,23 @@ covData <- cov(testData)
 
 
 bivSatModel3 <- mxModel("bivSat3",
-    mxMatrix("Symm", nrow=2, ncol=2, free=T, values = c(1,.5,1), name = "expCov"),
-		mxData(observed=covData, type="cov", numObs=1000),
-		mxFitFunctionWLS(covariance="expCov", dimnames=selVars)
+    mxMatrix(
+        type="Symm", 
+        nrow=2, 
+        ncol=2, 
+        free=T, 
+        values=c(1,.5,1), 
+        name="expCov"
+    ),
+    mxData(
+        observed=covData, 
+        type="cov", 
+        numObs=1000 
+    ),
+    imxWLSObjective(
+        covariance="expCov",
+        dimnames=selVars
+    )
 )
 
 bivSatFit3 <- mxRun(bivSatModel3)

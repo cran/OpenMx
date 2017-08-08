@@ -18,6 +18,8 @@
 ##' A list of supported model types
 imxModelTypes <- list()
 
+imxVariableTypes <- character()
+
 mxTypes <- function() {
 	return(names(imxModelTypes))
 }

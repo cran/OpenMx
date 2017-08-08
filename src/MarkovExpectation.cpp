@@ -33,10 +33,8 @@ public:
 	ScaleType scale;
 	omxMatrix *scaledInitial;
 	omxMatrix *scaledTransition;
-	const bool isMixtureInterface;
 
-	MarkovExpectation(bool _isMixtureInterface)
-		: initialV(0), transitionV(0), isMixtureInterface(_isMixtureInterface) {};
+	MarkovExpectation() : initialV(0), transitionV(0) {};
 	virtual ~MarkovExpectation();
 	virtual void init();
 	virtual void compute(FitContext *fc, const char *what, const char *how);
@@ -45,10 +43,7 @@ public:
 };
 
 omxExpectation *InitHiddenMarkovExpectation()
-{ return new MarkovExpectation(false); }
-
-omxExpectation *InitMixtureExpectation()
-{ return new MarkovExpectation(true); }
+{ return new MarkovExpectation; }
 
 MarkovExpectation::~MarkovExpectation()
 {
@@ -68,13 +63,8 @@ void MarkovExpectation::init()
 		components.push_back(omxExpectationFromIndex(cvec[cx], currentState));
 	}
 
-	if (isMixtureInterface) {
-		initial = omxNewMatrixFromSlot(rObj, currentState, "weights");
-		transition = 0;
-	} else {
-		initial = omxNewMatrixFromSlot(rObj, currentState, "initial");
-		transition = omxNewMatrixFromSlot(rObj, currentState, "transition");
-	}
+	initial = omxNewMatrixFromSlot(rObj, currentState, "initial");
+	transition = omxNewMatrixFromSlot(rObj, currentState, "transition");
 
 	ProtectedSEXP Rscale(R_do_slot(rObj, Rf_install("scale")));
 	auto scaleName = CHAR(STRING_ELT(Rscale, 0));
@@ -130,8 +120,7 @@ void MarkovExpectation::populateAttr(SEXP robj)
 	MxRList out;
 
 	EigenVectorAdaptor Ei(scaledInitial);
-	const char *initialName = isMixtureInterface? "weights" : "initial";
-	out.add(initialName, Rcpp::wrap(Ei));
+	out.add("initial", Rcpp::wrap(Ei));
 
 	if (scaledTransition) {
 		EigenMatrixAdaptor Et(scaledTransition);

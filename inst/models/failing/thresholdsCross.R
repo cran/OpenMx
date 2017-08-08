@@ -1,11 +1,4 @@
-# ===========
-# = history =
-# ===========
-# 2017-04-14 05:56PM TBATES
-# update with 	mxExpectationNormal, mxFitFunctionML()
-
-# Error is that OpenMx allows estimated thresholds to get out of order.
-# This script trigger this by starting them very close together
+# try to reverse the estimated thresholds by putting them very close together
 
 library(OpenMx)
 library(mvtnorm)
@@ -39,31 +32,20 @@ first <- mxModel("Sub",
 	mxMatrix("Stand", 2, 2, TRUE, sigma, name="S"),
 	mxMatrix("Zero", 1, 2, name="M"),
 	mxMatrix("Full", 2, 2, TRUE, c(-1, 1), name="T"),
-	mxExpectationNormal("S", "M", names(oDat), "T"),
-	mxFitFunctionML()
-)
+	mxFIMLObjective("S", "M", names(oDat), "T")
+	)
 
 firstTest <- mxRun(first, unsafe=TRUE)
-# as of 2.7.9 gives code red
-# In model 'Sub' Optimizer returned a non-zero status code 6. The model does not satisfy the first-order optimality conditions to the required accuracy, and no improved point for the merit function could be found during the final linesearch (Mx status RED)
 
 second <- mxModel("Sub",
 	mxData(oDat, "raw"),
 	mxMatrix("Stand", 2, 2, TRUE, sigma, name="S"),
 	mxMatrix("Zero", 1, 2, name="M"),
 	mxMatrix("Full", 2, 2, TRUE, c(0, 0.001), name="T"),
-	mxExpectationNormal("S", "M", names(oDat), "T"),
-	mxFitFunctionML()
-)
+	mxFIMLObjective("S", "M", names(oDat), "T")
+	)
 
 secondTest <- mxRun(second, unsafe=TRUE)
-# Warning messages:
-# 1: In model 'Sub' Optimizer returned a non-zero status code 10. Starting values are not feasible. Consider mxTryHard()
-# 2: The job for model 'Sub' exited abnormally with the error message: fit is not finite (0: Found 1 thresholds too close together in column 1.
-# 1: Found 1 thresholds too close together in column 1.
-# 2: Found 1 thresholds too close together in column 1.
-# 3: Found 1 thresholds too close together in column 1.
-# )
 
 # show that the error is due to threshold reversal
 firstCross  <- any((firstTest$T$values[2,] - firstTest$T$values[1,])<0)

@@ -49,9 +49,8 @@ factorModelPath <- mxModel("OneFactorPath",
                                   free=FALSE, values=1.0),
                            mxData(cov(demoOneFactor), type="cov",
                                   numObs=500))
-omxCheckWarning(
-	mxStandardizeRAMpaths(factorModelPath,T),
-  "standard errors will not be computed because model 'OneFactorPath' has not yet been run, and no matrix was provided for argument 'cov'")
+omxCheckWarning(mxStandardizeRAMpaths(factorModelPath,T),
+                "standard errors will not be computed because model 'OneFactorPath' has not yet been run")
 factorPathFit <- mxRun(factorModelPath, suppressWarnings = T)
 
 ( matrixFitPar <- summary(factorMatrixFit)$parameters )
@@ -78,31 +77,6 @@ omxCheckCloseEnough(
   c(0.0097233354792961,0.00640855820968981,0.00551439004191031,0.00400750800616116,0.00327547260416904,
     0.0173329991211512,0.0119526603725942,0.0104094769784555,0.00771335074796404,0.00637115856365944,0),
   5e-5)
-
-
-#Check errors and warnings:
-pointlessAlg <- mxModel(factorPathFit, mxAlgebra(1))
-omxCheckWarning(
-	mxStandardizeRAMpaths(pointlessAlg),
-	"MxModel 'OneFactorPath' was modified since it was run."
-)
-pointlessConstraint <- mxModel(factorModelPath, mxConstraint(1==1))
-pointlessConstraint <- mxRun(pointlessConstraint)
-omxCheckWarning(
-	mxStandardizeRAMpaths(pointlessConstraint,T),
-	"standard errors will not be computed because model 'OneFactorPath' contains at least one mxConstraint"
-)
-#NPSOL populates the 'hessian' slot of the output with its own final Hessian when there is no MxComputeNumericDeriv step:
-if(mxOption(NULL,"Default optimizer") != "NPSOL"){
-	plan <- omxDefaultComputePlan()
-	plan$steps <- list(plan$steps$GD, plan$steps$RE)
-	nohess <- mxModel(factorModelPath, plan)
-	nohess <- mxRun(nohess)
-	omxCheckWarning(
-		mxStandardizeRAMpaths(nohess,T),
-		"argument 'SE=TRUE' requires model to have a nonempty 'hessian' output slot, or a non-NULL value for argument 'cov'; continuing with 'SE' coerced to 'FALSE'"
-	)
-}
 
 #Make more models and check mxStandardizeRAMpaths()'s output for multigroup:
 data("twinData", package="OpenMx")
@@ -252,15 +226,6 @@ zpath4 <- mxStandardizeRAMpaths(bigrun3,T)
 omxCheckEquals(sum(zpath4$OneFactorPath==zpath3$OneFactorPath,na.rm=T),93)
 omxCheckEquals(names(zpath4),c("OneFactorPath","twinACE","LinearGrowthCurveModel_MatrixSpecification"))
 omxCheckEquals(names(zpath4[[2]]),c("MZ","DZ"))
-
-#Regression test to ensure (1) that if the "container" model uses RAM expectation, its results are included in the standardized-paths output,
-#and (2) that its element of the output list is named after it:
-littlemod <- mxModel(factorModelPath, mxModel(growthCurveModel, independent=T))
-littlerun <- mxRun(littlemod)
-zpath5 <- mxStandardizeRAMpaths(littlerun)
-omxCheckEquals(names(zpath5)[1],factorModelPath$name)
-omxCheckEquals(zpath4$OneFactorPath$Std.Value,zpath5$OneFactorPath$Std.Value)
-omxCheckEquals(zpath4$LinearGrowthCurveModel_MatrixSpecification$Std.Value,zpath5$LinearGrowthCurveModel_MatrixSpecification$Std.Value)
 
 # #Test mxTryHard(), since the initial run of 'bigmod' gets Code Red:
 # set.seed(420)

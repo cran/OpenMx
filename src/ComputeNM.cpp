@@ -248,13 +248,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	ScopedProtect p29(slotValue, R_do_slot(rObj, Rf_install("backtrackCtrl2")));
 	backtrackCtrl2 = Rf_asInteger(slotValue);
 	if(verbose){
-		mxLog("omxComputeNM member 'backtrackCtrl2' is %d", backtrackCtrl2);
-	}
-	
-	ScopedProtect p31(slotValue, R_do_slot(rObj, Rf_install("centerIniSimplex")));
-	centerIniSimplex = Rf_asLogical(slotValue);
-	if(verbose){
-		mxLog("omxComputeNM member 'centerIniSimplex' is %d", centerIniSimplex);
+		mxLog("omxComputeNM member 'backtrackCtrl1' is %d", backtrackCtrl2);
 	}
 	
 	feasTol = Global->feasibilityTolerance;
@@ -299,12 +293,11 @@ void omxComputeNM::computeImpl(FitContext *fc){
 	nmoc.maxIter = maxIter;
 	nmoc.iniSimplexType = iniSimplexType;
 	nmoc.iniSimplexEdge = iniSimplexEdge;
-	nmoc.centerIniSimplex = centerIniSimplex;
 	nmoc.fit2beat = R_PosInf;
 	nmoc.bignum = bignum;
 	nmoc.iniSimplexMat = iniSimplexMat;
 	nmoc.countConstraintsAndSetupBounds();
-	if(eqConstraintMthd==4 && (nmoc.numEqC || (ineqConstraintMthd && nmoc.numIneqC))){
+	if( (nmoc.numIneqC || nmoc.numEqC) && eqConstraintMthd==4 ){
 		if(verbose){mxLog("starting l1-penalty algorithm");}
 		fc->iterations = 0; //<--Not sure about this
 		nmoc.maxIter = maxIter/10;
@@ -346,7 +339,6 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		nmoc2.iniSimplexType = 1;
 		nmoc2.iniSimplexEdge = 
 			sqrt((nmoc.vertices[nmoc.n] - nmoc.vertices[0]).dot(nmoc.vertices[nmoc.n] - nmoc.vertices[0]));
-		nmoc2.centerIniSimplex = true;
 		nmoc2.fit2beat = nmoc.bestfit;
 		nmoc2.bignum = nmoc.bignum;
 		nmoc2.est = nmoc.est;
@@ -375,7 +367,8 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		fc->iterations += nmoc2.itersElapsed;
 	}
 	
-	if(doPseudoHessian && (nmoc.statuscode==0 || nmoc.statuscode==4) && !nmoc.vertexInfeas.sum() && !nmoc.numEqC && !nmoc.addPenalty){
+	if(doPseudoHessian && (nmoc.statuscode==0 || nmoc.statuscode==4) && !nmoc.vertexInfeas.sum() && !nmoc.numEqC){
+		nmoc.addPenalty = false;
 		nmoc.calculatePseudoHessian();
 	}
 	
@@ -420,7 +413,7 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		}
 	}
 	xproxOut = xdiffs.array().maxCoeff();
-	if(!nmoc.vertexInfeas.sum() && !nmoc.numEqC && !nmoc.addPenalty){
+	if(!nmoc.vertexInfeas.sum() && !nmoc.numEqC){
 		Eigen::FullPivLU< Eigen::MatrixXd > luq(Q);
 		if(luq.isInvertible()){
 			Eigen::MatrixXd Qinv(nmoc.n, nmoc.n);
@@ -557,8 +550,8 @@ void NelderMeadOptimizerContext::countConstraintsAndSetupBounds()
 	//If there aren't any of one of the two constraint types, then the
 	//method for handling them shouldn't matter.  But, switching the
 	//method to the simplest setting helps simplify programming logic:
-	if(!numEqC && !NMobj->ineqConstraintMthd){NMobj->eqConstraintMthd = 1;}
 	if(!numIneqC){NMobj->ineqConstraintMthd = 0;}
+	if(!numEqC){NMobj->eqConstraintMthd = 1;}
 	equality.resize(numEqC);
 	inequality.resize(numIneqC);
 	
@@ -866,13 +859,13 @@ void NelderMeadOptimizerContext::evalNewPoint(Eigen::VectorXd &newpt, Eigen::Vec
 	}
 }
 
-void NelderMeadOptimizerContext::jiggleCoord(Eigen::VectorXd &xin, Eigen::VectorXd &xout, double scal){
+void NelderMeadOptimizerContext::jiggleCoord(Eigen::VectorXd &xin, Eigen::VectorXd &xout){
 	double a,b;
 	int i;
 	GetRNGstate();
 	for(i=0; i < xin.size(); i++){
-		b = Rf_runif(1.0-scal,1.0+scal);
-		a = Rf_runif(0.0-scal,0.0+scal);
+		b = Rf_runif(0.75,1.25);
+		a = Rf_runif(-0.25,0.25);
 		xout[i] = b*xin[i] + a;
 	}
 	PutRNGstate();
@@ -940,7 +933,7 @@ void NelderMeadOptimizerContext::initializeSimplex(Eigen::VectorXd startpt, doub
 			xin=iniSimplexMat2.row(0);
 			for(i=0; i<SiniSupp.rows(); i++){
 				xout=SiniSupp.row(i);
-				jiggleCoord(xin, xout, edgeLength/4.0);
+				jiggleCoord(xin, xout);
 				SiniSupp.row(i) = xout;
 			}
 		}
@@ -1050,18 +1043,9 @@ void NelderMeadOptimizerContext::initializeSimplex(Eigen::VectorXd startpt, doub
 			vertices[0] = startpt;
 			for(i=1; i<n+1; i++){
 				vertices[i].setZero(numFree);
-				jiggleCoord(vertices[0],vertices[i],edgeLength/4.0);
+				jiggleCoord(vertices[0],vertices[i]);
 			}
 			break;
-		}
-		if(centerIniSimplex && !isRestart){
-			eucentroidCurr.setZero(numFree);
-			for(i=0; i<n+1; i++){
-				eucentroidCurr += vertices[i] / (n+1.0);
-			}
-			for(i=0; i<n+1; i++){
-				vertices[i] += startpt - eucentroidCurr;
-			}
 		}
 	}
 	//Now evaluate each vertex:
@@ -1405,9 +1389,6 @@ void NelderMeadOptimizerContext::invokeNelderMead(){
 	
 	//Loop is: sort, check convergence, check progress, transform;
 	do{
-		if(verbose){
-			mxLog("Nelder-Mead iteration %d / %d",itersElapsed,maxIter);
-		}
 		if(itersElapsed){
 			//Order the vertices by fit value:
 			if(needFullSort){fullSort();}
@@ -1515,11 +1496,6 @@ void NelderMeadOptimizerContext::calculatePseudoHessian()
 				NMobj->phInfeas.resize(0);
 				return;
 			}
-			else if(NMobj->phFvals(i,0) < bestfit){
-				est = currpt;
-				bestfit = NMobj->phFvals(i,0);
-				estInfeas = 0;
-			}
 			//We can't use Nelder & Mead's analytic solution if the midpoints of the edges aren't actually such:
 			if( (currpt.array() != currpt2.array()).any() ){
 				canDoAnalyt = false;
@@ -1546,10 +1522,10 @@ void NelderMeadOptimizerContext::calculatePseudoHessian()
 		if(lub.isInvertible()){
 			pmin = vertices[0] - (Q * lub.inverse() * a);
 			evalNewPoint(pmin, vertices[0], pminfit, pminInfeas, vertexInfeas[0]);
-			if(pminfit<bestfit && !pminInfeas){
+			if(pminfit<fvals[0] && !pminInfeas){
 				est = pmin;
 				bestfit = pminfit;
-				estInfeas = 0;
+				estInfeas = pminInfeas;
 			}
 		}
 		Eigen::MatrixXd Qinv = luq.inverse();
@@ -1601,7 +1577,7 @@ void NelderMeadOptimizerContext::calculatePseudoHessian()
 			}
 			pmin = vertices[0] - (Binv * a);
 			evalNewPoint(pmin, vertices[0], pminfit, pminInfeas, vertexInfeas[0]);
-			if(pminfit<bestfit && !pminInfeas){
+			if(pminfit<fvals[0] && !pminInfeas){
 				est = pmin;
 				bestfit = pminfit;
 				estInfeas = pminInfeas;

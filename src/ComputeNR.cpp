@@ -388,19 +388,19 @@ void ComputeNR::computeImpl(FitContext *fc)
 	}
 
 	if (converged) {
-		double gradNorm = 0.0;
+		double gradThresh = Global->getGradientThreshold(fc->fit);
 		double feasibilityTolerance = Global->feasibilityTolerance;
+		bool localMin = true;
 		// factor out simliar code in omxHessianCalculation
 		for (int gx=0; gx < int(fc->numParam); ++gx) {
-			if ((fc->grad[gx] > 0 && fabs(fc->est[gx] - lbound[gx]) < feasibilityTolerance) ||
-			    (fc->grad[gx] < 0 && fabs(fc->est[gx] - ubound[gx]) < feasibilityTolerance)) continue;
-			double g1 = fc->grad[gx];
-			gradNorm += g1 * g1;
+			if (fabs(fc->grad[gx]) > gradThresh &&
+			    !((fc->grad[gx] > 0 && fabs(fc->est[gx] - lbound[gx]) < feasibilityTolerance) ||
+			      (fc->grad[gx] < 0 && fabs(fc->est[gx] - ubound[gx]) < feasibilityTolerance))) {
+				localMin = false;
+				break;
+			}
 		}
-		gradNorm = sqrt(gradNorm);
-		if (gradNorm > Global->getGradientThreshold(fc->fit)) {
-			if (verbose >= 1) mxLog("gradient norm=%f gradient thresh=%f",
-						gradNorm, Global->getGradientThreshold(fc->fit));
+		if (!localMin) {
 			fc->setInform(INFORM_NOT_AT_OPTIMUM);
 		} else {
 			fc->setInform(INFORM_CONVERGED_OPTIMUM);

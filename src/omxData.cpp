@@ -30,7 +30,7 @@
 #include "omxExpectationBA81.h"  // improve encapsulation TODO
 #include "EnableWarnings.h"
 
-omxData::omxData() : rownames(0), primaryKey(-1),
+omxData::omxData() : rownames(0), primaryKey(-1), weightCol(-1), currentWeightColumn(0),
 		     dataObject(0), dataMat(0), meansMat(0), acovMat(0), obsThresholdsMat(0),
 		     thresholdCols(0), numObs(0), _type(0), numFactor(0), numNumeric(0),
 		     rows(0), cols(0), expectation(0)
@@ -164,6 +164,10 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 		if (pk != NA_INTEGER) {
 			primaryKey = pk - 1;
 		}
+
+		ProtectedSEXP Rweight(R_do_slot(dataObj, Rf_install("weight")));
+		weightCol = Rf_asInteger(Rweight);
+		if (weightCol != NA_INTEGER) weightCol -= 1;
 	}
 	{ScopedProtect pdl(dataLoc, R_do_slot(dataObj, Rf_install("observed")));
 	if(OMX_DEBUG) {mxLog("Processing Data Elements.");}
@@ -223,8 +227,12 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 	}
 	}
 
-	if (primaryKey != -1 && !(od->rawCols.size() && od->rawCols[primaryKey].intData)) {
+	if (od->hasPrimaryKey() && !(od->rawCols.size() && od->rawCols[primaryKey].intData)) {
 		Rf_error("%s: primary key must be an integer or factor column in raw observed data", od->name);
+	}
+
+	if (od->hasWeight() && od->rawCols.size() && od->rawCols[weightCol].type != COLUMNDATA_NUMERIC) {
+		Rf_error("%s: weight must be a numeric column in raw observed data", od->name);
 	}
 
 	if(OMX_DEBUG) {mxLog("Processing Means Matrix.");}
@@ -302,12 +310,9 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 		}
 	}
 
-	if(!strEQ(od->_type, "raw")) {
-		if(OMX_DEBUG) {mxLog("Processing Observation Count.");}
-		ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("numObs")));
-		od->numObs = Rf_asInteger(dataLoc);
-	} else {
-		od->numObs = od->rows;
+	{
+		ProtectedSEXP RdataLoc(R_do_slot(dataObj, Rf_install("numObs")));
+		od->numObs = Rf_asReal(RdataLoc);
 	}
 
 	if (hasPrimaryKey()) {
@@ -320,6 +325,32 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 			}
 		}
 	}
+
+	currentWeightColumn = getOriginalWeightColumn();
+}
+
+double *omxData::getOriginalWeightColumn()
+{
+	if (!hasWeight()) return 0;
+	if (rawCols.size()) {
+		return rawCols[weightCol].realData;
+	} else {
+		if (dataMat->colMajor) {
+			return omxMatrixColumn(dataMat, weightCol);
+		} else {
+			auto *col = (double*) R_alloc(dataMat->rows, sizeof(double));
+			EigenMatrixAdaptor dm(dataMat);
+			Eigen::Map< Eigen::VectorXd > Ecol(col, dataMat->rows);
+			Ecol.derived() = dm.col(weightCol);
+			return col;
+		}
+	}
+}
+
+int omxData::numRawRows()
+{
+	if (strEQ(getType(), "raw")) return rows;
+	return 0;
 }
 
 omxData* omxState::omxNewDataFromMxData(SEXP dataObj, const char *name)
@@ -483,14 +514,32 @@ const char *omxDataColumnName(omxData *od, int col)
 	return cd.name;
 }
 
+static const char *ColumnDataTypeToString(enum ColumnDataType cdt)
+{
+	switch (cdt) {
+	case COLUMNDATA_INVALID: return "invalid";
+	case COLUMNDATA_ORDERED_FACTOR: return "ordered factor";
+	case COLUMNDATA_UNORDERED_FACTOR: return "unordered factor";
+	case COLUMNDATA_INTEGER: return "integer";
+	case COLUMNDATA_NUMERIC: return "real";
+	default: Rf_error("type %d unknown", cdt);
+	}
+}
+
 void omxDataKeysCompatible(omxData *upper, omxData *lower, int foreignKey)
 {
-	ColumnData &ucd = upper->rawCols[upper->primaryKey];
 	ColumnData &lcd = lower->rawCols[foreignKey];
+	if (!upper->hasPrimaryKey()) {
+		Rf_error("Attempt to join foreign key '%s' in %s of type '%s' with"
+			 " %s which has no primary key declared",
+			 lcd.name, lower->name, ColumnDataTypeToString(lcd.type), upper->name);
+	}
+	ColumnData &ucd = upper->rawCols[upper->primaryKey];
 	if (ucd.type != lcd.type) {
-		Rf_error("Primary key '%s' in %s is not the same type"
-			 " as foreign key '%s' in %s",
-			 ucd.name, upper->name, lcd.name, lower->name);
+		Rf_error("Primary key '%s' in %s of type '%s' cannot be joined with"
+			 " foreign key '%s' in %s of type '%s'",
+			 ucd.name, upper->name, ColumnDataTypeToString(ucd.type),
+			 lcd.name, lower->name, ColumnDataTypeToString(lcd.type));
 	}
 	if (ucd.type == COLUMNDATA_ORDERED_FACTOR || ucd.type == COLUMNDATA_UNORDERED_FACTOR) {
 		if (Rf_length(ucd.levels) != Rf_length(lcd.levels)) {
@@ -677,7 +726,12 @@ bool omxData::loadDefVars(omxState *state, int row)
 {
 	bool changed = false;
 	for (int k=0; k < int(defVars.size()); ++k) {
-		double newDefVar = omxDoubleDataElement(this, row, defVars[k].column);
+		double newDefVar;
+		if (defVars[k].column == weightCol) {
+			newDefVar = getRowWeight(row);
+		} else {
+			newDefVar = omxDoubleDataElement(this, row, defVars[k].column);
+		}
 		if(ISNA(newDefVar)) {
 			Rf_error("Error: NA value for a definition variable is Not Yet Implemented.");
 		}

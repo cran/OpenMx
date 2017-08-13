@@ -260,7 +260,7 @@ void GradientOptimizerContext::solEqBFun(bool wantAJ) //<--"want analytic Jacobi
 	/*Note that this needs to happen even if no equality constraints have analytic Jacobians, because
 	analyticEqJacTmp is copied to the Jacobian matrix the elements of which are populated by code in
 	finiteDifferences.h, which knows to numerically populate an element if it's NA:*/
-	analyticEqJacTmp.setConstant(analyticEqJacTmp.rows(),analyticEqJacTmp.cols(),NA_REAL);
+	analyticEqJacTmp.setConstant(NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for(j = 0; j < int(st->conListX.size()); j++) {
@@ -294,7 +294,7 @@ void GradientOptimizerContext::myineqFun(bool wantAJ)
 
 	if (!ineq_n) return;
 	
-	analyticIneqJacTmp.setConstant(analyticIneqJacTmp.rows(),analyticIneqJacTmp.cols(),NA_REAL);
+	analyticIneqJacTmp.setConstant(NA_REAL);
 	
 	int cur=0, j=0, c=0, roffset=0;
 	for (j=0; j < int(st->conListX.size()); j++) {
@@ -518,7 +518,7 @@ void omxComputeGD::computeImpl(FitContext *fc)
 
 	if (verbose >= 1) {
 		int numConstr = fitMatrix->currentState->conListX.size();
-		mxLog("%s: engine %s (ID %d) #P=%d gradient=%s tol=%g constraints=%d",
+		mxLog("%s: engine %s (ID %d) #P=%lu gradient=%s tol=%g constraints=%d",
 		      name, engineName, engine, numParam, gradientAlgoName, optimalityTolerance,
 		      numConstr);
 	}
@@ -908,7 +908,7 @@ void ComputeCI::recordCI(Method meth, ConfidenceInterval *currentCI, int lower, 
 	}
 	INTEGER(VECTOR_ELT(detail, 4+fc.numParam))[detailRow] = meth;
 	INTEGER(VECTOR_ELT(detail, 5+fc.numParam))[detailRow] = diag;
-	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = 1 + fc.getInform();
+	INTEGER(VECTOR_ELT(detail, 6+fc.numParam))[detailRow] = fc.wrapInform();
 	++detailRow;
 }
 
@@ -1261,7 +1261,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 	Eigen::Map< Eigen::VectorXd > Est(fc.est, fc.numParam);
 
 	bool boundActive = fabs(Mle[currentCI->varIndex] - nearBox) < sqrt(std::numeric_limits<double>::epsilon());
-	if (currentCI->bound[!side]) {	// ------------------------------ away from bound side --
+	if (currentCI->bound[!side] > 0.0) {	// ------------------------------ away from bound side --
 		if (!boundActive) {
 			Diagnostic diag;
 			double val;
@@ -1317,7 +1317,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 	}
 
  part2:
-	if (currentCI->bound[side]) {     // ------------------------------ near to bound side --
+	if (currentCI->bound[side] > 0.0) {     // ------------------------------ near to bound side --
 		double boundLL = NA_REAL;
 		double sqrtCrit95 = sqrt(currentCI->bound[side]);
 		if (!boundActive) {
@@ -1539,7 +1539,8 @@ void ComputeCI::computeImpl(FitContext *mle)
 		return;
 	}
 
-	Global->unpackConfidenceIntervals(mle->state);
+	omxState *state = fitMatrix->currentState;
+	Global->unpackConfidenceIntervals(state);
 
 	// Not strictly necessary, but makes it easier to run
 	// mxComputeConfidenceInterval alone without other compute
@@ -1565,9 +1566,16 @@ void ComputeCI::computeImpl(FitContext *mle)
 	Rf_protect(intervalCodes = Rf_allocMatrix(INTSXP, numInts, 2));
 
 	int totalIntervals = 0;
-	for(int j = 0; j < numInts; j++) {
-		ConfidenceInterval *oCI = Global->intervalList[j];
-		totalIntervals += (oCI->bound != 0.0).count();
+	{
+		Eigen::Map< Eigen::ArrayXXd > interval(REAL(intervals), numInts, 3);
+		interval.fill(NA_REAL);
+		for(int j = 0; j < numInts; j++) {
+			ConfidenceInterval *oCI = Global->intervalList[j];
+			omxMatrix *ciMat = oCI->getMatrix(state);
+			omxRecompute(ciMat, mle);
+			interval(j, 1) = omxMatrixElement(ciMat, oCI->row, oCI->col);
+			totalIntervals += (oCI->bound != 0.0).count();
+		}
 	}
 
 	int numDetailCols = 7 + mle->numParam;
@@ -1592,21 +1600,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 	SET_VECTOR_ELT(detail, 5+mle->numParam,
 		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
 				  OMX_STATIC_ARRAY_SIZE(diagLabels), diagLabels));
-	const char *statusCodeLabels[] = { // see ComputeInform type
-		"OK", "OK/green",
-		"infeasible linear constraint",
-		"infeasible non-linear constraint",
-		"iteration limit",
-		"not convex",
-		"nonzero gradient",
-		"bad deriv",
-		"?",
-		"internal error",
-		"infeasible start"
-	};
-	SET_VECTOR_ELT(detail, 6+mle->numParam,
-		       makeFactor(Rf_allocVector(INTSXP, totalIntervals),
-				  OMX_STATIC_ARRAY_SIZE(statusCodeLabels), statusCodeLabels));
+	SET_VECTOR_ELT(detail, 6+mle->numParam, allocInformVector(totalIntervals));
 
 	SEXP detailCols;
 	Rf_protect(detailCols = Rf_allocVector(STRSXP, numDetailCols));
@@ -1624,7 +1618,6 @@ void ComputeCI::computeImpl(FitContext *mle)
 
 	markAsDataFrame(detail, totalIntervals);
 
-	omxState *state = fitMatrix->currentState;
 	FitContext fc(mle, mle->varGroup);
 	FreeVarGroup *freeVarGroup = fc.varGroup;
 
@@ -1654,13 +1647,9 @@ void ComputeCI::computeImpl(FitContext *mle)
 	mle->copyParamToModel();
 
 	Eigen::Map< Eigen::ArrayXXd > interval(REAL(intervals), numInts, 3);
-	interval.fill(NA_REAL);
 	int* intervalCode = INTEGER(intervalCodes);
 	for(int j = 0; j < numInts; j++) {
 		ConfidenceInterval *oCI = Global->intervalList[j];
-		omxMatrix *ciMat = oCI->getMatrix(state);
-		omxRecompute(ciMat, mle);
-		interval(j, 1) = omxMatrixElement(ciMat, oCI->row, oCI->col);
 		interval(j, 0) = std::min(oCI->val[ConfidenceInterval::Lower], interval(j, 1));
 		interval(j, 2) = std::max(oCI->val[ConfidenceInterval::Upper], interval(j, 1));
 		intervalCode[j] = oCI->code[ConfidenceInterval::Lower];
@@ -1803,8 +1792,6 @@ void ComputeTryH::computeImpl(FitContext *fc)
 
 	++invocations;
 
-	GetRNGstate();
-
 	// return record of attempted starting vectors? TODO
 
 	int retriesRemain = maxRetries - 1;
@@ -1829,6 +1816,7 @@ void ComputeTryH::computeImpl(FitContext *fc)
 		}
 
 		curEst = origStart;
+		GetRNGstate();
 		for (int vx=0; vx < curEst.size(); ++vx) {
 			double adj1 = loc + unif_rand() * 2.0 * scale - scale;
 			double adj2 = 0.0 + unif_rand() * 2.0 * scale - scale;
@@ -1839,6 +1827,7 @@ void ComputeTryH::computeImpl(FitContext *fc)
 			if(curEst[vx] < solLB[vx]){curEst[vx] = solLB[vx];}
 			if(curEst[vx] > solUB[vx]){curEst[vx] = solUB[vx];}
 		}
+		PutRNGstate();
 
 		--retriesRemain;
 
@@ -1862,8 +1851,6 @@ void ComputeTryH::computeImpl(FitContext *fc)
 		mxLog("%s: fit %.2f inform %d after %d attempt(s)", name, fc->fit, fc->getInform(),
 		      maxRetries - retriesRemain);
 	}
-
-	PutRNGstate();
 }
 
 void ComputeTryH::collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out)

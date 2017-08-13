@@ -46,7 +46,7 @@ wlsContinuousOnlyHelper <- function(x, type="WLS"){
 		row <- row+numCols-j+1
 	}
 	
-	if(type=="DWLS") {
+	if(type=="DLS" || type=="DWLS") {
 		for(i in 1:numColsStar){
 			U[i,i] <- 1/(sum((x[,M[i, 1]]**2) * (x[,M[i, 2]]**2)) / numRows - V[M[i, 1], M[i, 2]]**2)
 		}
@@ -397,7 +397,7 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	# version 0.2
 	#
 	#available types
-	wlsTypes <- c("ULS", "DLS", "WLS", "XLS")
+	wlsTypes <- c("ULS", "DLS", "DWLS", "WLS", "XLS")
 	
 	# error checking
 	if (!is.data.frame(data)){
@@ -415,15 +415,32 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 		
 	# select ordinal variables
 	ords <- unlist(lapply(data, is.ordered))
+	badFactors <- !ords & unlist(lapply(data, is.factor))
+	if (any(badFactors)) {
+		stop(paste("Factors", omxQuotes(colnames(data)[badFactors]),
+			   "must be ordered and are not"))
+	}
+
 	nvar <- sum(ords)
 	ntvar <- ncol(data)
 	n <- dim(data)[1]
-
-	message(paste("Calculating asymptotic summary statistics for",
-		      ntvar - nvar, "continuous and", nvar, "ordinal variables ..."))
-
+	
+	
+	msg <- paste("Calculating asymptotic summary statistics for",
+		ntvar - nvar, "continuous and", nvar, "ordinal variables ...")
+	msgLen <- nchar(msg)
+	#message(msg)
+	imxReportProgress(msg, 0)
+	
 	# if no ordinal variables, use continuous-only helper
-	if(nvar ==0){ #N.B. This fails for any missing data
+	if(nvar ==0){
+		imxReportProgress("", msgLen)
+		if (any(is.na(data))) {
+			stop(paste("All continuous data with missingness cannot be",
+				   "handled in the WLS framework.",
+				   "Use na.omit(yourDataFrame) to remove rows with missing values",
+				   "or use maximum likelihood instead"))
+		}
 		wls <- wlsContinuousOnlyHelper(data, type)
 		return(mxData(cov(data), type="acov", acov=wls$use, fullWeight=wls$full, numObs=n))
 	}
@@ -582,9 +599,16 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	
 	#TODO Figure out why certain elements of fullJac end up missing when the data are missing.
 	quad <- (n-1)*var(fullJac, use="pairwise.complete.obs") #bc colMeans all zero == t(fullJac) %*% fullJac
+	quad[is.na(quad)] <- 0
 	sel  <- diag(quad)!=0
 	iqj  <- matrix(0, dim(quad)[1], dim(quad)[2])
-	iqj[sel,sel] <- solve(quad[sel, sel])
+	attIqj <- try(solve(quad[sel, sel]))
+	if(class(attIqj) %in% "try-error"){
+		iqj[sel,sel] <- MASS::ginv(quad[sel, sel])
+		warning('First derivative matrix was not intertible. Used pseudo-inverse instead.')
+	} else {
+		iqj[sel,sel] <- attIqj
+	}
 	
 	# make the weight matrix!!!
 	wls <- fullHess %*% iqj %*% fullHess
@@ -626,7 +650,7 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	if (type=="ULS"){
 		retVal@acov <- uls
 		}
-	if (type=="DLS"){
+	if (type=="DLS" || type=="DWLS"){
 		retVal@acov <- dls
 		}	
 	if (type=="WLS"){
@@ -635,7 +659,8 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, d
 	if (type=="XLS"){
 		retVal@acov <- xls
 		}
-	if (debug){return(list(fullJac, fullHess))}	
+	if (debug){return(list(fullJac, fullHess))}
+	imxReportProgress("", msgLen)
 	return(retVal)
 	}
 

@@ -76,6 +76,8 @@ biRegModelRawOut <- mxRun(biRegModelRaw)
 
 summary(biRegModelRawOut)
 
+omxCheckWarning(summary(biRegModelRawOut, boot.quantile=c(.025,.975)),
+	       "No bootstrap data found. See ?mxBootstrap")
 
 # ----------------------------------
 # check for correct values
@@ -98,3 +100,39 @@ omxCheckCloseEnough(expectMin, biRegModelRawOut$output$minimum, 0.001)
 omxCheckCloseEnough(biRegModelRawOut$output$status$code, 0)
 
 omxCheckCloseEnough(biRegModelRawOut$output$iterations, 30, 10)
+
+biRegModelRawBoot <- mxBootstrap(biRegModelRawOut, 10, OK=NULL)
+ign <- omxCheckWarning(summary(biRegModelRawBoot),
+               "Only 0% of the bootstrap replications converged. Accuracy is much less than the 10 replications requested")
+
+set.seed(42)
+biRegModelRawBoot <- mxBootstrap(biRegModelRawOut, 10)
+omxCheckTrue(is.null(biRegModelRawBoot$output[["standardErrors"]]))
+bq1 <- summary(biRegModelRawBoot)[["bootstrapSE"]]
+omxCheckCloseEnough(cor(bq1, biRegModelRawOut$output$standardErrors), .91, .01)
+
+biRegModelRawBoot <- mxBootstrap(biRegModelRawBoot)
+bq2 <- summary(biRegModelRawBoot)[["bootstrapSE"]]
+omxCheckCloseEnough(sum((bq2 - biRegModelRawOut$output$standardErrors)^2), 0, 1e-3)
+
+set.seed(42)
+biRegModelRawBoot <- mxBootstrap(biRegModelRawBoot, 10)
+bq3 <- summary(biRegModelRawBoot)[["bootstrapSE"]]
+omxCheckEquals(bq3, bq1)
+
+repl3 <- biRegModelRawBoot$compute$output$raw[3,]
+biRegModelRawBoot3 <- mxBootstrap(biRegModelRawBoot, only=3)
+omit <- -match('statusCode', colnames(repl3))
+omxCheckCloseEnough(repl3[,omit], biRegModelRawBoot3$compute$output$raw[,omit], 1e-6)
+
+# investigate replication 3
+biRegModelRaw3 <- mxModel(
+  biRegModelRaw,
+  mxData(observed=cbind(multiData1,
+                        weight=biRegModelRawBoot3$compute$output$weight[[1]]),
+         type="raw", weight = "weight"))
+
+biRegModelRaw3 <- mxRun(biRegModelRaw3)
+
+omxCheckCloseEnough(coef(biRegModelRaw3),
+                    c(repl3[,names(coef(biRegModelRaw3))]), 1e-5)

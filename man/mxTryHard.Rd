@@ -8,7 +8,7 @@
 \title{Make multiple attempts to run a model}
 
 \description{
-Makes multiple attempts to fit an MxModel object with \code{\link{mxRun}()} until the optimizer yields an acceptable solution or the maximum number of attempts is reached.  Each attempt uses the parameter estimates of the previous attempt as start values, but they are each perturbed by random numbers, and optimization-control parameters may be altered.  From among its attempts, the function returns the fitted, post-\code{\link{mxRun}()} model with the smallest fit-function value, and can print to the console the start values it used for that model.
+Makes multiple attempts to fit an MxModel object with \code{\link{mxRun}()} until the optimizer yields an acceptable solution or the maximum number of attempts is reached.  Between attempts, start values are perturbed by random numbers, and optimization-control parameters may be altered.  From among its attempts, the function returns the fitted, post-\code{\link{mxRun}()} model with the smallest fit-function value, and can print to the console the start values it used for that model.
 }
 
 \usage{
@@ -19,7 +19,7 @@ initialTolerance=as.numeric(mxOption(NULL,'Optimality tolerance')),
 checkHess = TRUE, fit2beat = Inf, paste = TRUE,	iterationSummary=FALSE, 
 bestInitsOutput=TRUE, showInits=FALSE, verbose=0, intervals = FALSE,
 finetuneGradient=TRUE, jitterDistrib=c("runif","rnorm","rcauchy"), exhaustive=FALSE,
-maxMajorIter=3000, OKstatuscodes, wtgcsv=c("prev","best","initial"))
+maxMajorIter=3000, OKstatuscodes, wtgcsv=c("prev","best","initial"), silent=FALSE)
 
 mxTryHardOrig(model, finetuneGradient=FALSE, maxMajorIter=NA, 
 wtgcsv=c("prev","best"), ...)
@@ -42,12 +42,12 @@ OKstatuscodes=c(0,1,5,6), wtgcsv=c("prev","best"), ...)
   \item{greenOK}{Logical; is a solution with Mx status GREEN (optimizer status code 1) acceptable?  Defaults to \code{FALSE} (for \code{mxTryHard()}).  Ignored if a value is provided for \code{OKstatuscodes}.}
   \item{loc, scale}{Numeric. The location and scale parameters of the distribution from which random values are drawn to perturb start values between attempts, defaulting respectively to 1 and 0.25.  See below, under "Details," for additional information.}
   \item{initialGradientStepSize, initialGradientIterations, initialTolerance}{Numeric.  Initial values of optimization-control parameters passed to \code{\link{mxComputeGradientDescent}()} if \code{model} is using the default compute plan.}
-  \item{checkHess}{Logical; is a positive-definite Hessian a requirement for an acceptable solution?  Defaults to \code{TRUE} (for \code{mxTryHard()}).  If \code{TRUE}, the Hessian and standard errors are calculated with each fit attempt, irrespective of the value of relevant \link[=mxOption]{options}.  The exception is if \code{model} or any of its submodels contains \code{\link{MxConstraint}s}, in which case \code{checkHess} is coerced to \code{TRUE}. }
+  \item{checkHess}{Logical; is a positive-definite Hessian a requirement for an acceptable solution?  Defaults to \code{TRUE} (for \code{mxTryHard()}).  If \code{TRUE}, the Hessian and standard errors are calculated with each fit attempt, irrespective of the value of relevant \link[=mxOption]{options}.  The exception is if \code{model} or any of its submodels contains \code{\link{MxConstraint}s}, in which case \code{checkHess} is coerced to \code{FALSE}. }
   \item{fit2beat}{Numeric upper limit to the fitfunction value that an acceptable solution may have.  Useful if a nested submodel of \code{model} has already been fitted, since \code{model}, with its additional free parameters, should not yield a fitfunction value any greater than that of the submodel.}
   \item{paste}{Logical.  If \code{TRUE} (default), start values for the returned fitted model are printed to console as a comma-separated string.  This is useful if the user wants to copy-paste these values into an \R script, say, in an \code{\link{omxSetParameters}()} statement. If \code{FALSE}, the vector of start values is printed as-is.  Note that this vector, from \code{\link{omxGetParameters}()}, has names corresponding to the free parameters; these names are not displayed when \code{paste=TRUE}.}
-  \item{iterationSummary}{Logical. If \code{TRUE}, displays parameter estimates and fit values for every fit attempt. Defaults to \code{FALSE}.}
-  \item{bestInitsOutput}{Logical. If \code{TRUE}, displays starting values that resulted in best fit, according to format specified by \code{paste} argument. Defaults to \code{TRUE}.}
-  \item{showInits}{Logical. If \code{TRUE}, displays starting values for every fit attempt. Defaults to \code{FALSE}.}
+  \item{iterationSummary}{Logical. If \code{TRUE}, displays parameter estimates and fit values for every fit attempt. Defaults to \code{FALSE}.  Value of \code{TRUE} is overridden by \code{silent=TRUE}.}
+  \item{bestInitsOutput}{Logical. If \code{TRUE}, displays starting values that resulted in best fit, according to format specified by \code{paste} argument. Defaults to \code{TRUE}.  Value of \code{TRUE} is overridden by \code{silent=TRUE}.}
+  \item{showInits}{Logical. If \code{TRUE}, displays starting values for every fit attempt. Defaults to \code{FALSE}.  Value of \code{TRUE} is overridden by \code{silent=TRUE}.}
   \item{verbose}{If \code{model} is using the default compute plan, is passed to \code{\link{mxComputeGradientDescent}()} to specify level of output printed to console during optimization.}
   \item{intervals}{Logical. If TRUE, OpenMx will estimate any specified confidence intervals.}
   \item{finetuneGradient}{Logical.  If \code{TRUE} (default for \code{mxTryHard()}), then as repeated fit attempts appear to be improving, \code{mxTryHard()} will adjust optimization-control parameters \code{\link[OpenMx:mxComputeGradientDescent]{gradientStepSize}}, \code{\link[OpenMx:mxComputeGradientDescent]{gradientIterations}}, and \code{\link[OpenMx:mxComputeGradientDescent]{tolerance}}, as well as argument \code{scale}, to "fine-tune" its convergence toward an optimal solution.  \code{finetuneGradient=FALSE} is recommended for analyses involving thresholds.}
@@ -56,6 +56,7 @@ OKstatuscodes=c(0,1,5,6), wtgcsv=c("prev","best"), ...)
   \item{maxMajorIter}{Integer; passed to \code{\link{mxComputeGradientDescent}()}.  Defaults to 3000, which was the internally hardcoded value \code{mxTryHard()} used in at least one prior version of OpenMx.  Value of \code{NA} is permitted, in which case \code{mxTryHard()} will calculate a value via the on-load default formula for the "Major iterations" \link[=mxOption]{option}.}
   \item{OKstatuscodes}{Optional integer vector containing optimizer status codes that an acceptable solution is permitted to have.  \code{mxTryHard()} always considers a status code of 0 to be acceptable, this argument notwithstanding. By default, \code{mxTryHard()} will consider status code 0 acceptable, and, if \code{greenOK=TRUE}, status code 1 as well.  If a value is supplied for \code{OKstatuscodes} that conflicts with \code{greenOK}, \code{OKstatuscodes} controls.}
   \item{wtgcsv}{Character vector.  "Where to get current start values."  See below, under "Details," for additional information.}
+  \item{silent}{Logical; defaults to \code{FALSE}.  If \code{TRUE}, most \link[base:message]{message-printing} is suppressed, except for those which advise the user of errors, warnings, or a poor solution from the MxModel object to be returned; this overrides \code{iterationSummary}, \code{bestInitsOutput}, and \code{showInits}.}
   \item{...}{Additional arguments to be passed to \code{mxTryHard()}.}
 }
 

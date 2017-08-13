@@ -1183,7 +1183,8 @@ mxComputeNelderMead <- function(
 	doPseudoHessian=FALSE,
 	ineqConstraintMthd=c("soft","eqMthd"), 
 	eqConstraintMthd=c("GDsearch","soft","backtrack","l1p"),
-	backtrackCtrl=c(0.5,5)
+	backtrackCtrl=c(0.5,5),
+	centerIniSimplex=FALSE
 	){
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
@@ -1240,11 +1241,13 @@ mxComputeNelderMead <- function(
 	if(length(backtrackCtrl)<2){stop("'backtrackCtrl' must be a numeric vector of length 2")}
 	backtrackCtrl1 <- as.numeric(backtrackCtrl[1])
 	backtrackCtrl2 <- as.integer(backtrackCtrl[2])
+	centerIniSimplex <- as.logical(centerIniSimplex[1])
 	return(new("MxComputeNelderMead", freeSet, fitfunction, verbose, nudgeZeroStarts, maxIter, alpha, 
 						 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
 						 iniSimplexColnames, validationRestart,
 						 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
-						 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian))
+						 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian,
+						 centerIniSimplex))
 }
 
 setClass(
@@ -1278,7 +1281,8 @@ setClass(
 		ineqConstraintMthd="character",
 		eqConstraintMthd="character",
 		backtrackCtrl1="numeric",
-		backtrackCtrl2="integer"))
+		backtrackCtrl2="integer",
+		centerIniSimplex="logical"))
 
 #TODO: a user or developer might someday want to directly use this low-level 'initialize' method instead of the high-level constructor function,
 #so typecasting should also occur here:
@@ -1288,7 +1292,8 @@ setMethod(
 					 betao, betai, gamma, sigma, bignum, iniSimplexType, iniSimplexEdge, iniSimplexMat, 
 					 iniSimplexColnames, validationRestart,
 					 greedyMinimize, altContraction, degenLimit, stagnCtrl, xTolProx, fTolProx, 
-					 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian){
+					 ineqConstraintMthd, eqConstraintMthd, backtrackCtrl1, backtrackCtrl2, doPseudoHessian,
+					 centerIniSimplex){
 		.Object@name <- 'compute'
 		.Object@.persist <- TRUE
 		.Object@freeSet <- freeSet
@@ -1322,6 +1327,7 @@ setMethod(
 		.Object@eqConstraintMthd <- eqConstraintMthd
 		.Object@backtrackCtrl1 <- backtrackCtrl1
 		.Object@backtrackCtrl2 <- backtrackCtrl2
+		.Object@centerIniSimplex <- centerIniSimplex
 		.Object
 	})
 
@@ -1595,6 +1601,135 @@ mxComputeReportDeriv <- function(freeSet=NA_character_) {
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeBootstrap",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 data = "MxCharOrNumber",
+	     plan = "MxCompute",
+	     replications = "integer",
+	     verbose = "integer",
+	     parallel = "logical",
+	     OK = "ordered",
+	     only = "integer"
+	 ))
+
+setMethod("initialize", "MxComputeBootstrap",
+	  function(.Object, freeSet, data, plan, replications,
+		   verbose, parallel, OK, only) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object@data <- data
+		  .Object@plan <- plan
+		  .Object@replications <- replications
+		  .Object@verbose <- verbose
+		  .Object@parallel <- parallel
+		  .Object@OK <- OK
+		  .Object@only <- only
+		  .Object
+	  })
+
+setMethod("getFreeVarGroup", signature("MxComputeBootstrap"),
+	function(.Object) {
+		result <- callNextMethod()
+		for (step in c(.Object@plan)) {
+			got <- getFreeVarGroup(step)
+			if (length(got)) result <- append(result, got)
+		}
+		result
+	})
+
+setMethod("assignId", signature("MxComputeBootstrap"),
+	function(.Object, id, defaultFreeSet) {
+		.Object <- callNextMethod()
+		defaultFreeSet <- .Object@freeSet
+		id <- .Object@id
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- assignId(slot(.Object, sl), id, defaultFreeSet)
+			id <- slot(.Object, sl)@id + 1L
+		}
+		.Object@id <- id
+		.Object
+	})
+
+setMethod("qualifyNames", signature("MxComputeBootstrap"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('data')) {
+			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+		}
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- qualifyNames(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeBootstrap"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (any(!is.integer(.Object@data))) {
+			dataNum <- match(.Object@data, names(flatModel@datasets))
+			if (any(is.na(dataNum))) {
+				stop(paste("MxComputeBootstrap:", omxQuotes(.Object@data),
+					   "not recognized as MxData"))
+			}
+			.Object@data <- dataNum - 1L
+		}
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- convertForBackend(slot(.Object, sl), flatModel, model)
+		}
+		.Object
+	})
+
+setMethod("updateFromBackend", signature("MxComputeBootstrap"),
+	function(.Object, computes) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- updateFromBackend(slot(.Object, sl), computes)
+		}
+		.Object
+	})
+
+mxComputeBootstrap <- function(data, plan, replications=200, ...,
+			       verbose=0L, parallel=TRUE, freeSet=NA_character_,
+			       OK=c("OK", "OK/green"), only=NA_integer_) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeConfidenceInterval does not accept values for the '...' argument")
+	}
+
+	data <- vapply(data, function(e1) {
+		path <- unlist(strsplit(e1, imxSeparatorChar, fixed = TRUE))
+		if (length(path) == 1) {
+			e1 <- paste(path, "data", sep=imxSeparatorChar)
+		}
+		e1
+	}, "")
+
+	new("MxComputeBootstrap", freeSet, data, plan, as.integer(replications),
+	    as.integer(verbose), parallel, as.statusCode(OK), only)
+}
+
+setMethod("displayCompute", signature(Ob="MxComputeBootstrap", indent="integer"),
+	  function(Ob, indent) {
+		  callNextMethod();
+		  sp <- paste(rep('  ', indent), collapse="")
+		  cat(sp, "$plan :", '\n')
+		  displayCompute(Ob@plan, indent+1L)
+		  for (sl in c("data", "replications", "OK",
+			       "verbose", "parallel")) {
+			  slname <- paste("$", sl, sep="")
+			  if (is.character(slot(Ob, sl))) {
+				  cat(sp, slname, ":", omxQuotes(slot(Ob, sl)), '\n')
+			  } else {
+				  cat(sp, slname, ":", slot(Ob, sl), '\n')
+			  }
+		  }
+		  invisible(Ob)
+	  })
+
+#----------------------------------------------------
+
 setClass(Class = "MxComputeReportExpectation",
 	 contains = "BaseCompute")
 
@@ -1616,6 +1751,51 @@ setMethod("initialize", "MxComputeReportExpectation",
 
 mxComputeReportExpectation <- function(freeSet=NA_character_) {
 	new("MxComputeReportExpectation", freeSet)
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeGenerateData",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 expectation = "MxCharOrNumber"
+	 ))
+
+setMethod("initialize", "MxComputeGenerateData",
+	  function(.Object, expectation) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@expectation <- expectation
+		  .Object
+	  })
+
+setMethod("qualifyNames", signature("MxComputeGenerateData"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod();
+		.Object@expectation <- imxConvertIdentifier(.Object@expectation, modelname, namespace)
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeGenerateData"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@expectation)) {
+			.Object@expectation <- imxLocateIndex(flatModel, .Object@expectation, .Object)
+		}
+		.Object
+	})
+
+##' Generate data
+##'
+##' Generate data specified by the model expectations.
+##'
+##' @param expectation a character vector of expectations to generate data for
+##' @aliases
+##' MxComputeGenerateData-class
+
+mxComputeGenerateData <- function(expectation='expectation') {
+	new("MxComputeGenerateData", expectation)
 }
 
 #----------------------------------------------------
@@ -1719,10 +1899,36 @@ updateModelCompute <- function(model, computes) {
 ##' @param mat the matrix to invert
 imxSparseInvert <- function(mat) .Call(sparseInvert_wrapper, mat)
 
+ProcessCheckHess <- function(model, checkHess) {
+  if (omxHasDefaultComputePlan(model)) {
+    optList <- options()$mxOption
+    if (is.na(checkHess)) checkHess <- FALSE
+    checkHessYes <- ifelse(checkHess, 'Yes', 'No')
+    optList[['Calculate Hessian']] <- checkHessYes
+    optList[['Standard Errors']] <- checkHessYes
+    model <- mxModel(model, omxDefaultComputePlan(optionList=optList))
+  } else {
+    if (!is.na(checkHess)) {
+      stop(paste("Model", model$name, "has a custom compute plan.",
+                 "Cannot act on checkHess=",checkHess))
+    }
+  }
+  model
+}
 
+##' omxHasDefaultComputePlan
+##'
+##' Determine whether the model has a default complete plan (i.e., not custom).
+##'
+##' @param model model
+omxHasDefaultComputePlan <- function(model) {
+	if (is.null(model@compute)) return(TRUE)
+	if (!.hasSlot(model@compute, '.persist') || !model@compute@.persist) return(TRUE)
+	FALSE
+}
 
-omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=TRUE, 
-																	optionList=options()$mxOption){
+omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=TRUE,
+				  optionList=options()$mxOption) {
 	if(length(modelName) && !is.character(modelName[1])){stop("argument 'modelName' must be a character string")}
 	compute <- NULL
 	fitNum <- ifelse(length(modelName), paste(modelName, 'fitfunction', sep="."), "fitfunction")

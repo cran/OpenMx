@@ -62,10 +62,7 @@ setMethod("initialize", "MxModel",
 	        .Object@.wasRun <- FALSE
 	        .Object@.modifiedSinceRun <- FALSE
 		if (.hasSlot(.Object, '.version')) {
-			if (is.null(pkg_globals$myVersion)) {
-				pkg_globals$myVersion <- as.character(packageVersion("OpenMx"))
-			}
-			.Object@.version <- pkg_globals$myVersion
+			.Object@.version <- as.character(pkg_globals$myVersion)
 		}
 		.Object <- imxInitModel(.Object)
 		return(.Object)
@@ -341,6 +338,16 @@ imxGenericModelBuilder <- function(model, lst, name,
 }
 
 varsToCharacter <- function(vars, vartype) {
+	got <- varsToCharacter2(vars, vartype)
+	fail <- try(lapply(got, imxVerifyName, 1), TRUE)  # should be 2 instead of 1
+	if (is(fail, "try-error")) {
+		# after a few years, convert to actual error TODO
+		warning(attr(fail,'condition')$message)
+	}
+	got
+}
+
+varsToCharacter2 <- function(vars, vartype) {
 	if (is.list(vars)) {
 		varnames <- names(vars)
 		if (length(varnames) == 0) {

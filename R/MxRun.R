@@ -20,7 +20,7 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 
 	if (.hasSlot(model, '.version')) {
 		mV <- package_version(model@.version)
-		curV <- packageVersion('OpenMx')
+		curV <- pkg_globals$myVersion
 		if (curV$major != mV$major ||
 		    curV$minor != mV$minor) {
 			warning(paste0("You are using OpenMx version ", curV,
@@ -30,7 +30,7 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 				       "current version of OpenMx."))
 		}
 	} else {
-		curV <- packageVersion('OpenMx')
+		curV <- pkg_globals$myVersion
 		warning(paste0("You are using OpenMx version ", curV,
 			       " with a model created by an old version of OpenMx. ",
 			       "This may work fine (fingers crossed), but if you run into ",
@@ -312,13 +312,6 @@ updateModelExpectationDims <- function(model, expectations){
 	return(model)
 }
 
-#' Report backend progress
-#'
-#' Prints a show status string to the console without emitting a
-#' newline.
-#'
-#' @param info the character string to print
-#' @param eraseLen the number of characters to erase
 imxReportProgress <- function(info, eraseLen) {
 	origLen = nchar(info)
 	if (origLen < eraseLen) {
@@ -327,3 +320,107 @@ imxReportProgress <- function(info, eraseLen) {
 	cat(paste0("\r", info))
 	if (origLen == 0) cat("\r")
 }
+
+enumerateDatasets <- function(model) {
+	datasets <- c()
+	if (!is.null(model@data)) datasets <- c(datasets, model@name)
+	if (length(model@submodels)) {
+		datasets <- c(datasets, sapply(model@submodels, enumerateDatasets))
+	}
+	return(datasets)
+}
+
+as.statusCode <- function(code) {
+	lev <- c("OK", "OK/green",
+		"infeasible linear constraint",
+		"infeasible non-linear constraint",
+		"iteration limit/blue",
+		"not convex/red",
+		"nonzero gradient/red",
+		"bad deriv",
+		"internal error",
+		"infeasible start")
+	if (is(code, 'ordered')) {
+		if (all(levels(code) == lev)) return(code)
+		code <- as.character(code)
+	}
+	if (is.numeric(code) || is.null(code)) {
+		mxFactor(code, levels=c(0:7,9:10), labels=lev)
+	} else if (is.character(code) || all(is.na(code))) {
+		mxFactor(code, lev)
+	} else {
+		stop(paste("Don't know how to convert type", typeof(code),
+			   "into a status code"))
+	}
+}
+
+mxBootstrap <- function(model, replications=200, ...,
+                        data=NULL, plan=NULL, verbose=0L,
+                        parallel=TRUE, only=as.integer(NA),
+			OK=mxOption(model, "Status OK"), checkHess=FALSE) {
+    if (!missing(plan)) {
+	    stop("The 'plan' argument is deprecated. Use mxModel(model, plan) and then mxBootstrap")
+    }
+    if (!is(model$compute, "MxComputeBootstrap")) {
+	    if (missing(checkHess)) checkHess <- as.logical(NA)
+	    model <- ProcessCheckHess(model, checkHess)
+    if (missing(data)) {
+      data <- enumerateDatasets(model)
+    }
+    plan <- mxComputeBootstrap(data, model@compute)
+  } else {
+    plan <- model$compute
+  }
+
+  plan$replications <- as.integer(replications)
+  plan$verbose <- as.integer(verbose)
+  plan$parallel <- as.logical(parallel)
+  plan$only <- as.integer(only)
+  plan$OK <- as.statusCode(OK)
+  
+  model <- mxModel(model, plan)
+  mxRun(model, suppressWarnings=TRUE)
+}
+
+omxGetBootstrapReplications <- function(model) {
+   if(!is(model, "MxModel")) {
+      stop("'model' argument must be a MxModel object")
+   }
+  if (is.null(model$compute) || !is(model$compute, "MxComputeBootstrap")) {
+	  stop(paste("Compute plan", class(model$compute), "found in model",
+		     omxQuotes(model$name),
+		     "instead of MxComputeBootstrap. Have you run this model",
+		     "through mxBootstrap already?"))
+  }
+   assertModelFreshlyRun(model)
+  cb <- model@compute
+  if (is.null(cb@output$raw)) {
+	  stop(paste("No bootstrap data found. Please run this model",
+		     "through mxBootstrap again."))
+  }
+  if (!is.na(cb@only)) {
+	  stop(paste("Detected mxBootstrap's only= option. Please mxBootstrap",
+		     "this model without using only="))
+  }
+  if (cb@output$numParam != length(coef(model))) {
+	  stop(paste("Model", omxQuotes(model), "has", length(coef(model)),
+		     "parameters but bootstrap data has", cb@output$numParam,
+		     "parameters. Please mxBootstrap this model again."))
+  }
+  raw <- cb@output$raw
+  mask <- raw[,'statusCode'] %in% cb@OK
+  bootData <- raw[mask, 3:(length(coef(model))+2), drop=FALSE]
+  if (sum(mask) < 3) {
+	  stop(paste("Fewer than 3 replications are available.",
+		     "Use mxBootstrap to increase the number of replications."))
+  }
+   if (sum(mask) < .95*length(mask)) {
+	   pct <- round(100*sum(mask) / length(mask))
+	   warning(paste0("Only ",pct,"% of the bootstrap replications ",
+			  "converged acceptably. Accuracy is much less than the ", nrow(raw),
+			  " replications requested"), call.=FALSE)
+   }
+   bootData
+}
+
+omxBootstrapCov <- function(model) cov(omxGetBootstrapReplications(model))

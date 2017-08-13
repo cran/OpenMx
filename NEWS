@@ -1,4 +1,12 @@
 # OpenMx bleed / 2.8.0 in the making
+* NEW: Add mxParametricBootstrap
+* CHANGE: mxBootstrap no longer accepts a plan= parameter.
+* NEW: Add simulate S3 alias for mxGenerateData
+* FIXED: Rampart sufficient statistic optimization no longer interferes with zero variance predictors.
+* NEW: Add MxExpectationMixture interface.
+* Nelder-Mead: "GDsearch" method for handling equality constraints.
+* FIXED: Oakes standard errors (ComputeEM) were broken since Feb 2016.
+* NEW: mxBootstrap, mxComputeBootstrap, mxBootstrapEval, mxBootstrapEvalByName
 * IMPROVED: mxAutoStart handles models which refer to parent models.
 * IMPROVED: WLS improvements
 	* Handling models with constraints

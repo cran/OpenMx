@@ -13,19 +13,26 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-mxEval <- function(expression, model, compute = FALSE, show = FALSE, defvar.row = 1,
+mxEval <- function(expression, model, compute = FALSE, show = FALSE, defvar.row = 1L,
 			cache = new.env(parent = emptyenv()), cacheBack = FALSE) {
 	if (missing(expression)) {
 		stop("'expression' argument is mandatory in call to mxEval function")
 	} else if (missing(model)) {
 		stop("'model' argument is mandatory in call to mxEval function")
-	} else if (!is.numeric(defvar.row) || length(defvar.row) != 1 || is.na(defvar.row)) {
-		stop("'defvar.row' argument must be a single numeric value")
-	}	
+	}
 	expression <- match.call()$expression
 	modelvariable <- match.call()$model
+	EvalInternal(expression, model, modelvariable, compute, show, defvar.row,
+		       cache, cacheBack, 2L)
+}
+
+EvalInternal <- function(expression, model, modelvariable, compute, show, defvar.row,
+		       cache, cacheBack, back) {
+	if (!is.numeric(defvar.row) || length(defvar.row) != 1 || is.na(defvar.row)) {
+		stop("'defvar.row' argument must be a single numeric value")
+	}
 	labelsData <- imxGenerateLabels(model)
-	env <- parent.frame()
+	env <- parent.frame(back)
 	if (compute) {
 		model <- imxPreprocessModel(model)
 		expression <- formulaEliminateObjectiveFunctions(expression)
@@ -404,7 +411,7 @@ generateLabelsMatrix <- function(modelName, matrix, labelsData) {
 	return(labelsData)
 }
 
-mxEvalByName <- function(name, model, compute=FALSE, show=FALSE, defvar.row = 1,
+mxEvalByName <- function(name, model, compute=FALSE, show=FALSE, defvar.row = 1L,
 		cache = new.env(parent = emptyenv()), cacheBack = FALSE) {
    if((length(name) != 1) || typeof(name) != "character") {
       stop("'name' argument must be a character argument")
@@ -416,3 +423,58 @@ mxEvalByName <- function(name, model, compute=FALSE, show=FALSE, defvar.row = 1,
       list(x = as.symbol(name))))
 }
 
+BootstrapEvalInternal <- function(expression, model, modelvariable, defvar.row, ...) {
+	bootData <- omxGetBootstrapReplications(model)
+  mle <- cvectorize(EvalInternal(expression, model, modelvariable,
+				 compute=TRUE, show=FALSE, defvar.row, cache=new.env(parent = emptyenv()),
+						 cacheBack=FALSE, back=2L))
+  result <- matrix(NA, nrow=nrow(bootData), ncol=length(mle))
+  for (rx in 1:nrow(bootData)) {
+	  bmodel <- omxSetParameters(model, labels=colnames(bootData), values=unlist(bootData[rx,]))
+	  result[rx,] <- cvectorize(EvalInternal(expression, bmodel, modelvariable,
+						 compute=TRUE, show=FALSE, defvar.row, cache=new.env(parent = emptyenv()),
+						 cacheBack=FALSE, back=2L))
+  }
+	list(mle=mle, result=result)
+}
+
+omxBootstrapEval <- function(expression, model, defvar.row = 1L, ...) {
+  expression <- match.call()$expression
+  modelvariable <- match.call()$model
+  BootstrapEvalInternal(expression, model, modelvariable, defvar.row, ...)$result
+}
+
+omxBootstrapEvalCov <- function(expression, model, defvar.row = 1L, ...) {
+  expression <- match.call()$expression
+  modelvariable <- match.call()$model
+  cov(BootstrapEvalInternal(expression, model, modelvariable, defvar.row, ...)$result)
+}
+
+mxBootstrapEval <- function(expression, model, defvar.row = 1L, ..., bq=c(.25,.75),
+				method=c('bcbci','quantile')) {
+  expression <- match.call()$expression
+  modelvariable <- match.call()$model
+	method <- match.arg(method)
+  got <- BootstrapEvalInternal(expression, model, modelvariable, defvar.row, ...)
+	cbind("SE"=apply(got$result, 2, sd),
+	      summarizeBootstrap(got$mle, got$result, bq, method))
+}
+
+mxBootstrapEvalByName <- function(name, model, defvar.row=1L, ..., bq=c(.25,.75),
+				  method=c('bcbci','quantile')) {
+   if((length(name) != 1) || typeof(name) != "character") {
+      stop("'name' argument must be a character argument")
+   }
+   method <- match.arg(method)
+   eval(substitute(mxBootstrapEval(x, model, defvar.row, bq, method),
+      list(x = as.symbol(name))))
+}
+
+omxBootstrapEvalByName <- function(name, model, defvar.row=1L, ...) {
+   if((length(name) != 1) || typeof(name) != "character") {
+      stop("'name' argument must be a character argument")
+   }
+   method <- match.arg(method)
+   eval(substitute(omxBootstrapEval(x, model, defvar.row),
+      list(x = as.symbol(name))))
+}

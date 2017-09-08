@@ -47,7 +47,7 @@ citEntry(entry="article",
 	     "Educational and Psychological Measurement, 75(3), 458-474"))
 
 year <- 2017
-revision <- "2.7.16"
+revision <- "2.7.17"
 authors <-  c(person(c("Steven", "M."), "Boker", role="aut"), person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."), "Maes", role="aut"), person(c("Michael", "J."), "Wilde", role="ctb"), person("Michael", "Spiegel", role="aut"), person(c("Timothy", "R."), "Brick", role="aut"), person("Ryne", "Estabrook", role="aut"), person(c("Timothy", "C."), "Bates", role="aut"), person("Paras", "Mehta", role="ctb"), person("Timo", c("von", "Oertzen"), role="ctb"), person(c("Ross", "J."), "Gore", role="aut"), person(c("Michael", "D."), "Hunter", role="aut"), person(c("Daniel", "C."), "Hackett", role="ctb"), person("Julian", "Karch", role="ctb"), person(c("Andreas", "M."), "Brandmaier", role="ctb"), person(c("Joshua", "N."), "Pritikin", email="jpritikin@pobox.com", role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"), person(c("Robert", "M."), "Kirkpatrick", role="aut"), person(c("Yang"), "Wang", role="ctb"), person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"), person("Massachusetts Institute of Technology", role="cph"), person("S. G.", "Johnson", role="cph"), person("Association for Computing Machinery", role="cph"), person("Dieter", "Kraft", role="cph"), person("Stefan", "Wilhelm", role="cph"), person("Manjunath B G", role="cph"))
      
 citEntry(entry="manual",

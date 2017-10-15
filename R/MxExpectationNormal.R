@@ -135,6 +135,23 @@ setMethod("genericGetExpected", signature("MxExpectationNormal"),
 		ret
 	})
 
+getThresholdMask <- function(model, cols) {
+	if (is.null(model@data)) stop(paste("Cannot find observed thresholds, model",
+					    omxQuotes(model$name), "has no data"))
+	d1 <- model@data
+	if (d1@type == 'raw') {
+		lev <- sapply(d1$observed[,cols], function(x) length(levels(x)))
+		mask <- matrix(FALSE, length(cols), max(lev)-1)
+		colnames(mask) <- cols
+		for (lx in 1:length(cols)) mask[1:(lev[lx]-1), lx] <- TRUE
+		mask
+	} else {
+		th <- d1@thresholds
+		if (single.na(th)) stop(paste("Observed data in model", omxQuotes(model$name), "has no thresholds"))
+		!is.na(th)
+	}
+}
+
 setMethod("genericGetExpectedVector", signature("BaseExpectationNormal"),
 	function(.Object, model, defvar.row=1, subname=model@name) {
 		ret <- genericGetExpected(.Object, model, c('covariance', 'means', 'thresholds'), defvar.row, subname)
@@ -142,9 +159,12 @@ setMethod("genericGetExpectedVector", signature("BaseExpectationNormal"),
 		mns <- ret[['means']]
 		if (is.null(mns)) stop("mns is null")
 		thr <- ret[['thresholds']]
-		if (is.null(thr)) stop("thresholds is null")
-		v <- c(vech(cov), mns[!is.na(mns)], thr[!is.na(thr)])
-		return(v)
+		if (prod(dim(thr)) == 0) {
+			return(c(vech(cov), mns[!is.na(mns)]))
+		} else {
+			dth <- getThresholdMask(model, colnames(thr))
+			return(c(vech(cov), mns[!is.na(mns)], thr[dth]))
+		}
 })
 
 setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
@@ -154,21 +174,33 @@ setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
 		mns <- ret[['means']]
 		if (is.null(mns)) stop("mns is null")
 		thr <- ret[['thresholds']]
-		if (is.null(thr)) stop("thresholds is null")
-		v <- .standardizeCovMeansThresholds(cov, mns, thr, vector=TRUE)
-		return(v)
+		if (prod(dim(thr)) == 0) {
+			return(c(vech(cov), mns[!is.na(mns)]))
+		} else {
+			dth <- getThresholdMask(model, colnames(thr))
+			v <- .standardizeCovMeansThresholds(cov, mns, thr, dth, vector=TRUE)
+			return(v)
+		}
 })
 
-.standardizeCovMeansThresholds <- function(cov, means, thresholds, vector=FALSE){
-	if(is.null(colnames(means))){ mnames <- names(means) } else {mnames <- colnames(means)}
+.standardizeCovMeansThresholds <- function(cov, means, thresholds, dth, vector=FALSE){
+	if(!is.null(names(means))){
+		mnames <- names(means)
+	} else if(!is.null(colnames(means)) && length(means) == length(colnames(means))) {
+		mnames <- colnames(means)
+	} else if(!is.null(rownames(means)) && length(means) == length(rownames(means))){
+		mnames <- rownames(means)
+	} else {
+		stop("I give up. Have no idea how to standardize this expectation.\nYour means must have rownames(), colnames(), or names().")
+	}
 	ordInd <- match(colnames(thresholds), mnames)
 	thresholds <- matrix( (c(thresholds) - rep(means[ordInd], each=nrow(thresholds)) ) / rep(sqrt(diag(cov)[ordInd]), each=nrow(thresholds)), nrow=nrow(thresholds), ncol=ncol(thresholds) )
-	means[,ordInd] <- means[,ordInd] - means[,ordInd]
+	means[ordInd] <- means[ordInd] - means[ordInd]
 	cov <- .ordinalCov2Cor(cov, ordInd)
 	if(!vector){
 		return(list(cov=cov, means=means, thresholds=thresholds))
 	} else {
-		return(c(vech(cov), means[!is.na(means)], thresholds[!is.na(thresholds)]))
+		return(c(vech(cov), means[!is.na(means)], thresholds[dth]))
 	}
 }
 
@@ -322,6 +354,10 @@ generateNormalData <- function(model, nrows){
 		theMeans <- imxGetExpectationComponent(model, "means")
 		theCov <- imxGetExpectationComponent(model, "covariance")
 		theThresh <- imxGetExpectationComponent(model, "thresholds")
+		if (length(theMeans) == 0) {
+			stop(paste("Cannot generate data from model", omxQuotes(model$name),
+				   "where means are not specified"))
+		}
 		data <- mvtnorm::rmvnorm(nrows, theMeans, theCov)
 		colnames(data) <- colnames(theCov)
 		data <- as.data.frame(data)
@@ -487,9 +523,13 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 	fellner <- is(model$expectation, "MxExpectationRAM") && length(model$expectation$between);
 	if (!fellner) {
 		origData <- NULL
-		if (!is.null(model@data) && model@data@type == 'raw') {
-			origData <- model@data@observed
-			if (length(nrows)==0) nrows <- nrow(origData)
+		if (!is.null(model@data)) {
+			if (model@data@type == 'raw') {
+				origData <- model@data@observed
+				if (length(nrows)==0) nrows <- nrow(origData)
+			} else if (model@data@type %in% c('cov','cor')) {
+				if (length(nrows)==0) nrows <- model@data@numObs
+			}
 		}
 		if (is.null(nrows)) stop("You must specify nrows")
 		data <- genericGenerateData(model$expectation, model, nrows)

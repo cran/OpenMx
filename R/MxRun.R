@@ -18,6 +18,7 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 		checkpoint = FALSE, useSocket = FALSE, onlyFrontend = FALSE, 
 		useOptimizer = TRUE){
 
+	if (!is(model, "MxModel")) stop("mxRun can only act on MxModel objects")
 	if (.hasSlot(model, '.version')) {
 		mV <- package_version(model@.version)
 		curV <- pkg_globals$myVersion
@@ -256,6 +257,7 @@ runHelper <- function(model, frontendStart,
 		if(options[["Standard Errors"]] == "Yes"){
 			wlsSEs <- imxWlsStandardErrors(model)
 			model@output$standardErrors <- wlsSEs$SE
+			model@output$ihessian <- 0.5*wlsSEs$Cov
 			model@output$hessian <- 2*solve(wlsSEs$Cov) #puts in same units as m2ll Hessian
 			wlsChi <- imxWlsChiSquare(model, J=wlsSEs$Jac)
 		} else {
@@ -271,6 +273,13 @@ runHelper <- function(model, frontendStart,
 			model@output$status$code <- 5   # INFORM_NOT_CONVEX
 		}
 	}
+	mroe <- model@output[['maxRelativeOrdinalError']]
+	if (!is.null(mroe)) { if (mroe > .01) {
+		warning(paste("model$output[['maxRelativeOrdinalError']] is larger than 1%.\n",
+			      "Standardized ordinal thresholds are too far from zero or",
+			      "you have too many ordinal variables with nonzero covariance.\n",
+			      "Model is unlikely to converge and standard errors are unlikely to be accurate."))
+	}}
 
 	# Currently runstate preserves the pre-backend state of the model.
 	# Eventually this needs to capture the post-backend state,
@@ -317,8 +326,8 @@ imxReportProgress <- function(info, eraseLen) {
 	if (origLen < eraseLen) {
 		info <- paste0(info, paste0(rep(' ', eraseLen - nchar(info)), collapse=""))
 	}
-	message(paste0("\r", info), appendLF=FALSE)
-	if (origLen == 0) message("\r", appendLF=FALSE)
+	cat(paste0("\r", info))
+	if (origLen == 0) cat("\r")
 }
 
 enumerateDatasets <- function(model) {

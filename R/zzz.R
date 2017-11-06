@@ -46,7 +46,8 @@ imxHasOpenMP <- function() .Call(hasOpenMP_wrapper)
 		packageStartupMessage("OpenMx is not compiled to take advantage of computers with multiple cores.")
 	} else if (Sys.getenv("OMP_NUM_THREADS") == "") {
 		packageStartupMessage(paste0("To take full advantage of multiple cores, use:\n",
-					     "  mxOption(NULL, 'Number of Threads', parallel::detectCores())"))
+					     "  mxOption(NULL, 'Number of Threads', parallel::detectCores()) #now\n",
+					     "  Sys.setenv(OMP_NUM_THREADS=parallel::detectCores()) #before library(OpenMx)"))
 	}
 	if (!is.na(match("package:expm", search()))) {
 		packageStartupMessage(paste("** Holy cannoli! You must be a pretty advanced and awesome user.",
@@ -112,9 +113,9 @@ imxLog <- function(str) .Call(Log_wrapper, str)
 #' Estabrook, Timothy C. Bates, Paras Mehta, Timo von Oertzen, Ross J. Gore, Michael D. Hunter, Daniel C.
 #' Hackett, Julian Karch, Andreas M. Brandmaier, Joshua N. Pritikin, Mahsa Zahery, Robert M. Kirkpatrick, 
 #' Yang Wang, and Charles Driver. (2016) OpenMx 2 User Guide. 
-#' http://openmx.psyc.virginia.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
+#' http://openmx.ssri.psu.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
 #'
-#' @references The OpenMx User's guide can be found at \url{http://openmx.psyc.virginia.edu/documentation}
+#' @references The OpenMx User's guide can be found at \url{http://openmx.ssri.psu.edu/documentation}
 #'
 #' @examples
 #' library(OpenMx)

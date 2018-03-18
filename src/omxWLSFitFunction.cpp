@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,13 +31,14 @@ struct omxWLSFitFunction : omxFitFunction {
 	omxMatrix* P;
 	omxMatrix* B;
 	int n;
-
+	int fullWls;
+	
 	omxWLSFitFunction() :standardMeans(0), standardThresholds(0) {};
 	virtual ~omxWLSFitFunction();
 	virtual void init();
 	virtual void compute(int ffcompute, FitContext *fc);
 	virtual void populateAttr(SEXP algebra);
-
+	
 	// 'standard' prefix variables are temp space used by flattenDataToVector
 	omxMatrix* standardCov;
 	omxMatrix* standardMeans;
@@ -241,9 +242,11 @@ void omxWLSFitFunction::populateAttr(SEXP algebra)
 	if (weightExt) Rf_setAttrib(algebra, Rf_install("weights"), weightExt);
 	Rf_setAttrib(algebra, Rf_install("gradients"), gradients);
 	
-	Rf_setAttrib(algebra, Rf_install("SaturatedLikelihood"), Rf_ScalarReal(0));
+	ProtectedSEXP Rsat(Rf_ScalarReal(0));
+	Rf_setAttrib(algebra, Rf_install("SaturatedLikelihood"), Rsat);
 	//Rf_setAttrib(algebra, Rf_install("IndependenceLikelihood"), Rf_ScalarReal(0));
-	Rf_setAttrib(algebra, Rf_install("ADFMisfit"), Rf_ScalarReal(omxMatrixElement(matrix, 0, 0)));
+	ProtectedSEXP Rmisfit(Rf_ScalarReal(omxMatrixElement(matrix, 0, 0)));
+	Rf_setAttrib(algebra, Rf_install("ADFMisfit"), Rmisfit);
 }
 
 omxFitFunction *omxInitWLSFitFunction()
@@ -277,7 +280,9 @@ void omxWLSFitFunction::init()
 		return;
 	}
 	
-	oo->units = FIT_UNITS_SQUARED_RESIDUAL;
+	fullWls = strEQ("WLS", CHAR(Rf_asChar(R_do_slot(rObj, Rf_install("weights")))));
+
+	oo->units = fullWls? FIT_UNITS_SQUARED_RESIDUAL_CHISQ : FIT_UNITS_SQUARED_RESIDUAL;
 	
 	/* Get Expectation Elements */
 	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
@@ -419,7 +424,9 @@ void omxWLSFitFunction::init()
 	if(newObj->expectedMeans != NULL) {
 		vectorSize = vectorSize + ncol;
 	}
-	for(int i = 0; i < int(oThresh.size()); i++) {
+	for(int i = 0, ei=0; i < int(oThresh.size()); i++) {
+		while (ei < int(eThresh.size()) && eThresh[ei].dColumn != oThresh[i].dColumn) ++ei;
+		eThresh[ei].numThresholds = oThresh[i].numThresholds;  // assume
 		vectorSize = vectorSize + oThresh[i].numThresholds;
 	}
 	if(OMX_DEBUG) { mxLog("Intial WLSFitFunction vectorSize comes to: %d.", vectorSize); }

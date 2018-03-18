@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -98,8 +98,6 @@ plan$steps$GD <- mxComputeNelderMead(xTolProx=1e-12,fTolProx=1e-8,maxIter=10000L
 m2 <- mxModel(model,plan)
 m2o <- mxRun(m2)
 summary(m2o)
-#Notice how the fit values at all vertices of the final simplex are larger than that reported in summary()
-#output--the reason is that a better point was found during calculation of the pseudoHessian:
 m2o$compute$steps$GD$output$finalFitValues
 m2o$output$iterations
 

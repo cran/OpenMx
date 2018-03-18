@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -68,6 +68,29 @@ setMethod("initialize", "MxModel",
 		return(.Object)
 	}
 )
+
+warnModelCreatedByOldVersion <- function(model) {
+	if (!is(model, "MxModel")) stop("MxModel object required")
+	if (.hasSlot(model, '.version')) {
+		mV <- package_version(model@.version)
+		curV <- pkg_globals$myVersion
+		if (curV$major != mV$major ||
+		    curV$minor != mV$minor) {
+			warning(paste0("You are using OpenMx version ", curV,
+				       " with a model created by OpenMx version ",
+				       mV, ". This may work fine (fingers crossed), but if you run into ",
+				       "trouble then please recreate your model with the ",
+				       "current version of OpenMx."))
+		}
+	} else {
+		curV <- pkg_globals$myVersion
+		warning(paste0("You are using OpenMx version ", curV,
+			       " with a model created by an old version of OpenMx. ",
+			       "This may work fine (fingers crossed), but if you run into ",
+			       "trouble then please recreate your model with the ",
+			       "current version of OpenMx."))
+	}
+}
 
 ##' imxInitModel
 ##'
@@ -692,4 +715,19 @@ vcov.MxModel <- function(object, ...) {
     stop(paste("Don't know how to extract vcov from object",
                omxQuotes(object$name), "fit in", omxQuotes(fu), "units"))
   }
+}
+
+omxModelDeleteData <- function(model) {
+  if (length(names(model$submodels))) for (sm in names(model$submodels)) {
+    model <- mxModel(model, omxModelDeleteData(model[[sm]]))
+  }
+  
+  if (!is.null(model@data)) {
+    model@data <- NULL
+  }
+  
+  if (!is.null(model@runstate) && !is.null(model@runstate$datalist)) {
+    model@runstate$datalist <- NULL
+  }
+  model
 }

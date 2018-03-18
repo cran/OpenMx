@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -78,6 +78,11 @@ void omxDuplicateAlgebra(omxMatrix* tgt, omxMatrix* src, omxState* newState) {
 
     if(src->algebra != NULL) {
 	    omxFillMatrixFromMxAlgebra(tgt, src->algebra->sexpAlgebra, src->nameStr, NULL, 0);
+	    tgt->algebra->calcDimnames = src->algebra->calcDimnames;
+	    if (!src->algebra->calcDimnames) {
+		    tgt->rownames = src->rownames;
+		    tgt->colnames = src->colnames;
+	    }
     } else if(src->fitFunction != NULL) {
         omxDuplicateFitMatrix(tgt, src, newState);
     }
@@ -105,6 +110,30 @@ void omxAlgebraPreeval(omxMatrix *mat, FitContext *fc)
 	auto ff = mat->fitFunction;
 	if (ff) fc->fitUnits = ff->units;
 	st->setWantStage(FF_COMPUTE_FIT);
+}
+
+void CheckAST(omxAlgebra *oa, FitContext *fc)
+{
+	bool debug = false;
+	if (!oa->calcDimnames) {
+		if (debug || OMX_DEBUG) mxLog("CheckAST: %s has user assigned dimnames", oa->matrix->name());
+		return;
+	}
+
+	for(int j = 0; j < oa->numArgs; j++) {
+		CheckAST(oa->algArgs[j], fc);
+	}
+
+	if (oa->oate) {
+		if (debug || OMX_DEBUG) mxLog("CheckAST: processing op %s for %s", oa->oate->rName, oa->matrix->name());
+		(*(algebra_op_t)oa->oate->check)(fc, oa->algArgs, oa->numArgs, oa->matrix);
+	} else {
+		// null op
+		auto &arg = oa->algArgs[0];
+		auto &mat = oa->matrix;
+		mat->rownames = arg->rownames;
+		mat->colnames = arg->colnames;
+	}
 }
 
 void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
@@ -145,7 +174,12 @@ void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 	if(oa->funWrapper == NULL) {
 		if(oa->numArgs != 1) Rf_error("Internal Error: Empty algebra evaluated");
 		if(OMX_DEBUG_ALGEBRA) { omxPrint(oa->algArgs[0], "Copy no-op algebra"); }
-		omxCopyMatrix(oa->matrix, oa->algArgs[0]);
+		if (oa->algArgs[0]->canDiscard()) {
+			oa->matrix->take(oa->algArgs[0]);
+			if(OMX_DEBUG_ALGEBRA) mxLog("Take algebra '%s'", oa->algArgs[0]->name());
+		} else {
+			omxCopyMatrix(oa->matrix, oa->algArgs[0]);
+		}
 	} else {
 		if(OMX_DEBUG_ALGEBRA || oa->verbose >= 2) { 
 			std::string buf;
@@ -157,6 +191,14 @@ void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 			mxLog("Algebra '%s' %s(%s)", oa->matrix->name(), oa->oate->rName, buf.c_str());
 		}
 		(*(algebra_op_t)oa->funWrapper)(fc, oa->algArgs, (oa->numArgs), oa->matrix);
+		for(int j = 0; j < oa->numArgs; j++) {
+			auto *mat1 = oa->algArgs[j];
+			if (!mat1->canDiscard()) continue;
+			// skip if smaller than 10x10? TODO
+			if (OMX_DEBUG_ALGEBRA) mxLog("Set arg[%d] '%s' to 0x0 dim", j, mat1->name());
+			omxZeroByZeroMatrix(mat1);
+			omxMarkDirty(mat1);
+		}
 	}
 
 	if(OMX_DEBUG_ALGEBRA || oa->verbose >= 3) {
@@ -192,7 +234,7 @@ void omxFillAlgebraFromTableEntry(omxAlgebra *oa, const omxAlgebraTableEntry* oa
 	if(oa == NULL) Rf_error("Internal Error: Null Algebra Detected in fillAlgebra.");
 
 	oa->oate = oate;
-	oa->funWrapper = oate->funWrapper;
+	oa->funWrapper = oate->calc;
 	omxAlgebraAllocArgs(oa, oate->numArgs==-1? realNumArgs : oate->numArgs);
 }
 
@@ -223,16 +265,13 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 		if(OMX_DEBUG) {mxLog("Table Entry %d is %s.", value, entry->opName);}
 		omxFillAlgebraFromTableEntry(oa, entry, Rf_length(algebra) - 1);
 		for(int j = 0; j < oa->numArgs; j++) {
-			SEXP algebraArg;
-			{
-				ScopedProtect p1(algebraArg, VECTOR_ELT(algebra, j+1));
-				auto name2 = string_snprintf("%s arg %d", om->name(), j);
-				oa->algArgs[j] = omxAlgebraParseHelper(algebraArg, om->currentState, name2);
-			}
-			if (oa->algArgs[j]->nameStr.size() == 0) {
+			if (om->nameStr.compare("?") == 0) {
 				// A bit inefficient but invaluable for debugging
-				oa->algArgs[j]->nameStr = string_snprintf("alg%03d", ++Global->anonAlgebra);
+				om->nameStr = string_snprintf("alg%03d", ++Global->anonAlgebra);
 			}
+			ProtectedSEXP algebraArg(VECTOR_ELT(algebra, j+1));
+			auto name2 = string_snprintf("%s arg %d", om->name(), j);
+			oa->algArgs[j] = omxAlgebraParseHelper(algebraArg, om->currentState, name2);
 		}
 	} else {		// This is an algebra pointer, and we're a No-op algebra.
 		/* TODO: Optimize this by eliminating no-op algebras entirely. */
@@ -259,7 +298,8 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 	}
 	om->nameStr     = name;
 	oa->sexpAlgebra = algebra;
-	om->loadDimnames(dimnames);
+	oa->calcDimnames = !dimnames || Rf_isNull(dimnames);
+	if (!oa->calcDimnames) om->loadDimnames(dimnames);
 }
 
 void omxAlgebraPrint(omxAlgebra* oa, const char* d) {

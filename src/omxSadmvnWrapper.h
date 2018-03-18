@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -143,12 +143,6 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 		this->colInfoPtr = &colInfo;
 	};
 
-	struct CorCmp {
-		Eigen::MatrixXd &cor;
-		CorCmp(Eigen::MatrixXd *_cor) : cor(*_cor) {};
-		bool operator()(int i, int j) { return fabs(cor.data()[i]) > fabs(cor.data()[j]); };
-	};
-
 	template <typename T1>
 	void setCovariance(Eigen::MatrixBase<T1> &cov, FitContext *fc)
 	{
@@ -179,6 +173,7 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 
 	void setupCorrelation()
 	{
+		bool debug = false;
 		std::vector<int> cells;
 		for(int i = 1; i < cor.rows(); i++) {
 			for(int j = 0; j < i; j++) {
@@ -187,10 +182,11 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 			}
 		}
 
-		std::sort(cells.begin(), cells.end(), CorCmp(&cor));
-		//Eigen::VectorXd ec(cells.size());
-		//for (int ex=0; ex < ec.size(); ex++) ec[ex] = cor.data()[cells[ex]];
-		//mxPrintMat("ec", ec);
+		if (debug) {
+			Eigen::VectorXd ec(cells.size());
+			for (int ex=0; ex < ec.size(); ex++) ec[ex] = cor.data()[cells[ex]];
+			mxPrintMat("ec", ec);
+		}
 
 		std::vector<int> region;
 		Connectedness::SubgraphType subgraph;
@@ -201,10 +197,18 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 			int row = offset % cor.rows();
 			if (cc.getSizeIfConnected(row, col) <= Global->maxOrdinalPerBlock) {
 				cc.connect(row, col);
+			} else {
+				int opb = Global->maxOrdinalPerBlock;
+				omxRaiseErrorf("Ordinal covariance has dependent block larger than %dx%d. "
+					       "You must increase mxOption maxOrdinalPerBlock",
+					       opb, opb);
+				break;
 			}
 		}
 
-		//mxLog("split %d vars into %d blocks", stddev.size(), cc.numSubgraphs());
+		if (debug) {
+			mxLog("split %d vars into %d blocks", stddev.size(), cc.numSubgraphs());
+		}
 		blocks.clear();
 		blocks.resize(cc.numSubgraphs());
 		int bx = 0;

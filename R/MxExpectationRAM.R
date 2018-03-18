@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ setClass(Class = "MxExpectationRAM",
 		M = "MxCharOrNumber",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
-		thresholdColumns = "numeric",
-		thresholdLevels = "numeric",
 		depth = "integer",
 		threshnames = "character",
 		usePPML = "logical",
@@ -185,18 +183,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 				omxQuotes(modelname), "does not contain colnames")
 			stop(msg, call. = FALSE)
 		}
-		sMatrix <- flatModel[[sMatrix]]
-		if (!is.null(sMatrix)) {
-			if (!is(sMatrix, "MxAlgebra") &&
-			    all(diag(sMatrix$values) == 0) && all(diag(sMatrix$free) == FALSE) &&
-			    all(is.na(diag(sMatrix$labels)))) {
-				msg <- paste("The S matrix associated",
-				"with the RAM expectation function in model", 
-				omxQuotes(modelname), "is fixed to zero on the",
-				"diagonal. Your model must allow some variance.")
-				stop(msg, call.=FALSE)
-			}
-		}
 		mMatrix <- flatModel[[mMatrix]]		
 		if (hasMeanModel && !is.null(mMatrix)) {
 			means <- dimnames(mMatrix)
@@ -232,9 +218,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 				checkNumberOrdinalColumns(mxDataObject)
 				verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
 				.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
-				retval <- generateThresholdColumns(flatModel, model, labelsData, translatedNames, data, threshName)
-				.Object@thresholdColumns <- retval[[1]]
-				.Object@thresholdLevels <- retval[[2]]
 				if (length(mxDataObject@observed) == 0) {
 					.Object@data <- as.integer(NA)
 				}
@@ -261,8 +244,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			}
 		} else {
 			.Object@thresholds <- as.integer(NA)
-			.Object@thresholdColumns <- as.integer(NA)
-			.Object@thresholdLevels <- as.integer(NA)
 		}
 		if(length(.Object@dims) > nrow(fMatrix) && length(translatedNames) == nrow(fMatrix)){
 			.Object@dims <- translatedNames

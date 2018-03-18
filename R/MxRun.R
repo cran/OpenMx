@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,26 +18,7 @@ mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 		checkpoint = FALSE, useSocket = FALSE, onlyFrontend = FALSE, 
 		useOptimizer = TRUE){
 
-	if (!is(model, "MxModel")) stop("mxRun can only act on MxModel objects")
-	if (.hasSlot(model, '.version')) {
-		mV <- package_version(model@.version)
-		curV <- pkg_globals$myVersion
-		if (curV$major != mV$major ||
-		    curV$minor != mV$minor) {
-			warning(paste0("You are using OpenMx version ", curV,
-				       " with a model created by OpenMx version ",
-				       mV, ". This may work fine (fingers crossed), but if you run into ",
-				       "trouble then please recreate your model with the ",
-				       "current version of OpenMx."))
-		}
-	} else {
-		curV <- pkg_globals$myVersion
-		warning(paste0("You are using OpenMx version ", curV,
-			       " with a model created by an old version of OpenMx. ",
-			       "This may work fine (fingers crossed), but if you run into ",
-			       "trouble then please recreate your model with the ",
-			       "current version of OpenMx."))
-	}
+	warnModelCreatedByOldVersion(model)
 
 	if (is.null(intervals)) {
 		# OK
@@ -103,7 +84,7 @@ runHelper <- function(model, frontendStart,
 	frozen <- lapply(independents, imxFreezeModel)
 	model <- imxReplaceModels(model, frozen)
 	namespace <- imxGenerateNamespace(model)
-	flatModel <- imxFlattenModel(model, namespace)	
+	flatModel <- imxFlattenModel(model, namespace, unsafe)
 	options <- generateOptionsList(model, length(flatModel@constraints), useOptimizer)
 	options[['intervals']] <- intervals
 
@@ -146,7 +127,7 @@ runHelper <- function(model, frontendStart,
 
 	if (model@.newobjects) {
 		namespace <- imxGenerateNamespace(model)
-		flatModel <- imxFlattenModel(model, namespace)
+		flatModel <- imxFlattenModel(model, namespace, unsafe)
 		labelsData <- imxGenerateLabels(model)
 	}
 
@@ -428,7 +409,7 @@ omxGetBootstrapReplications <- function(model) {
 	   pct <- round(100*sum(mask) / length(mask))
 	   warning(paste0("Only ",pct,"% of the bootstrap replications ",
 			  "converged acceptably. Accuracy is much less than the ", nrow(raw),
-			  " replications requested"), call.=FALSE)
+			  " replications requested. Examine table(model$compute$output$raw$statusCode)"), call.=FALSE)
    }
    bootData
 }

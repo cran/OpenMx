@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -91,9 +91,11 @@ imxFreezeModel <- function(model) {
 ##'
 ##' @param model model
 ##' @param namespace namespace
-imxFlattenModel <- function(model, namespace) {
+##' @param unsafe whether to skip sanity checks
+imxFlattenModel <- function(model, namespace, unsafe=FALSE) {
 	flatModel <- new("MxFlatModel", model)
 	name <- model@name
+	flatModel@unsafe <- unsafe
 	flatModel@fitfunction <- safeQualifyNames(model@fitfunction, name, namespace)
 	flatModel@expectation <- safeQualifyNames(model@expectation, name, namespace)
 	defaultData <- qualifyNamesData(model@data, name)

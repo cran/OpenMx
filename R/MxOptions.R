@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ otherOptions <- list(
     "mvnAbsEps" = 0,
     "mvnRelEps" = 1e-3,
     "maxStackDepth" = 25000L,   # R_PPSSIZE/2
-    "Gradient algorithm" = "central",
+    "Gradient algorithm" = NULL,
     "Gradient iterations" = "Auto",#1L,
     "Gradient step size" = "Auto",#1.0e-7,
     "Parallel diagnostics" = "No",

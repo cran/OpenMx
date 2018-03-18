@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -189,7 +189,8 @@ omxCheckWithinPercentError <- function(a, b, percent = 0.1) {
 trim <- function(input) {
 	input <- sub("(?m)^\\s+", "", input, perl = TRUE)
 	input <- sub("(?m)\\s+$", "", input, perl = TRUE)
-	return(input)
+	input <- gsub("\\s+", " ", input, perl = TRUE)
+	tolower(input)
 }
 
 tryCatch.W <- function(expr) {

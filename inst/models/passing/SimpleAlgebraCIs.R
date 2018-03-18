@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
 
 
 require(OpenMx)
+
+# give SLSQP plenty of time to converge
+mxOption(NULL, "major iterations", 3000)
+
 data(demoOneFactor)
 
 manifests <- names(demoOneFactor)

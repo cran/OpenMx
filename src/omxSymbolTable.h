@@ -8,7 +8,8 @@ struct omxAlgebraTableEntry {
 	const char opName[32];
 	const char rName[32];
 	int numArgs;
-	algebra_op_t funWrapper;
+	algebra_op_t check;
+	algebra_op_t calc;
 };
 
 void omxMatrixInvert(omxMatrix** args, int numArgs, omxMatrix* result);

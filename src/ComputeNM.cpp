@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -258,14 +258,6 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	}
 	
 	feasTol = Global->feasibilityTolerance;
-	
-	ProtectedSEXP Rexclude(R_do_slot(rObj, Rf_install(".excludeVars")));
-	excludeVars.reserve(Rf_length(Rexclude));
-	for (int ex=0; ex < Rf_length(Rexclude); ++ex) {
-		int got = varGroup->lookupVar(CHAR(STRING_ELT(Rexclude, ex)));
-		if (got < 0) continue;
-		excludeVars.push_back(got);
-	}
 }
 
 
@@ -274,27 +266,16 @@ void omxComputeNM::computeImpl(FitContext *fc){
 	omxAlgebraPreeval(fitMatrix, fc);
 	if (isErrorRaised()) return;
 	
-	size_t numParam = fc->varGroup->vars.size();
-	if (excludeVars.size()) {
-		fc->profiledOut.assign(fc->numParam, false);
-		for (auto vx : excludeVars) fc->profiledOut[vx] = true;
-	}
-	if (fc->profiledOut.size()) {
-		if (fc->profiledOut.size() != fc->numParam) Rf_error("Fail");
-		for (size_t vx=0; vx < fc->varGroup->vars.size(); ++vx) {
-			if (fc->profiledOut[vx]) --numParam;
-		}
-	}
-	
-	if (numParam <= 0) {
-		omxRaiseErrorf("%s: model has no free parameters", name);
-		return;
-	}
-	
 	fc->ensureParamWithinBox(nudge);
 	fc->createChildren(fitMatrix);
 	
 	NelderMeadOptimizerContext nmoc(fc, this);
+
+	if (nmoc.numFree <= 0) {
+		omxRaiseErrorf("%s: model has no free parameters", name);
+		return;
+	}
+	
 	nmoc.verbose = verbose;
 	nmoc.maxIter = maxIter;
 	nmoc.iniSimplexType = iniSimplexType;
@@ -314,7 +295,7 @@ void omxComputeNM::computeImpl(FitContext *fc){
 			if(verbose){mxLog("l1p iteration %d",k);}
 			if(k>0){
 				if(nmoc.iniSimplexMat.rows() || nmoc.iniSimplexMat.cols()){nmoc.iniSimplexMat.resize(0,0);}
-				if(nmoc.statuscode==3){break;}
+				if(nmoc.statuscode==10){break;}
 				if( !nmoc.estInfeas && nmoc.statuscode==0 ){
 					if(verbose){mxLog("l1p solution found");}
 					break;
@@ -353,7 +334,6 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		nmoc2.rho = nmoc.rho;
 		nmoc2.addPenalty = nmoc.addPenalty;
 		nmoc2.countConstraintsAndSetupBounds();
-		//TODO: ideally, the simplex for the validation should be *centered* on the previous best vertex
 		nmoc2.invokeNelderMead();
 		
 		if(nmoc2.bestfit < nmoc.bestfit && (nmoc2.statuscode==0 || nmoc2.statuscode==4)){
@@ -393,6 +373,9 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		break;
 	case 4:
 		fc->setInform(INFORM_ITERATION_LIMIT);
+		break;
+	case 10:
+		fc->setInform(INFORM_STARTING_VALUES_INFEASIBLE);
 		break;
 	}
 	
@@ -466,7 +449,6 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 		output.add("constraintRows", cr);
 		output.add("constraintCols", cc);
 	}
-	//TODO: figure out why none of the constraint-function values are getting exported to the frontend:
 	if( fc->constraintFunVals.size() ){
 		Rf_protect(cv = Rf_allocVector( REALSXP, fc->constraintFunVals.size() ));
 		memcpy( REAL(cv), fc->constraintFunVals.data(), sizeof(double) * fc->constraintFunVals.size() );
@@ -518,7 +500,7 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 //-------------------------------------------------------
 
 NelderMeadOptimizerContext::NelderMeadOptimizerContext(FitContext* _fc, omxComputeNM* _nmo)
-	: fc(_fc), NMobj(_nmo), numFree(countNumFree()), 
+	: fc(_fc), NMobj(_nmo), numFree(_fc->calcNumFree()),
    subsidiarygoc(GradientOptimizerContext(_fc, 0L, GradientAlgorithm_Forward, 1L, 1e-5))
 {
 	est.resize(numFree);
@@ -530,16 +512,7 @@ NelderMeadOptimizerContext::NelderMeadOptimizerContext(FitContext* _fc, omxCompu
 
 void NelderMeadOptimizerContext::copyBounds()
 {
-	FreeVarGroup *varGroup = fc->varGroup;
-	int px=0;
-	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
-		if (fc->profiledOut[vx]) continue;
-		solLB[px] = varGroup->vars[vx]->lbound;
-		if (!std::isfinite(solLB[px])) solLB[px] = NEG_INF;
-		solUB[px] = varGroup->vars[vx]->ubound;
-		if (!std::isfinite(solUB[px])) solUB[px] = INF;
-		++px;
-	}
+	fc->copyBoxConstraintToOptimizer(solLB, solUB);
 }
 
 void NelderMeadOptimizerContext::countConstraintsAndSetupBounds()
@@ -573,35 +546,15 @@ void NelderMeadOptimizerContext::countConstraintsAndSetupBounds()
 	}
 }
 
-int NelderMeadOptimizerContext::countNumFree()
-{
-	int nf = 0;
-	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
-		if (fc->profiledOut[vx]) continue;
-		++nf;
-	}
-	return nf;
-}
-
 void NelderMeadOptimizerContext::copyParamsFromFitContext(double *ocpars)
 {
-	int px=0;
-	for (size_t vx=0; vx < fc->profiledOut.size(); ++vx) {
-		if (fc->profiledOut[vx]) continue;
-		ocpars[px] = fc->est[vx];
-		++px;
-	}
+	Eigen::Map<Eigen::VectorXd> vec(ocpars, numFree);
+	fc->copyEstToOptimizer(vec);
 }
 
 void NelderMeadOptimizerContext::copyParamsFromOptimizer(Eigen::VectorXd &x, FitContext* fc2)
 {
-	int px=0;
-	for (size_t vx=0; vx < fc2->profiledOut.size(); ++vx) {
-		if (fc2->profiledOut[vx]) continue;
-		fc2->est[vx] = x[px];
-		++px;
-	}
-	fc2->copyParamToModel();
+	fc2->setEstFromOptimizer(x);
 }
 
 //----------------------------------------------------------------------
@@ -695,8 +648,7 @@ double NelderMeadOptimizerContext::evalFit(Eigen::VectorXd &x)
 	}
 }
 
-//TODO: maybe the user should optionally be able to request that non-finite fit values be treated
-//like violated MxConstraints
+
 void NelderMeadOptimizerContext::checkNewPointInfeas(Eigen::VectorXd &x, Eigen::Vector2i &ifcr)
 {
 	int i=0;
@@ -1393,7 +1345,7 @@ void NelderMeadOptimizerContext::invokeNelderMead(){
 	initializeSimplex(est, iniSimplexEdge, false);
 	if( (vertexInfeas.sum()==n+1 && NMobj->eqConstraintMthd != 4) || (fvals.array()==bignum).all()){
 		omxRaiseErrorf("initial simplex is not feasible; specify it differently, try different start values, or use mxTryHard()");
-		statuscode = 3;
+		statuscode = 10;
 		return;
 	}
 	fullSort();
@@ -1624,6 +1576,10 @@ void NelderMeadOptimizerContext::finalize()
 	NMobj->bestfitOut = bestfit;
 	copyParamsFromOptimizer(est,fc);
 	ComputeFit(engineName, NMobj->fitMatrix, FF_COMPUTE_FIT, fc);
+	/*Doing this here ensures (1) that the fit has just been freshly evaluated at the solution, (2) that this check is done as part of the
+	MxComputeNelderMead step (necessary for bootstrapping), and (3) that Nelder-Mead reports status code 3 for solutions that violate 
+	MxConstraints, and status code 10 for	all other kinds of infeasible solutions:*/
+	if(!fc->insideFeasibleSet()){fc->setInform(INFORM_STARTING_VALUES_INFEASIBLE);}
 	
 	omxState *st = fc->state;
 	int ineqType = omxConstraint::LESS_THAN;

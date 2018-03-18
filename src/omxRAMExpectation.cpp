@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2017 The OpenMx Project
+ * Copyright 2007-2018 The OpenMx Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,8 +105,9 @@ void omxRAMExpectation::populateAttr(SEXP robj)
 		ProtectedSEXP expCovExt(Rf_allocMatrix(REALSXP, Ax->rows, Ax->cols));
 		memcpy(REAL(expCovExt), Ax->data, sizeof(double) * Ax->rows * Ax->cols);
 		Rf_setAttrib(robj, Rf_install("UnfilteredExpCov"), expCovExt);
+		ProtectedSEXP RnumStats(Rf_ScalarReal(omxDataDF(data)));
+		Rf_setAttrib(robj, Rf_install("numStats"), RnumStats);
 	}
-	Rf_setAttrib(robj, Rf_install("numStats"), Rf_ScalarReal(omxDataDF(data)));
 
 	MxRList out;
 	MxRList dbg;
@@ -1538,8 +1539,8 @@ namespace RelationalRAMExpectation {
 			if (isErrorRaised()) return;
 		}
 		for (auto *ex : allEx) {
-			if (!ex->data->hasWeight()) continue;
-			Rf_error("%s: row weights provided in '%s' are not compatible with joins",
+			if (!ex->data->hasWeight() && !ex->data->hasFreq()) continue;
+			Rf_error("%s: row frequencies or weights provided in '%s' are not compatible with joins",
 				 expectation->name, ex->data->name);
 		}
 

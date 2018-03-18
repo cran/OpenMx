@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2017-11-05
+Date: 2018-03-16
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -32,7 +32,9 @@ Description: Facilitates treatment of statistical model specifications
     maximum likelihood, and weighted least squares.
     Example models include confirmatory factor, multiple group, mixture
     distribution, categorical threshold, modern test theory, differential
-    equations, state space, and many others. See Neale, Hunter, Pritikin, Zahery, Brick,
+    equations, state space, and many others.  MacOS users can download the most up-to-date 
+    package binaries from <http://openmx.ssri.psu.edu>.
+    See Neale, Hunter, Pritikin, Zahery, Brick,
     Kirkpatrick, Estabrook, Bates, Maes, & Boker (2016) <doi:10.1007/s11336-014-9435-8>.
 SystemRequirements: GNU make
 ByteCompile: yes
@@ -77,11 +79,11 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxExpectationStateSpace.R' 'MxExpectationBA81.R'
         'MxFitFunctionGREML.R' 'MxExpectationGREML.R' 'MxMI.R'
         'MxFactorScores.R' 'MxRobustSE.R' 'MxAvailableOptimizers.R'
-        'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'zzz.R'
-Version: 2.8.3
-RoxygenNote: 6.0.1.9000
+        'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'zzz.R'
+Version: 2.9.6
+RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-11-05 19:45:36 UTC; joshua
+Packaged: 2018-03-16 19:16:17 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -110,4 +112,4 @@ Author: Steven M. Boker [aut],
   Manjunath B G [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2017-11-06 16:09:04 UTC
+Date/Publication: 2018-03-18 14:05:17 UTC

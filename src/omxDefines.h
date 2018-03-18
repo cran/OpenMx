@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -131,7 +131,8 @@ enum FitStatisticUnits {
 	FIT_UNITS_UNKNOWN,
 	FIT_UNITS_PROBABILITY,
 	FIT_UNITS_MINUS2LL,
-	FIT_UNITS_SQUARED_RESIDUAL  // OK?
+	FIT_UNITS_SQUARED_RESIDUAL,
+	FIT_UNITS_SQUARED_RESIDUAL_CHISQ,  // full weight matrix
 };
 
 #define GRADIENT_FUDGE_FACTOR(x) (pow(10.0,x))
@@ -343,9 +344,9 @@ class MxRList : private MxRListBase {
 	size_t size() const { return MxRListBase::size(); }
 	SEXP asR();
 	void add(const char *key, SEXP val) {
+		Rf_protect(val);
 		SEXP rkey = Rf_mkChar(key);
 		Rf_protect(rkey);
-		Rf_protect(val);
 		push_back(std::make_pair(rkey, val));
 	};
 };
@@ -389,6 +390,25 @@ class ProtectedSEXP {
  private:
         ProtectedSEXP( const ProtectedSEXP& );
         ProtectedSEXP& operator=( const ProtectedSEXP& );
+};
+
+class omxManageProtectInsanity {
+	PROTECT_INDEX initialpix;
+ public:
+	omxManageProtectInsanity() {
+		R_ProtectWithIndex(R_NilValue, &initialpix);
+		Rf_unprotect(1);
+	}
+	PROTECT_INDEX getDepth() {
+		PROTECT_INDEX pix;
+		R_ProtectWithIndex(R_NilValue, &pix);
+		PROTECT_INDEX diff = pix - initialpix;
+		Rf_unprotect(1);
+		return diff;
+	}
+	~omxManageProtectInsanity() {
+		Rf_unprotect(getDepth());
+	}
 };
 
 #endif /* _OMXDEFINES_H_ */

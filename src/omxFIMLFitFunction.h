@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,8 +35,7 @@ typedef struct omxFIMLRowOutput {  // Output object for each row of estimation. 
 enum JointStrategy {
 	JOINT_AUTO,
 	JOINT_CONDCONT,
-	JOINT_CONDORD,
-	JOINT_OLD
+	JOINT_CONDORD
 };
 
 #if !_OPENMP && OMX_DEBUG
@@ -71,8 +70,9 @@ class omxFIMLFitFunction : public omxFitFunction {
 	omxData* data;				// The data
 
 	omxMatrix* rowLikelihoods;     // The row-by-row likelihoods
-	int returnRowLikelihoods;   // Whether or not to return row-by-row likelihoods
-	int populateRowDiagnostics; // Whether or not to populated the row-by-row likelihoods back to R
+	bool wantRowLikelihoods;
+	bool returnVector;   // Whether or not to return row-by-row likelihoods
+	bool populateRowDiagnostics; // Whether or not to populated the row-by-row likelihoods back to R
 
 	int skippedRows;
 	int origStateId;
@@ -91,6 +91,7 @@ class omxFIMLFitFunction : public omxFitFunction {
 	int verbose;
 	bool inUse;
 	std::vector<int> indexVector;
+	Eigen::ArrayXd rowMult;
 	std::vector<bool> sameAsPrevious;
 	std::vector<bool> continuousMissingSame;
 	std::vector<bool> continuousSame;
@@ -165,7 +166,8 @@ class mvnByRow {
 	FitContext *fc;
 	const Eigen::Map<Eigen::VectorXi> dataColumns;
 	omxMatrix *rowLikelihoods;
-	bool returnRowLikelihoods;
+	bool returnVector;
+	bool wantRowLikelihoods;
 	std::vector<bool> &isOrdinal;
 	int numOrdinal;
 	int numContinuous;
@@ -173,7 +175,7 @@ class mvnByRow {
 	omxFIMLFitFunction *parent;
 	int sortedRow;  // it's really the unsorted row (row in the original data); rename TODO
 	bool useSufficientSets;
-	double *rowWeight;
+	Eigen::ArrayXd &rowMult;
 
 	int rowOrdinal;
 	int rowContinuous;
@@ -207,6 +209,7 @@ class mvnByRow {
 		thresholdCols(expectation->getThresholdInfo()),
 		dataColumns(expectation->getDataColumns()),
 		isOrdinal(_ofiml->isOrdinal),
+		rowMult(shared_ofo->rowMult),
 		op(isOrdinal, isMissing)
 	{
 		data = ofo->data;
@@ -221,7 +224,8 @@ class mvnByRow {
 		ofiml = _ofiml;
 		parent = _parent;
 		rowLikelihoods = ofiml->rowLikelihoods;
-		returnRowLikelihoods = ofiml->returnRowLikelihoods;
+		returnVector = ofiml->returnVector;
+		wantRowLikelihoods = ofiml->wantRowLikelihoods;
 		localobj = _localobj;
 		omxSetMatrixElement(localobj->matrix, 0, 0, 0.0);
 		numOrdinal = ofiml->numOrdinal;
@@ -231,7 +235,6 @@ class mvnByRow {
 		ordColBuf.resize(numOrdinal);
 		isMissing.resize(dataColumns.size());
 		useSufficientSets = ofiml->useSufficientSets;
-		rowWeight = data->getWeightColumn();
 		verbose = ofiml->verbose;
 
 		if (fc->isClone()) {  // rowwise parallel
@@ -248,6 +251,8 @@ class mvnByRow {
 			double el1 = get_nanotime() - startTime;
 			ofo->elapsed[shared_ofo->curElapsed] = el1;
 			if (verbose >= 3) mxLog("%d--%d %.2fms", ofo->rowBegin, ofo->rowCount, el1/1000000.0);
+		} else {
+			if (verbose >= 3) mxLog("%d--%d", ofo->rowBegin, ofo->rowCount);
 		}
 	};
 
@@ -292,7 +297,7 @@ class mvnByRow {
 
 	void record(double logLik, int nrows)
 	{
-		if (returnRowLikelihoods) Rf_error("oops");
+		if (wantRowLikelihoods) Rf_error("oops");
 		if (!std::isfinite(logLik)) {
 			ofiml->skippedRows += nrows;
 		} else {
@@ -307,7 +312,7 @@ class mvnByRow {
 	void skipRow()
 	{
 		int oldRow = row;
-		if (returnRowLikelihoods) {
+		if (wantRowLikelihoods) {
 			EigenVectorAdaptor rl(rowLikelihoods);
 			double rowLik = 0.0;
 			rl[sortedRow] = rowLik;
@@ -328,6 +333,11 @@ class mvnByRow {
 		firstRow = false;
 	}
 
+	double rowWeightAndFreq(int row1)
+	{
+		return rowMult[row1];
+	}
+
 	void recordRow(double contLogLik, double ordLik)
 	{
 		if (ordLik == 0.0 || !std::isfinite(contLogLik)) {
@@ -337,22 +347,24 @@ class mvnByRow {
 		if (OMX_DEBUG_ROWS(sortedRow)) {
 			mxLog("%d/%d ordLik %g contLogLik %g", row, sortedRow, ordLik, contLogLik);
 		}
-		if (returnRowLikelihoods) {
+		if (wantRowLikelihoods) {
 			EigenVectorAdaptor rl(rowLikelihoods);
 			double rowLik = exp(contLogLik) * ordLik;
 			double rowLik1 = rowLik;
 			double prevWeight = 1.0;
-			if (rowWeight && rowWeight[sortedRow] != 1.0) {
-				rowLik1 = pow(rowLik, rowWeight[sortedRow]);
-				prevWeight = rowWeight[sortedRow];
+			double curWeight = rowWeightAndFreq(sortedRow);
+			if (curWeight != 1.0) {
+				rowLik1 = pow(rowLik, curWeight);
+				prevWeight = curWeight;
 			}
 			rl[sortedRow] = rowLik1;
 			row += 1;
 			while (row < rows && sameAsPrevious[row]) {
 				sortedRow = indexVector[row];
-				if (rowWeight && prevWeight != rowWeight[sortedRow]) {
-					rowLik1 = pow(rowLik, rowWeight[sortedRow]);
-					prevWeight = rowWeight[sortedRow];
+				curWeight = rowWeightAndFreq(sortedRow);
+				if (curWeight != prevWeight) {
+					rowLik1 = pow(rowLik, curWeight);
+					prevWeight = curWeight;
 				}
 				rl[sortedRow] = rowLik1;
 				row += 1;
@@ -362,40 +374,24 @@ class mvnByRow {
 			double rowLogLik = contLogLik + log(ordLik);
 			double rowLogLik1 = rowLogLik;
 			double prevWeight = 1.0;
-			if (rowWeight) {
-				rowLogLik1 *= rowWeight[sortedRow];
-				prevWeight = rowWeight[sortedRow];
+			double curWeight = rowWeightAndFreq(sortedRow);
+			if (curWeight != 1.0) {
+				rowLogLik1 *= curWeight;
+				prevWeight = curWeight;
 			}
 			rl[0] += rowLogLik1;
 			row += 1;
 			while (row < rows && sameAsPrevious[row]) {
 				sortedRow = indexVector[row];
-				if (rowWeight && prevWeight != rowWeight[sortedRow]) {
-					rowLogLik1 = rowLogLik * rowWeight[sortedRow];
-					prevWeight = rowWeight[sortedRow];
+				curWeight = rowWeightAndFreq(sortedRow);
+				if (curWeight != prevWeight) {
+					rowLogLik1 = rowLogLik * curWeight;
+					prevWeight = curWeight;
 				}
 				rl[0] += rowLogLik1;
 				row += 1;
 			}
 		}
-		firstRow = false;
-	}
-
-	void recordRowOld(double rowLik) // TODO remove
-	{
-		auto &identicalRows = shared_ofo->identicalRows;
-		int numIdentical = identicalRows[row];
-                if (returnRowLikelihoods) {
-                        EigenVectorAdaptor rl(rowLikelihoods);
-			for(int nid = 0; nid < numIdentical; nid++) {
-				int to = indexVector[row+nid];
-				rl[to] = rowLik;
-                        }
-                } else {
-                        EigenVectorAdaptor rl(localobj->matrix);
-			rl[0] += numIdentical * log(rowLik);
-                }
-		row += numIdentical;
 		firstRow = false;
 	}
 

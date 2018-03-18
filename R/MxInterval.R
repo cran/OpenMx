@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -384,7 +384,7 @@ omxParallelCI <- function(model, run = TRUE, verbose=0L, independentSubmodels=TR
 	}
 	else{
 		namespace <- imxGenerateNamespace(model)
-		flatModel <- imxFlattenModel(model, namespace)
+		flatModel <- imxFlattenModel(model, namespace, FALSE)
 		intervals <- flatModel@intervals
 		if (length(intervals) == 0) return(model)
 		intervals <- expandConfidenceIntervals(model, intervals)

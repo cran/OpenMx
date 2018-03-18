@@ -78,7 +78,7 @@ m1 <- mxModel("One Factor", type = "RAM",
 # ===============================
 
 m1 = mxRun(m1)
-summary(m1, show = "std")
+summary(m1)
 
 }
 \references{

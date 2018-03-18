@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ summary(testrun2)
 testrun2$fitfunction$result
 testrun2$output$iterations
 testrun2$output$evaluations
-omxCheckCloseEnough(mxEval(X,testrun1,T),mxEval(X,testrun2,T),1e-11)
+omxCheckCloseEnough(mxEval(X,testrun1,T),mxEval(X,testrun2,T),1e-8)
 omxCheckCloseEnough(mxEval(fitfunc,testrun1,T),mxEval(fitfunc,testrun2,T),1e-8)
-if(mxOption(NULL,"Default optimizer") %in% c("NPSOL","SLSQP")){omxCheckTrue(testrun1$output$evaluations > testrun2$output$evaluations)}
+omxCheckTrue(testrun1$output$evaluations > testrun2$output$evaluations)
 

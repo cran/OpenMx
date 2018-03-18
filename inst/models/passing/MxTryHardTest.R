@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -15,11 +15,6 @@
 
 
 require(OpenMx)
-
-if (mxOption(NULL, 'Default optimizer') == "CSOLNP") {
-	# Currently takes much too long
-	stop("SKIP")
-}
 
 if (mxOption(NULL, "Default optimizer") == "SLSQP") {
 	mxOption(NULL, "Optimality tolerance", "6e-10")

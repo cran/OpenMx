@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -518,6 +518,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	FitContext::setRFitFunction(NULL);
 	Global = new omxGlobal;
 	Global->silent = silent;
+	Global->mpi = &protectManager;
 
 	/* Create new omxState for current state storage and initialize it. */
 	omxState *globalState = new omxState;

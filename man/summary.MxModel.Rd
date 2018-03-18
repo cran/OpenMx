@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2017 The OpenMx Project
+%   Copyright 2007-2018 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ If the information matrix was estimated using finite differences then an additio
 
 \strong{Fit statistics}
 
-AIC and BIC \code{Information Criteria} are reported in a table showing different versions of the information criteria obtained using different penalties. AIC is reported with both a Parameters Penalty and a Degrees of Freedom Penalty version.  AIC generally takes the form \eqn{Fit + 2*k}.  With the Parameters Penalty version, \eqn{k} is the number of free parameters:  \eqn{AIC.param = Fit + 2*param}.  With the Degrees of Freedom Penalty, \eqn{k} is minus one times the model degrees of freedom.  So the penalty is subtracted instead of added: \eqn{AIC.param = Fit - 2*df}.  The Degrees of Freedom penalty was used in Classic Mx.  BIC is defined similarly: \eqn{Fit + k*log(N)} where \eqn{k} is either the number of free parameters or minus one times the model degrees of freedom.  The Sample-Size Adjusted BIC is only defined for the parameters penalty: \eqn{Fit + k*log((N+2)/24)}.  For raw data models, \eqn{Fit} is the minus 2 log likelihood, \eqn{-2LL}.  For covariance data, \eqn{Fit} is the Chi-squared statistic.  The \eqn{-2LL} and saturated likelihood values reported under covariance data are not necessarily meaningful on their own, but their difference yields the Chi-squared value.
+AIC and BIC \code{Information Criteria} are reported in a table showing different versions of the information criteria obtained using different penalties. AIC is reported with both a Parameters Penalty and a Degrees of Freedom Penalty version.  AIC generally takes the form \eqn{Fit + 2*k}.  With the Parameters Penalty version, \eqn{k} is the number of free parameters:  \eqn{AIC.param = Fit + 2*param}.  With the Degrees of Freedom Penalty, \eqn{k} is minus one times the model degrees of freedom.  So the penalty is subtracted instead of added: \eqn{AIC.param = Fit - 2*df}.  The Degrees of Freedom penalty was used in Classic Mx.  BIC is defined similarly: \eqn{Fit + k*log(N)} where \eqn{k} is either the number of free parameters or minus one times the model degrees of freedom.  The Sample-Size-Adjusted BIC is only defined for the parameters penalty: \eqn{Fit + k*log((N+2)/24)}.  Similarly, the Sample-Size-Adjusted AIC is \eqn{Fit + 2*k + 2*k*(k+1)/(N-k-1)}.  For raw data models, \eqn{Fit} is the minus 2 log likelihood, \eqn{-2LL}.  For covariance data, \eqn{Fit} is the Chi-squared statistic.  The \eqn{-2LL} and saturated likelihood values reported under covariance data are not necessarily meaningful on their own, but their difference yields the Chi-squared value.
 
 \strong{Additional fit statistics}
 
@@ -102,7 +102,7 @@ The \code{verbose} argument changes the printing style for the \code{summary} of
 
 \strong{Summary for bootstrap replications}
 
-Summarization of bootstrap replications is controlled by two options: \sQuote{boot.quantile} and \sQuote{boot.SummaryType}. To obtain a two-sided 95\% width confidence interval, use \code{boot.quantile=c(.025,.975)}. Options for \sQuote{boot.SummaryType} are \sQuote{quantile} (using R's standard \code{stats::quantile} function) and \sQuote{bcbci} for bias-corrected bootstrap confidence intervals.  The latter, \sQuote{bcbci}, is the default due to its superior theoretical properties.  However, its bias-correction can lead to nonsensical results if the number of bootstrap replications is too small for the desired coverage probability.  For example, a lower confidence limit of \code{-Inf}, or an upper confidence limit smaller than the point estimate, are signals that more replications are needed.
+Summarization of bootstrap replications is controlled by two options: \sQuote{boot.quantile} and \sQuote{boot.SummaryType}. To obtain a two-sided 95\% width confidence interval, use \code{boot.quantile=c(.025,.975)}. Options for \sQuote{boot.SummaryType} are \sQuote{quantile} (using R's standard \code{stats::quantile} function) and \sQuote{bcbci} for bias-corrected bootstrap confidence intervals.  The latter, \sQuote{bcbci}, is the default due to its superior theoretical properties.
 
 
 }

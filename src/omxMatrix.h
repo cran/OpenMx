@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ class omxMatrix {
 	bool dependsOnParametersCache;    // Ignores free variable groups
 	bool dependsOnDefVarCache;
 	int joinKey;
-	struct omxExpectation *joinModel;
+	class omxExpectation *joinModel;
  public:
 	omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1), joinModel(0) {};
 	void setDependsOnParameters() { dependsOnParametersCache = true; };
@@ -65,7 +65,7 @@ class omxMatrix {
 	void omxPopulateSubstitutions(int want, FitContext *fc);
 	void markPopulatedEntries();
 	int getJoinKey() const { return joinKey; }
-	struct omxExpectation *getJoinModel() const { return joinModel; }
+	class omxExpectation *getJoinModel() const { return joinModel; }
 										//TODO: Improve encapsulation
 /* Actually Useful Members */
 	int rows, cols;						// Matrix size  (specifically, its leading edge)
@@ -88,6 +88,7 @@ class omxMatrix {
 	unsigned version;
 
 /* For Algebra Functions */				// At most, one of these may be non-NULL.
+	bool canDiscard();
 	omxAlgebra* algebra;				// If it's not an algebra, this is NULL.
 	omxFitFunction* fitFunction;		// If it's not a fit function, this is NULL.
 
@@ -97,8 +98,11 @@ class omxMatrix {
 	// char pointers are from R and should not be freed
 	std::vector<const char *> rownames;
 	std::vector<const char *> colnames;
+	int lookupColumnByName(const char *target);
 
 	friend void omxCopyMatrix(omxMatrix *dest, omxMatrix *src);  // turn into method later TODO
+	void take(omxMatrix *orig);
+
 	void unshareMemroyWithR();
 	void loadDimnames(SEXP dimnames);
 	const char *getType() const {
@@ -179,7 +183,7 @@ void omxResizeMatrix(omxMatrix *source, int nrows, int ncols);
 	void omxPrint(omxMatrix *source, const char* d);
 
 void omxRecompute(omxMatrix *matrix, FitContext *fc);
-
+void CheckAST(omxMatrix *matrix, FitContext *fc);
 
 void omxRemoveElements(omxMatrix *om, int removed[]);
 void omxRemoveRowsAndColumns(omxMatrix *om, int rowsRemoved[], int colsRemoved[]);
@@ -192,7 +196,7 @@ void omxPrintMatrix(omxMatrix *source, const char* header);  // deprecated, use 
 
 void setMatrixError(omxMatrix *om, int row, int col, int numrow, int numcol);
 void setVectorError(int index, int numrow, int numcol);
-void matrixElementError(int row, int col, int numrow, int numcol);
+void matrixElementError(int row, int col, omxMatrix *om);
 void vectorElementError(int index, int numrow, int numcol);
 
 bool omxNeedsUpdate(omxMatrix *matrix);
@@ -238,7 +242,7 @@ static OMXINLINE void omxAccumulateMatrixElement(omxMatrix *om, int row, int col
 static OMXINLINE double omxMatrixElement(omxMatrix *om, int row, int col) {
 	int index = 0;
 	if((row < 0) || (col < 0) || (row >= om->rows) || (col >= om->cols)) {
-		matrixElementError(row + 1, col + 1, om->rows, om->cols);
+		matrixElementError(row + 1, col + 1, om);
         return (NA_REAL);
 	}
 	if(om->colMajor) {

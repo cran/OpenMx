@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -955,15 +955,13 @@ static void omxRepopulateRFitFunction(omxFitFunction* oo, double* x, int n)
 {
 	omxRFitFunction* rFitFunction = (omxRFitFunction*)oo;
 
-	SEXP theCall, estimate;
-
-	ScopedProtect(estimate, Rf_allocVector(REALSXP, n));
+	ProtectedSEXP estimate(Rf_allocVector(REALSXP, n));
 	double *est = REAL(estimate);
 	for(int i = 0; i < n ; i++) {
 		est[i] = x[i];
 	}
 
-	{ScopedProtect p1(theCall, Rf_allocVector(LANGSXP, 4));
+	ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 4));
 
 		// imxUpdateModelValues does not handle parameters with equality
 		// constraints. This is a bug.
@@ -972,8 +970,9 @@ static void omxRepopulateRFitFunction(omxFitFunction* oo, double* x, int n)
 	SETCADDR(theCall, rFitFunction->flatModel);
 	SETCADDDR(theCall, estimate);
 
-	R_Reprotect(rFitFunction->model = Rf_eval(theCall, R_GlobalEnv), rFitFunction->modelIndex);
-	}
+	rFitFunction->model = Rf_eval(theCall, R_GlobalEnv);
+
+	Rf_setAttrib(rFitFunction->rObj, Rf_install("model"), rFitFunction->model);
 
 	omxMarkDirty(oo->matrix);
 }
@@ -1154,13 +1153,11 @@ void FitContext::createChildren(omxMatrix *alg)
 	childList.reserve(numThreads);
 
 	for(int ii = 0; ii < numThreads; ii++) {
-		//omxManageProtectInsanity mpi;
 		FitContext *kid = new FitContext(this, varGroup);
 		kid->state = new omxState(state);
 		kid->state->initialRecalc(kid);
 		omxAlgebraPreeval(alg, kid);
 		childList.push_back(kid);
-		//if (OMX_DEBUG) mxLog("Protect depth at line %d: %d", __LINE__, mpi.getDepth());
 	}
 
 	if (OMX_DEBUG) mxLog("FitContext::createChildren: done creating %d omxState", Global->numThreads);
@@ -1484,10 +1481,12 @@ void omxCompute::computeWithVarGroup(FitContext *fc)
 {
 	ComputeInform origInform = fc->getInform();
 	if (OMX_DEBUG) { mxLog("enter %s varGroup %d", name, varGroup->id[0]); }
+	if (Global->debugProtectStack) mxLog("enter %s: protect depth %d", name, Global->mpi->getDepth());
 	fc->setInform(INFORM_UNINITIALIZED);
 	computeImpl(fc);
 	fc->setInform(std::max(origInform, fc->getInform()));
 	if (OMX_DEBUG) { mxLog("exit %s varGroup %d inform %d", name, varGroup->id[0], fc->getInform()); }
+	if (Global->debugProtectStack) mxLog("exit %s: protect depth %d", name, Global->mpi->getDepth());
 	fc->destroyChildren();
 	Global->checkpointMessage(fc, fc->est, "%s", name);
 }
@@ -1675,9 +1674,9 @@ class ComputeBootstrap : public omxCompute {
 	
 	struct context {
 		omxData *data;
-		double *origRowWeights;
-		std::vector<double> origCumSum;
-		std::vector<double> resample;
+		int *origRowFreq;
+		std::vector<int> origCumSum;
+		std::vector<int> resample;
 	};
 	std::vector< context > contexts;
 	omxCompute *plan;
@@ -3027,8 +3026,7 @@ void ComputeReportDeriv::reportResults(FitContext *fc, MxRList *, MxRList *resul
 		if (!fc->grad.data()) {
 			// oh well
 		} else {
-			SEXP Rgradient;
-			Rgradient = Rf_allocVector(REALSXP, numFree);
+			SEXP Rgradient = Rf_allocVector(REALSXP, numFree);
 			result->add("gradient", Rgradient);
 			memcpy(REAL(Rgradient), fc->grad.data(), sizeof(double) * numFree);
 		}
@@ -3096,11 +3094,11 @@ void ComputeBootstrap::initFromFrontend(omxState *globalState, SEXP rObj)
 			Rf_error("%s: data '%s' of type '%s' cannot have row weights",
 				 name, ctx.data->name, ctx.data->getType());
 		}
-		ctx.origRowWeights = ctx.data->getWeightColumn();
+		ctx.origRowFreq = ctx.data->getFreqColumn();
 		ctx.origCumSum.resize(numRows);
 		ctx.resample.resize(ctx.origCumSum.size());
-		if (ctx.origRowWeights) {
-			std::partial_sum(ctx.origRowWeights, ctx.origRowWeights + ctx.origCumSum.size(),
+		if (ctx.origRowFreq) {
+			std::partial_sum(ctx.origRowFreq, ctx.origRowFreq + ctx.origCumSum.size(),
 					 ctx.origCumSum.begin());
 		} else {
 			for (int rx=0; rx < numRows; ++rx) ctx.origCumSum[rx] = 1+rx;
@@ -3146,8 +3144,12 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 
 	int numCols = fc->numParam + 3;
 	Rf_protect(rawOutput = Rf_allocVector(VECSXP, numCols));
-	SEXP colNames = Rf_allocVector(STRSXP, numCols);
-	Rf_setAttrib(rawOutput, R_NamesSymbol, colNames);
+	SEXP colNames;
+	{
+		ProtectedSEXP colNamesP(Rf_allocVector(STRSXP, numCols));
+		Rf_setAttrib(rawOutput, R_NamesSymbol, colNamesP);
+		colNames = colNamesP;
+	}
 
 	SET_STRING_ELT(colNames, 0, Rf_mkChar("seed"));
 	SET_VECTOR_ELT(rawOutput, 0, Rf_allocVector(INTSXP, numReplications));
@@ -3222,7 +3224,7 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 		if (INTEGER(VECTOR_ELT(rawOutput, 2 + fc->numParam))[repl] != NA_INTEGER) continue;
 		if (verbose >= 2) mxLog("%s: replication %d", name, repl);
 		for (auto &ctx : contexts) {
-			ctx.resample.assign(ctx.origCumSum.size(), 0.0);
+			ctx.resample.assign(ctx.origCumSum.size(), 0);
 			int last = ctx.origCumSum.size() - 1;
 			int total = ctx.origCumSum[last];
 			std::uniform_int_distribution<int> dist(1, total);
@@ -3230,13 +3232,9 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 				int pick = dist(generator);
 				auto rowPick = std::lower_bound(ctx.origCumSum.begin(), ctx.origCumSum.end(), pick);
 				int row = rowPick - ctx.origCumSum.begin();
-				ctx.resample[row] += 1.0;
+				ctx.resample[row] += 1;
 			}
-			if (verbose >= 4) {
-				EigenStdVectorAdaptor<double> rs(ctx.resample);
-				mxPrintMat(ctx.data->name, rs);
-			}
-			ctx.data->setWeightColumn(ctx.resample.data());
+			ctx.data->setFreqColumn(ctx.resample.data());
 			if (only != NA_INTEGER) {
 				onlyWeight.add(ctx.data->name, Rcpp::wrap(ctx.resample));
 			}
@@ -3260,7 +3258,7 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 	}
 
 	for (auto &ctx : contexts) {
-		ctx.data->setWeightColumn(ctx.origRowWeights);
+		ctx.data->setFreqColumn(ctx.origRowFreq);
 	}
 
 	if (only == NA_INTEGER) {
@@ -3284,7 +3282,7 @@ void ComputeBootstrap::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 	output.add("numParam", Rcpp::wrap(int(fc->numParam)));
 	output.add("raw", rawOutput);
 	if (only != NA_INTEGER) {
-		output.add("weight", onlyWeight.asR());
+		output.add("frequency", onlyWeight.asR());
 	}
 	slots->add("output", output.asR());
 }

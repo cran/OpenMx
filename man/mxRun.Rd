@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2017 The OpenMx Project
+%   Copyright 2007-2018 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ If the \sQuote{silent} flag is TRUE, then model execution will not print any sta
 
 If the \sQuote{suppressWarnings} flag is TRUE, then model execution will not issue a warning if NPSOL returns a non-zero status code.
 
-If the \sQuote{unsafe} flag is TRUE, then any error conditions will throw a warning instead of an error.  It is strongly recommended to use this feature only for debugging purposes.
+If the \sQuote{unsafe} flag is TRUE, then many error conditions will not
+be detected. Any error condition detected will be downgraded to warnings.  It is strongly recommended to use this feature only for debugging purposes.
 
 Free parameters are estimated or updated based on the expectation and fit functions. These estimated values, along with estimation information and model fit, can be found in the 'output' slot of MxModel objects after mxRun has been used.
 

@@ -30,8 +30,7 @@ mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
 There are various equivalent ways to pose the optimization
 problems required to estimate confindence intervals. Most accurate
 solutions are achieved when the problem is posed using non-linear
-constraints. However, the available optimizers (NPSOL, SLSQP, and
-CSOLNP) often have difficulty with non-linear
+constraints. However, the available optimizers (CSOLNP, SLSQP, and NPSOL) often have difficulty with non-linear
 constraints.
 }
 \references{

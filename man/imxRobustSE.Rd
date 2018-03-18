@@ -19,12 +19,20 @@ what they are doing.
 This function computes robust standard errors via a sandwich estimator.
 The "bread" of the sandwich is the numerically computed inverse Hessian
 of the likelihood function.  This is what is typically used for standard
-errors throughout OpenMx.  The "meat" of the sandwich is the covariance
+errors throughout OpenMx.  The "meat" of the sandwich is proportional to the covariance
 matrix of the numerically computed row derivatives of the likelihood function
 (i.e. row gradients).
 
-When \code{details=FALSE}, only the standard errors are returned.  When \code{details=TRUE},
-a list with named elements \code{SE} and \code{cov} is returned.  The \code{SE} element is the vector of standard errors that is also returned when \code{details=FALSE}.  The \code{cov} element is the full covariance matrix of the parameter estimates.  The square root of the diagonal of \code{cov} gives the standard errors.
+When \code{details=FALSE}, only the standard errors are returned.
 
-This function may not work correctly if 'model' is a multigroup model.  This function also does not correctly handle multilevel data.
+When \code{details=TRUE},
+a list with five named elements is returned.  Element \code{SE} is the vector of standard errors that is also 
+returned when \code{details=FALSE}.  Element \code{cov} is the full robust covariance matrix of the parameter estimates; 
+the square root of the diagonal of \code{cov} gives the standard errors.  Element \code{bread} is the aforementioned "bread"--the naive
+(non-robust) covariance matrix of the parameter estimates.  Element \code{meat} is the aforementioned "meat," proportional to the covvariance matrix
+ of the row gradients.  Element \code{TIC} is the model's Takeuchi Information Criterion, which is a generalization of AIC calculated from the 
+"bread," the "meat," and the loglikelihood at the maximum-likelihood solution.
+
+This function does not work correctly with multigroup models in which the groups themselves contain subgroups.  This function also does not 
+correctly handle multilevel data.
 }

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ setClass(Class = "MxExpectationNormal",
 		means = "MxCharOrNumber",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
-		thresholdColumns = "numeric",
-		thresholdLevels = "numeric",
 		threshnames = "character",
 		ExpCov = "matrix",
 		ExpMean = "matrix",
@@ -498,13 +496,20 @@ simulate.MxModel <- function(object, nsim = 1, seed = NULL, ...) {
 	mxGenerateData(object, nsim)
 }
 
-extractObservedData <- function(model) {
+extractData <- function(model) {
 	datasets <- list()
-	if (!is.null(model@data)) datasets <- c(datasets, model@data@observed)
+	if (!is.null(model@data)) datasets <- c(datasets, list(model@data))
 	if (length(model@submodels)) {
-		datasets <- c(datasets, lapply(model@submodels, extractObservedData))
+		datasets <- c(datasets, unlist(lapply(model@submodels, extractData), recursive=FALSE))
 	}
 	return(datasets)
+}
+
+extractObservedData <- function(model) {
+	lapply(extractData(model), function(mxd) {
+		if (mxd@type != 'raw') stop(paste("Cannot extract observed data when type=", mxd@type))
+		mxd@observed
+	})
 }
 
 mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE,
@@ -548,6 +553,7 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 			}
 		}
 		if (is.null(nrows)) stop("You must specify nrows")
+		if (nrows != round(nrows)) stop(paste("Cannot generate a non-integral number of rows:",nrows))
 		data <- genericGenerateData(model$expectation, model, nrows)
 		if (use.miss && !is.null(origData) && all(colnames(data) %in% colnames(origData))) {
 			del <- is.na(origData[,colnames(data),drop=FALSE])
@@ -639,9 +645,6 @@ setMethod("genericExpFunConvert", "MxExpectationNormal",
 		verifyMvnNames(covName, meansName, "expected", flatModel, modelname, class(.Object))
 		.Object@dataColumns <- generateDataColumns(flatModel, covNames, dataName)
 		verifyThresholds(flatModel, model, labelsData, dataName, covNames, threshName)
-		retval <- generateThresholdColumns(flatModel, model, labelsData, covNames, dataName, threshName)
-		.Object@thresholdColumns <- retval[[1]] 
-		.Object@thresholdLevels <- retval[[2]]
 		if (single.na(.Object@dims)) {
 			.Object@dims <- covNames
 		}
@@ -774,17 +777,19 @@ updateThresholdDimnames <- function(flatExpectation, flatModel, labelsData) {
 		stop(msg, call.=FALSE)      
 	}
 	if (is.null(colnames(thresholds)) && !single.na(dims)) {
-		tuple <- evaluateMxObject(threshName, flatModel, labelsData, new.env(parent = emptyenv()))
-		threshMatrix <- tuple[[1]]
-		if (ncol(threshMatrix) != length(dims)) {
-			modelname <- getModelName(flatExpectation)
-			msg <- paste("The thresholds matrix associated",
-			"with the expectation function in model", 
-			omxQuotes(modelname), "is not of the same length as the 'threshnames'",
-			"argument provided by the expectation function. The 'threshnames' argument is",
-			"of length", length(dims), "and the expected covariance matrix",
-			"has", ncol(threshMatrix), "columns.")
-			stop(msg, call.=FALSE)      
+		if (!flatModel@unsafe) {
+			tuple <- evaluateMxObject(threshName, flatModel, labelsData, new.env(parent = emptyenv()))
+			threshMatrix <- tuple[[1]]
+			if (ncol(threshMatrix) != length(dims)) {
+				modelname <- getModelName(flatExpectation)
+				msg <- paste("The thresholds matrix associated",
+					"with the expectation function in model", 
+					omxQuotes(modelname), "is not of the same length as the 'threshnames'",
+					"argument provided by the expectation function. The 'threshnames' argument is",
+					"of length", length(dims), "and the expected covariance matrix",
+					"has", ncol(threshMatrix), "columns.")
+				stop(msg, call.=FALSE)      
+			}
 		}
 		dimnames(flatModel[[threshName]]) <- list(NULL, dims)
 	}
@@ -792,7 +797,8 @@ updateThresholdDimnames <- function(flatExpectation, flatModel, labelsData) {
 }
 
 updateExpectationDimnames <- function(flatExpectation, flatModel,
-		labelsData, unsafe = FALSE) {
+		labelsData) {
+	unsafe <- flatModel@unsafe
 	covName <- flatExpectation@covariance
 	meansName <- flatExpectation@means
 	if (is.na(meansName)) {

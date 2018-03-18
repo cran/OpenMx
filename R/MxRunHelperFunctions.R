@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -104,7 +104,6 @@ nameGDOptimizerConstraintOutput <- function(paramNames, constraintNames, GDstep,
 		constraintCols <- NULL
 		
 		#Filter extraneous elements and generate vectors of names:
-		paramNames <- paramNames[!(paramNames %in% GDstep@.excludeVars)] #<--Probably not necessary...
 		if(length(paramNames)){lmNames <- paste(paramNames,"bound",sep=".")}
 		if(length(constraintNames) && length(GDstep@output$constraintRows) && length(GDstep@output$constraintCols)){
 			emptyConstraints <- (GDstep@output$constraintRows==0 | GDstep@output$constraintCols==0)
@@ -153,7 +152,7 @@ nameGDOptimizerConstraintOutput <- function(paramNames, constraintNames, GDstep,
 			output$istate <- GDstep@output$istate
 		}
 	}
-	else if(GDstep@engine=="SLSQP"){
+	else if(GDstep@engine=="CSOLNP" || GDstep@engine=="SLSQP"){
 		
 		#Initialize variables:
 		cfvNames <- NULL
@@ -161,7 +160,6 @@ nameGDOptimizerConstraintOutput <- function(paramNames, constraintNames, GDstep,
 		constraintCols <- NULL
 		
 		#Filter extraneous elements and generate vectors of names:
-		paramNames <- paramNames[!(paramNames %in% GDstep@.excludeVars)] #<--Probably not necessary...
 		if(length(constraintNames) && length(GDstep@output$constraintRows) && length(GDstep@output$constraintCols)){
 			emptyConstraints <- (GDstep@output$constraintRows==0 | GDstep@output$constraintCols==0)
 			#Assuming that "empty" constraints have no function values...

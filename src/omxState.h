@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@
 #include <stdarg.h>
 
 /* Forward declarations for later includes */
-typedef struct omxState omxState;
+typedef class omxState omxState;
 class omxFreeVar;
 struct ConfidenceInterval;
 
@@ -83,7 +83,7 @@ class omxFreeVar {
 		return map;
 	}
 	// Warning: copyToState does not mark matrices dirty
-	void copyToState(struct omxState *os, double val);
+	void copyToState(omxState *os, double val);
 	void markDirty(omxState *os);
 };
 
@@ -213,6 +213,7 @@ class omxGlobal {
 	void reportProgressStr(const char *msg);
 
  public:
+	omxManageProtectInsanity *mpi;
 	bool silent;
 	int numThreads;
 	int parallelDiag;

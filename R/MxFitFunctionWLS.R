@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -122,6 +122,18 @@ setMethod("genericFitInitialMatrix", "MxFitFunctionWLS",
 
 setMethod("genericFitAddEntities", "MxFitFunctionWLS",
 	function(.Object, job, flatJob, labelsData) {
+		modName <- strsplit(.Object@name, split='.', fixed=TRUE)[[1]][1]
+		if(!is.null(job[[modName]]$data) && job[[modName]]$data$type %in% 'acov'){
+			W <- job[[modName]]$data$acov
+			if(any(W[row(W) != col(W)] != 0)){ # any off-diagonals are non-zero
+				job[[modName]]@fitfunction@weights <- 'WLS'
+			} else if(any(!(W %in% c(0, 1)))){ # any diagonals are non-zero non-unity
+				job[[modName]]@fitfunction@weights <- 'DLS'
+			} else {
+				job[[modName]]@fitfunction@weights <- 'ULS'
+			}
+			job@.newobjects <- TRUE
+		}
 		return(job)
 })
 
@@ -267,6 +279,7 @@ imxWlsChiSquare <- function(model, J=NA){
 	samp.param <- mxGetExpected(model, 'vector')
 	theParams <- omxGetParameters(model)
 	numOrdinal <- 0
+	numObs <- 0
 	isMultiGroupModel <- is.null(model$expectation) && (class(model$fitfunction) %in% "MxFitFunctionMultigroup")
 	fwMsg <- "Terribly sorry, master, but you cannot compute chi square without the full weight matrix."
 	if( isMultiGroupModel ){
@@ -279,6 +292,7 @@ imxWlsChiSquare <- function(model, J=NA){
 			cov <- model[[amod]]$data$observed
 			mns <- model[[amod]]$data$means
 			thr <- model[[amod]]$data$thresholds
+			numObs <- numObs + model[[amod]]$data$numObs
 			sD[[amod]] <- single.na(thr)
 			if(!single.na(thr)){
 				expd.param <- c(expd.param, .standardizeCovMeansThresholds(cov, mns, thr, !is.na(thr), vector=TRUE))
@@ -297,6 +311,7 @@ imxWlsChiSquare <- function(model, J=NA){
 		cov <- model$data$observed
 		mns <- model$data$means
 		thr <- model$data$thresholds
+		numObs <- model$data$numObs
 		sD <- single.na(thr)
 		if(!single.na(thr)){
 			expd.param <- .standardizeCovMeansThresholds(cov, mns, thr, !is.na(thr), vector=TRUE)
@@ -340,6 +355,9 @@ imxWlsChiSquare <- function(model, J=NA){
 	mvadj <-  trUW^2/dstar
 	x2mv <- as.numeric(model$fitfunction$result)/mvadj
 	# N.B. x2mv is off by a factor of N where N is the total number of rows in all data sets for the ULS case.
+	V <- as.matrix(V)
+	I <- diag(1, nrow=nrow(V))
+	x2mv <- x2mv*ifelse(all(V[V!=0] == I[V != 0]), 1/numObs, 1)
 	return(list(Chi=x2, ChiDoF=df, ChiM=x2m, ChiMV=x2mv, dstar=dstar))
 }
 

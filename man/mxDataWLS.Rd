@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2017 The OpenMx Project
+%   Copyright 2007-2018 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@
 
 \usage{
    mxDataWLS(data, type = "WLS", useMinusTwo = TRUE, returnInverted = TRUE, 
-    fullWeight = TRUE, suppressWarnings = TRUE, allContinuousMethod = "cumulants")
+    fullWeight = TRUE, suppressWarnings = TRUE, allContinuousMethod =
+   "cumulants", ..., silent=!interactive())
 }
 
 \arguments{
@@ -41,7 +42,10 @@
    calculation.}
  \item{suppressWarnings}{Logical that determines whether to suppress
    diagnostic warnings. These warnings are likely only helpful to developers.}
- \item{allContinuousMethod}{A character string 'cumulants' (default) or 'marginals'. See Details.}
+ \item{allContinuousMethod}{A character string 'cumulants' (default) or
+   'marginals'. See Details.}
+\item{...}{Not used.  Forces remaining arguments to be specified by name.}
+ \item{silent}{Whether to report progress}
 }
 
 \details{

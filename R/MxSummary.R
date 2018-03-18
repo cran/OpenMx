@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -97,6 +97,7 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 		dof <- numThresh + numMeans + ifelse(numThresh > 0, n*(n-1)/2, n*(n+1)/2)
 		historySet <- append(data, historySet)
 	} else {
+		# Incorporate row frequency and weight information? TODO
 		dof <- 0
 		observed <- data@observed
 		for (i in 1:ncol(observed)) {
@@ -228,12 +229,14 @@ fitStatistics <- function(model, useSubmodels, retval) {
 	AIC.p <- Fvalue + 2 * nParam
 	BIC.p <- (Fvalue + nParam * log(retval[['numObs']])) 
 	sBIC <- (Fvalue + nParam * log((retval[['numObs']]+2)/24))
+	AICc <- Fvalue + 2*nParam + (2*nParam*(nParam+1))/(retval[['numObs']]-nParam-1)
 	retval[['satDoF']] <- satDoF
 	retval[['indDoF']] <- indDoF
 	IC <- matrix(NA, nrow=2, ncol=3, dimnames=list(c("AIC:", "BIC:"), c('df', 'par', 'sample')))
 	IC[,'df'] <- c(retval$AIC.Mx, retval$BIC.Mx)
 	IC[,'par'] <- c(AIC.p, BIC.p)
 	IC['BIC:','sample'] <- sBIC
+	IC['AIC:','sample'] <- AICc
 	retval[['informationCriteria']] <- IC
 	
 	retval$fitUnits <- model@output$fitUnits
@@ -812,26 +815,20 @@ refToDof <- function(model) {
 	}
 }
 
-ecdftable <- function(data){
-	x <- sort(unique(data))
-	Pn <- sapply(x,function(z){mean(data<=z,na.rm=T)})
-	return(cbind(x,Pn))
-}
 
 summarizeBootstrap <- function(mle, bootData, bq, summaryType) {
 	if (summaryType == 'quantile') {
-		t(apply(bootData, 2, quantile, probs=bq))
+		t(apply(bootData, 2, quantile, probs=bq, type=1))
 	} else if (summaryType == 'bcbci') {
 		zcrit <- qnorm(bq)
 		out <- matrix(NA, nrow=length(mle), ncol=length(bq),
 			      dimnames=list(names(mle),
 					    sapply(bq, function(x) sprintf("%.1f%%", round(100*min(x), 1)))))
 		for(i in 1:length(mle)) {
-			ecdf.curr <- ecdftable(bootData[,i])
 			z0 <- qnorm(mean(bootData[,i] <= mle[i]))
 			for (qx in 1:length(bq)) {
 				phi <- pnorm(2*z0 + zcrit[qx])
-				out[i,qx] <- max(c(-Inf,subset(ecdf.curr[,1], ecdf.curr[,2]<=phi)))
+				out[i,qx] <- quantile(bootData[,i], probs=phi, type=1)
 			}
 		}
 		out
@@ -950,11 +947,17 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 }
 
 assertModelRunAndFresh <- function(model) {
+	warnModelCreatedByOldVersion(model)
 	if (!model@.wasRun) stop("This model has not been run yet. Tip: Use\n  model = mxRun(model)\nto estimate a model.")
-	assertModelFreshlyRun(model)
+	if (model@.modifiedSinceRun) {
+		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
+			     "since it was run.")
+		warning(msg)
+	}
 }
 
 assertModelFreshlyRun <- function(model) {
+	warnModelCreatedByOldVersion(model)
 	if (model@.wasRun && model@.modifiedSinceRun) {
 		msg <- paste("MxModel", omxQuotes(model@name), "was modified",
 			     "since it was run.")
@@ -1077,6 +1080,13 @@ logLik.MxModel <- function(object, ...) {
   zout <- .standardizeParams(x=freeparams,model=model,Apos=Apos,Spos=Spos)
   #Compute SEs, or assign them 'not requested' values, as the case may be:
   if(SE){ 
+  	if(!all(paramnames %in% rownames(ParamsCov))){
+  		stop(paste(
+  			"some free parameter labels do not appear in the dimnames of the parameter estimates' covariance matrix;\n",
+  			"are you running mxStandardizeRAMpaths() on a dependent submodel instead of on its multigroup container model?\n",
+  			"the missing parameter labels are:\n",
+  			paste(paramnames[!(paramnames %in% rownames(ParamsCov))],collapse=", "),sep=""))
+  	}
     #From Mike Hunter's delta method example:
     covParam <- ParamsCov[paramnames,paramnames]#<--submodel will usually not contain all free param.s
     jacStand <- numDeriv::jacobian(func=.standardizeParams, x=freeparams, model=model, Apos=Apos, Spos=Spos)
@@ -1288,17 +1298,16 @@ mxBootstrapStdizeRAMpaths <- function(model, bq=c(.25,.75), method=c('bcbci','qu
 	colnames(out) <- c("name","label","matrix","row","col","Std.Value","Boot.SE",
 										 sprintf("%.1f%%", round(100*min(bq), 1)),sprintf("%.1f%%", round(100*max(bq), 1)))
 	if(method=="quantile"){
-		out[,8] <- as.vector(apply(outmtx,2,quantile,probs=min(bq)))
-		out[,9] <- as.vector(apply(outmtx,2,quantile,probs=max(bq)))
+		out[,8] <- as.vector(apply(outmtx,2,quantile,probs=min(bq),type=1))
+		out[,9] <- as.vector(apply(outmtx,2,quantile,probs=max(bq),type=1))
 	}
 	else if(method=="bcbci"){
 		zcrit <- qnorm(bq)
 		for(i in 1:nrow(realstdpaths)){
-			ecdf.curr <- ecdftable(outmtx[,i])
 			z0 <- qnorm(mean(outmtx[,i] <= realstdpaths$Std.Value[i]))
 			for (qx in 1:2){
 				phi <- pnorm(2*z0 + zcrit[qx])
-				out[i,7+qx] <- max(c(-Inf,subset(ecdf.curr[,1], ecdf.curr[,2]<=phi)))
+				out[i,7+qx] <- quantile(outmtx[,i], probs=phi, type=1)
 			}
 		}
 	}

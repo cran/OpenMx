@@ -285,7 +285,7 @@ static int constrainedSLSQPOptimalityCheck(GradientOptimizerContext &goc, const 
 	if(arows){ //&& false){
 		int j=0;
 		//Per its documentation, this is NPSOL's criterion for first-order optimality conditions:
-		double gradThresh = 10 * sqrt(Global->optimalityTolerance) * ( 1 + fmax(1 + fabs(goc.getFit()), sqrt(goc.grad.dot(goc.grad)) ) );
+		double gradThresh = 10 * sqrt(goc.ControlTolerance) * ( 1 + fmax(1 + fabs(goc.getFit()), sqrt(goc.grad.dot(goc.grad)) ) );
 		if (goc.verbose >= 2) {
 			mxLog("gradient 'threshold': %f", gradThresh);
 		}
@@ -383,6 +383,7 @@ void omxInvokeNLOPT(GradientOptimizerContext &goc)
 	if (goc.verbose >= 2) mxLog("nlopt_optimize returned %d", code);
 	SLSQP::omxExtractSLSQPConstraintInfo(wkspc, opt, goc);
 	opt->work = NULL;
+	free(wkspc.realwkspc);
 	
 	nlopt_destroy(opt);
 	
@@ -475,6 +476,7 @@ void omxInvokeSLSQPfromNelderMead(NelderMeadOptimizerContext* nmoc, Eigen::Vecto
 	}
 	
 	opt->work = NULL;
+	free(wkspc.realwkspc);
 	nlopt_destroy(opt);
 	
 	return;

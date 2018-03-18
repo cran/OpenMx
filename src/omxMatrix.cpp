@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,6 +53,33 @@ void expm_eigen(int n, double *rz, double *out)
     outMat = inMat.exp();
 }
 
+std::string stringifyDimnames(omxMatrix *source)
+{
+	std::string buf;
+	auto &rownames = source->rownames;
+	auto &colnames = source->colnames;
+	if (rownames.size() || colnames.size()) {
+		buf += "dimnames=list(";
+		if (!rownames.size()) {
+			buf += "NULL";
+		} else {
+			buf += "c(";
+			for (auto &nn : rownames) buf += string_snprintf("'%s', ", nn);
+			buf += ")";
+		}
+		buf += ", ";
+		if (!colnames.size()) {
+			buf += "NULL";
+		} else {
+			buf += "c(";
+			for (auto &nn : colnames) buf += string_snprintf("'%s', ", nn);
+			buf += ")";
+		}
+		buf += ")";
+	}
+	return buf;
+}
+
 void omxPrintMatrix(omxMatrix *source, const char* header) // make static TODO
 {
 	EigenMatrixAdaptor Esrc(source);
@@ -63,23 +90,8 @@ void omxPrintMatrix(omxMatrix *source, const char* header) // make static TODO
 	auto &rownames = source->rownames;
 	auto &colnames = source->colnames;
 	if (rownames.size() || colnames.size()) {
-		buf += ", dimnames=list(";
-		if (!rownames.size()) {
-			buf += "NULL";
-		} else {
-			buf += "c(";
-			for (auto &nn : rownames) buf += string_snprintf("'%s', ", nn);
-			buf += "),";
-		}
-		buf += " ";
-		if (!colnames.size()) {
-			buf += "NULL";
-		} else {
-			buf += "c(";
-			for (auto &nn : colnames) buf += string_snprintf("'%s', ", nn);
-			buf += ")";
-		}
-		buf += ")";
+		buf += ", ";
+		buf += stringifyDimnames(source);
 	}
 
 	mxPrintMatX(header, Esrc, buf);
@@ -162,6 +174,35 @@ void omxCopyMatrix(omxMatrix *dest, omxMatrix *orig) {
 	}
 
 	omxMatrixLeadingLagging(dest);
+}
+
+void omxMatrix::take(omxMatrix *orig)
+{
+	omxFreeInternalMatrixData(this);
+
+	this->rows = orig->rows;
+	this->cols = orig->cols;
+	this->colMajor = orig->colMajor;
+	this->populate = orig->populate;
+
+	this->data = orig->data;
+	this->owner = orig->owner;
+	orig->data = 0;
+	orig->owner = 0;
+
+	omxMatrixLeadingLagging(this);
+
+	omxMarkDirty(orig);
+}
+
+bool omxMatrix::canDiscard()
+{
+	if (hasMatrixNumber ||             // can be referenced from the front-end
+	    populate.size() ||             // has populations from elsewhere
+	    (!algebra && !fitFunction) ||  // any simple matrix that we can't recreate
+	    (algebra && algebra->oate == &(omxAlgebraSymbolTable[62])))   // broadcast
+		return false;
+	return true;
 }
 
 void omxFreeMatrix(omxMatrix *om) {
@@ -248,6 +289,15 @@ void omxMatrix::copyAttr(omxMatrix *src)
 	}
 }
 
+// could build index and binary search
+int omxMatrix::lookupColumnByName(const char *target)
+{
+	for (int cx=0; cx < int(colnames.size()); ++cx) {
+		if (strEQ(colnames[cx], target)) return cx;
+	}
+	return -1;
+}
+
 void omxResizeMatrix(omxMatrix *om, int nrows, int ncols)
 {
 	// Always Recompute() before you Resize().
@@ -310,8 +360,9 @@ void setMatrixError(omxMatrix *om, int row, int col, int numrow, int numcol) {
 	free(errstr);  // TODO not reached
 }
 
-void matrixElementError(int row, int col, int numrow, int numcol) {
-	Rf_error("Requested improper value (%d, %d) from (%d, %d) matrix", row, col, numrow, numcol);
+void matrixElementError(int row, int col, omxMatrix *om) {
+	Rf_error("Requested improper value (%d, %d) from (%d, %d) matrix '%s'",
+		 row, col, om->rows, om->cols, om->name());
 }
 
 void setVectorError(int index, int numrow, int numcol) {
@@ -435,6 +486,11 @@ void omxMatrix::loadDimnames(SEXP dimnames)
 			}
 		}
 	}
+
+	if (OMX_DEBUG) {
+		std::string buf = stringifyDimnames(this);
+		mxLog("matrix %s loaded %s", name(), buf.c_str());
+	}
 }
 
 void omxMatrix::setJoinInfo(SEXP Rmodel, SEXP Rkey)
@@ -520,7 +576,9 @@ void omxToggleRowColumnMajor(omxMatrix *mat) {
 	mat->colMajor = !mat->colMajor;
 }
 
-void omxTransposeMatrix(omxMatrix *mat) {
+void omxTransposeMatrix(omxMatrix *mat)
+{
+	std::swap(mat->colnames, mat->rownames);
 	mat->colMajor = !mat->colMajor;
 	
 	if(mat->rows != mat->cols){
@@ -689,6 +747,11 @@ bool omxNeedsUpdate(omxMatrix *matrix)
 		mxLog("%s %s is %s", matrix->getType(), matrix->name(), yes? "dirty" : "clean");
 	}
 	return yes;
+}
+
+void CheckAST(omxMatrix *matrix, FitContext *fc)
+{
+	if (matrix->algebra) CheckAST(matrix->algebra, fc);
 }
 
 void omxRecompute(omxMatrix *matrix, FitContext *fc)

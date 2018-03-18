@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ struct multi_normal_deriv {
 		fc(_fc), fvMask(_fvMask), omo(_omo) {};
 
 	template <typename T>
-	T operator()(Eigen::Matrix<T, Eigen::Dynamic, 1>& x) const {
+	T operator()(const Eigen::Matrix<T, Eigen::Dynamic, 1>& x) const {
 		EigenMatrixAdaptor obCovAdapter(omo->observedCov);
 		Eigen::MatrixXd obCov = obCovAdapter;
 		EigenMatrixAdaptor exCovAdapter(omo->expectedCov);
@@ -287,8 +287,10 @@ void MLFitState::populateAttr(SEXP algebra) {
 	double saturated_out;
 	double independence_out;
 	calcExtraLikelihoods(oo, &saturated_out, &independence_out);
-	Rf_setAttrib(algebra, Rf_install("SaturatedLikelihood"), Rf_ScalarReal(saturated_out));
-	Rf_setAttrib(algebra, Rf_install("IndependenceLikelihood"), Rf_ScalarReal(independence_out));
+	ProtectedSEXP Rsat(Rf_ScalarReal(saturated_out));
+	Rf_setAttrib(algebra, Rf_install("SaturatedLikelihood"), Rsat);
+	ProtectedSEXP Rind(Rf_ScalarReal(independence_out));
+	Rf_setAttrib(algebra, Rf_install("IndependenceLikelihood"), Rind);
 }
 
 omxFitFunction *omxInitMLFitFunction()

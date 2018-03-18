@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,7 +73,8 @@ void omxNormalExpectation::populateAttr(SEXP algebra) {
 		Rf_setAttrib(algebra, Rf_install("ExpMean"), expMeanExt);
 	}
 
-	Rf_setAttrib(algebra, Rf_install("numStats"), Rf_ScalarReal(omxDataDF(data)));
+	ProtectedSEXP RnumStats(Rf_ScalarReal(omxDataDF(data)));
+	Rf_setAttrib(algebra, Rf_install("numStats"), RnumStats);
 }
 
 omxExpectation *omxInitNormalExpectation() { return new omxNormalExpectation; }

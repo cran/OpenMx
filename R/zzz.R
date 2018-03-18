@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ imxLog <- function(str) .Call(Log_wrapper, str)
 #' # ===============================
 #' 
 #' m1 = mxRun(m1)
-#' summary(m1, show = "std")
+#' summary(m1)
 #'
 #' @docType package
 #' @name OpenMx

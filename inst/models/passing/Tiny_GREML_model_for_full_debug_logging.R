@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -48,7 +48,13 @@ testrun <- mxRun(testmod)
 summary(testrun)
 omxCheckEquals(mxEval(nrow(I),testrun,T), 5)
 omxCheckEquals(mxEval(ncol(I),testrun,T), 5)
-mxGetExpected(testrun, "covariance")
+
+#mxGetExpected() knows how to drop rows and columns of the covariance matrix due to missing data; mxEvalByName() does not:
+omxCheckEquals(nrow(mxEvalByName("V", testrun, compute=T)), 5)
+omxCheckEquals(nrow(mxGetExpected(testrun, "covariance")), 4)
+
+omxCheckTrue( all(abs(mxGetExpected(testrun,"means") - mean(dat[,1],na.rm=T)) < 1e-8) )
+omxCheckTrue(is.na(mxGetExpected(testrun,"thresholds")))
 
 
 testmod2 <- mxModel(

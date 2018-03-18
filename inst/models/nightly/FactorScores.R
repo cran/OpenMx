@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -277,12 +277,12 @@ ssModelLisrel <- mxModel(model="lisrel",
 	)
 
 omxCheckWarning(mxGetExpected(ssModelLisrel, 'means'),
-	"Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or KA matrices to get real means.")
+	"Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or AL matrices to get real means.")
 
 omxCheckWarning(
 	omxCheckError(ssDataLisrel <- mxGenerateData(ssModelLisrel,200),
 		"Cannot generate data from model 'lisrel' where means are not specified"),
-	"Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or KA matrices to get real means."
+	"Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or AL matrices to get real means."
 )
 # Causes error/warning
 

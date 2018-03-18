@@ -18,7 +18,7 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
 
 \item{...}{Not used.  Forces remaining arguments to be specified by name.}
 
-\item{engine}{specific 'NPSOL', 'SLSQP', or 'CSOLNP'}
+\item{engine}{specific 'CSOLNP', 'SLSQP', or 'NPSOL'}
 
 \item{fitfunction}{name of the fitfunction (defaults to 'fitfunction')}
 
@@ -43,25 +43,18 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
 \description{
 This optimizer does not require analytic derivatives of the fit
 function. The fully open-source CRAN version of OpenMx offers 2 choices,
-SLSQP (from the NLOPT collection) and CSOLNP.  The OpenMx Team's version of
-OpenMx offers the choice of three optimizers: SLSQP, CSOLNP, and NPSOL.
+CSOLNP and SLSQP (from the NLOPT collection).  The OpenMx Team's version of
+OpenMx offers the choice of three optimizers: CSOLNP, SLSQP, and NPSOL.
 }
 \details{
-One of the most important options for SLSQP is
-\code{gradientAlgo}. By default, the \code{central} method 
-is used.  This method requires 2 times 
+One option for CSOLNP and SLSQP is
+\code{gradientAlgo}. CSOLNP uses \code{forward} method
+by default, while SLSQP uses \code{central} method. \code{forward} method requires
+1 time \code{gradientIterations} function evaluation per parameter
+per gradient, while \code{central} method requires 2 times
 \code{gradientIterations} function evaluations per parameter 
-per gradient.  The \code{central} method can be much more accurate 
-than the \code{forward} method, which requires 
-\code{gradientIterations} function evaluations per parameter per 
-gradient.  The \code{forward} method is faster, and often works
-well enough, but can result in imprecise gradient estimations that
-may not allow SLSQP to fully optimize a given model, possibly 
-resulting in code RED (status code 5 or 6).
-
-Currently, only SLSQP uses arguments \code{gradientIterations} 
-and \code{gradientAlgo}.  CSOLNP always uses the \code{forward} 
-method; NPSOL usually uses the \code{forward} method, but 
+per gradient. Users can change the default methods for either of these optimizers.
+NPSOL usually uses the \code{forward} method, but
 adaptively switches to \code{central} under certain circumstances.
 
 CSOLNP uses the value of argument \code{gradientStepSize} as-is, 
@@ -72,7 +65,7 @@ NPSOL ignores \code{gradientStepSize}, and instead uses a function
 of \link{mxOption} \dQuote{Function precision} to determine its gradient
 step size.
 
-Currently, only SLSQP and NPSOL can use analytic gradients, 
+All three optimizers can use analytic gradients,
 and only NPSOL uses \code{warmStart}.
 }
 \examples{

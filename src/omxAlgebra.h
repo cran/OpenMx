@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ struct omxAlgebra {						// A matrix
 	int numArgs;						// Length of args
 
 	omxMatrix* matrix;				// The matrix populated by this algebra
+	bool calcDimnames;
 	int verbose;
     SEXP sexpAlgebra;               // The SEXP MxAlgebra object
 
@@ -61,6 +62,8 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name, 
 																		// NOTE: Duplicates.
 
 void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc);
+
+void CheckAST(omxAlgebra *matrix, FitContext *fc);
 
 void omxAlgebraPreeval(omxMatrix *mat, FitContext *fc);
 

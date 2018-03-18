@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2017 The OpenMx Project
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -159,7 +159,7 @@ summary(m6)
 mxEval(Sigma,m6,T)
 #Interestingly, SLSQP doesn't gain any advantage in function evaluations by adding analytic derivatives
 #for the inequality constraints, but NPSOL does:
-if(mxOption(NULL,"Default optimizer")=="NPSOL"){
+if(mxOption(NULL,"Default optimizer") %in% c("CSOLNP","NPSOL")){
 	omxCheckTrue(m4$output$evaluations > m6$output$evaluations)
 }
 omxCheckCloseEnough(mxEval(Tau,m6,T)[1,],c(1.64,1.64,1.64),0.1)

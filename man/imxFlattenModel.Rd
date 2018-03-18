@@ -4,12 +4,14 @@
 \alias{imxFlattenModel}
 \title{Remove heirarchical structure from model}
 \usage{
-imxFlattenModel(model, namespace)
+imxFlattenModel(model, namespace, unsafe = FALSE)
 }
 \arguments{
 \item{model}{model}
 
 \item{namespace}{namespace}
+
+\item{unsafe}{whether to skip sanity checks}
 }
 \description{
 Remove heirarchical structure from model

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2017 The OpenMx Project
+ *  Copyright 2007-2018 The OpenMx Project
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <Eigen/Cholesky>
 #include "EnableWarnings.h"
 #include "omxFIMLFitFunction.h"
+#include <limits>
 
 nanotime_t omxFIMLFitFunction::getMedianElapsedTime()
 {
@@ -62,9 +63,10 @@ bool condOrdByRow::eval()
 	VectorXd xi;
 	MatrixXd U11;
 	MatrixXd invOrdCov;
-		
+	int prevRowContinuous = 0;
+
 	int ssx = parent->sufficientSets.size() + 1;
-	if (useSufficientSets && parent->sufficientSets.size()) {
+	if (parent->sufficientSets.size()) {
 		auto &sufficientSets = parent->sufficientSets;
 		sufficientSet ssRef;
 		ssRef.start = row;
@@ -107,7 +109,8 @@ bool condOrdByRow::eval()
 			}
 
 			if (rowContinuous) {
-				if (!parent->ordinalSame[row] || firstRow) {
+				bool firstContinuous = prevRowContinuous == 0;
+				if (!parent->ordinalSame[row] || firstContinuous) {
 					std::vector< omxThresholdColumn > &colInfo = expectation->getThresholdInfo();
 					EigenMatrixAdaptor tMat(thresholdsMat);
 					VectorXd uThresh(rowOrdinal);
@@ -142,7 +145,7 @@ bool condOrdByRow::eval()
 					}
 					U11 = U11.selfadjointView<Eigen::Upper>();
 				}
-				if (!parent->ordinalMissingSame[row] || firstRow) {
+				if (!parent->ordinalMissingSame[row] || firstContinuous) {
 					invOrdCov = ordCov;
 					if (InvertSymmetricPosDef(invOrdCov, 'L')) {
 						reportBadOrdLik(2);
@@ -150,7 +153,7 @@ bool condOrdByRow::eval()
 					}
 					invOrdCov = invOrdCov.selfadjointView<Eigen::Lower>();
 				}
-				if (!parent->missingSameOrdinalSame[row] || firstRow) {
+				if (!parent->missingSameOrdinalSame[row] || firstContinuous) {
 					// Aitken (1934) "Note on Selection from a Multivariate Normal Population"
 					// Or Johnson/Kotz (1972), p.70
 					MatrixXd V22;  //cont
@@ -193,7 +196,7 @@ bool condOrdByRow::eval()
 			const MatrixXd &iV = covDecomp.getInverse();
 
 			if (row < rows-1 && parent->missingSameOrdinalSame[row+1] &&
-			    useSufficientSets && ssx < (int)parent->sufficientSets.size()) {
+			    ssx < (int)parent->sufficientSets.size()) {
 				INCR_COUNTER(contDensity);
 				sufficientSet &ss = parent->sufficientSets[ssx++];
 				if (ss.start != row) Rf_error("oops");
@@ -228,6 +231,7 @@ bool condOrdByRow::eval()
 		} else { contLogLik = 0.0; }
 
 		recordRow(contLogLik, ordLik);
+		prevRowContinuous = rowContinuous;
 	}
 
 	return false;
@@ -249,6 +253,7 @@ bool condContByRow::eval()
 	SimpCholesky< Eigen::MatrixXd >  covDecomp;
 	double contLogLik = 0.0;
 	double ordLik = 1.0;
+	bool ordConditioned = false;
 
 	while(row < lastrow) {
 		if (!loadRow()) return true;
@@ -291,11 +296,13 @@ bool condContByRow::eval()
 				ordMean += ordAdj * (cData - contMean);
 				INCR_COUNTER(conditionMean);
 			}
+			ordConditioned = true;
 		} else if (rowOrdinal) {
-			if (!parent->ordinalMissingSame[row] || firstRow) {
+			if (!parent->ordinalMissingSame[row] || firstRow || ordConditioned) {
 				op.wantOrdinal = true;
 				subsetNormalDist(jointMeans, jointCov, op, rowOrdinal, ordMean, ordCov);
 				newOrdCov = true;
+				ordConditioned = false;
 			}
 		} else if (rowContinuous) {
 			if (!parent->continuousMissingSame[row] || firstRow) {
@@ -562,13 +569,6 @@ struct FIMLCompare {
 	}
 };
 
-static void recordGap(int rx, int &prev, std::vector<int> &identical)
-{
-	int gap = rx - prev;
-	for (int gx=0; gx < gap; ++gx) identical[prev + gx] = gap - gx;
-	prev = rx;
-}
-
 static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 {
 	omxExpectation *ex = off->expectation;
@@ -609,6 +609,7 @@ static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 static void addSufficientSet(omxFitFunction *off, int from, int to)
 {
 	omxFIMLFitFunction* ofiml = ((omxFIMLFitFunction*)off);
+	if (!ofiml->useSufficientSets) return;
 	//mxLog("ss from %d to %d length %d", from, to, 1 + to - from);
 	omxData *data = ofiml->data;
 	double *rowWeight = data->getWeightColumn();
@@ -624,14 +625,21 @@ static void sortData(omxFitFunction *off)
 {
 	//mxLog("%s: sortData", off->matrix->name());
 	omxFIMLFitFunction* ofiml = ((omxFIMLFitFunction*)off);
+	auto &rowMult = ofiml->rowMult;
 	auto& indexVector = ofiml->indexVector;
 	indexVector.clear();
 	ofiml->sufficientSets.clear();
 	omxData *data = ofiml->data;
 	double *rowWeight = data->getWeightColumn();
+	int *rowFreq = data->getFreqColumn();
 	indexVector.reserve(data->rows);
+	rowMult.resize(data->rows);
 	for (int rx=0; rx < data->rows; ++rx) {
-		if (rowWeight && rowWeight[rx] == 0.0) continue;
+		double ww = 1.0;
+		if (rowWeight) ww *= rowWeight[rx];
+		if (rowFreq) ww *= rowFreq[rx];
+		rowMult[rx] = ww;
+		if (ww == 0.0) continue;
 		indexVector.push_back(rx);
 	}
 	int rows = int(indexVector.size());
@@ -673,107 +681,65 @@ static void sortData(omxFitFunction *off)
 		//data->omxPrintData("sorted", 1000, indexVector.data());
 	}
 
-	switch (ofiml->jointStrat) {
-	case JOINT_OLD:{
-		auto& identicalDefs = ofiml->identicalDefs;
-		auto& identicalMissingness = ofiml->identicalMissingness;
-		auto& identicalRows = ofiml->identicalRows;
-		identicalDefs.resize(rows);
-		identicalMissingness.resize(rows);
-		identicalRows.resize(rows);
+	cmp.ordinalFirst = true;
+	ofiml->ordinalMissingSame.assign(rows, false);
+	ofiml->continuousMissingSame.assign(rows, false);
+	ofiml->missingSameOrdinalSame.assign(rows, false);
+	ofiml->missingSameContinuousSame.assign(rows, false);
+	ofiml->continuousSame.assign(rows, false);
+	ofiml->missingSame.assign(rows, false);
+	ofiml->ordinalSame.assign(rows, false);
+	int prevSS = -1;
+	for (int rx=1; rx < rows; ++rx) {
+		bool m1;
+		cmp.compareAllDefVars(indexVector[rx-1], indexVector[rx], m1);
+		bool m2;
+		cmp.compareMissingnessPart(false, indexVector[rx-1], indexVector[rx], m2);
+		if (!m1 && !m2) ofiml->ordinalMissingSame[rx] = true;
+		bool m3;
+		cmp.compareMissingnessPart(true, indexVector[rx-1], indexVector[rx], m3);
+		if (!m1 && !m3) ofiml->continuousMissingSame[rx] = true;
+		bool m4;
+		cmp.compareMissingness(indexVector[rx-1], indexVector[rx], m4);
+		if (!m1 && !m4) ofiml->missingSame[rx] = true;
+		bool m7;
+		cmp.compareDataPart(false, indexVector[rx-1], indexVector[rx], m7);
+		if (!m1 && !m2 && !m7) ofiml->ordinalSame[rx] = true;
+		if (!m1 && !m4 && !m7) {
+			ofiml->missingSameOrdinalSame[rx] = true;
+			if (prevSS == -1 && !cmp.isAllMissingnessPart(true, indexVector[rx-1])) {
+				prevSS = rx-1;
+			}
+		} else {
+			if (prevSS != -1) {
+				addSufficientSet(off, prevSS, rx-1);
+				prevSS = -1;
+			}
+		}
+		bool m5;
+		cmp.compareDataPart(true, indexVector[rx-1], indexVector[rx], m5);
+		if (!m1 && !m3 && !m5) ofiml->continuousSame[rx] = true;
+		if (!m1 && !m4 && !m5) ofiml->missingSameContinuousSame[rx] = true;
 
-		int prevDefs=0;
-		int prevMissingness=0;
-		int prevRows=0;
-		for (int rx=1; rx < rows; ++rx) {
-			bool mismatch;
-			cmp.compareAllDefVars(indexVector[prevDefs], indexVector[rx], mismatch);
-			if (mismatch) recordGap(rx, prevDefs, identicalDefs);
-			cmp.compareMissingness(indexVector[prevMissingness], indexVector[rx], mismatch);
-			if (mismatch) {
-				recordGap(rx, prevMissingness, identicalMissingness);
-			}
-			cmp.compareData(indexVector[prevRows], indexVector[rx], mismatch);
-			if (mismatch) recordGap(rx, prevRows, identicalRows);
+		if (m1 || m4) continue;
+		bool m6;
+		cmp.compareData(indexVector[rx-1], indexVector[rx], m6);
+		if (m6) continue;
+		ofiml->sameAsPrevious[rx] = true;
+	}
+	if (prevSS != -1) addSufficientSet(off, prevSS, rows-1);
+	if (ofiml->verbose >= 3) {
+		mxLog("key: row ordinalMissingSame continuousMissingSame missingSameOrdinalSame missingSameContinuousSame continuousSame missingSame ordinalSame");
+		for (int rx=0; rx < rows; ++rx) {
+			mxLog("row=%d sortedrow=%d %d %d %d %d %d %d %d", rx, indexVector[rx],
+			      bool(ofiml->ordinalMissingSame[rx]),
+			      bool(ofiml->continuousMissingSame[rx]),
+			      bool(ofiml->missingSameOrdinalSame[rx]),
+			      bool(ofiml->missingSameContinuousSame[rx]),
+			      bool(ofiml->continuousSame[rx]),
+			      bool(ofiml->missingSame[rx]),
+			      bool(ofiml->ordinalSame[rx]));
 		}
-		recordGap(rows - 1, prevDefs, identicalDefs);
-		recordGap(rows - 1, prevMissingness, identicalMissingness);
-		recordGap(rows - 1, prevRows, identicalRows);
-		identicalRows[rows - 1] = 1;
-		if (0) {
-			Eigen::Map< Eigen::VectorXi > m1(identicalDefs.data(), rows);
-			Eigen::Map< Eigen::VectorXi > m2(identicalMissingness.data(), rows);
-			Eigen::Map< Eigen::VectorXi > m3(identicalRows.data(), rows);
-			mxPrintMat("m1", m1);
-			mxPrintMat("m2", m2);
-			mxPrintMat("m3", m3);
-		}
-		break;
-	};
-	case JOINT_AUTO:
-	case JOINT_CONDORD:
-	case JOINT_CONDCONT:{
-		cmp.ordinalFirst = true;
-		ofiml->ordinalMissingSame.assign(rows, false);
-		ofiml->continuousMissingSame.assign(rows, false);
-		ofiml->missingSameOrdinalSame.assign(rows, false);
-		ofiml->missingSameContinuousSame.assign(rows, false);
-		ofiml->continuousSame.assign(rows, false);
-		ofiml->missingSame.assign(rows, false);
-		ofiml->ordinalSame.assign(rows, false);
-		int prevSS = -1;
-		for (int rx=1; rx < rows; ++rx) {
-			bool m1;
-			cmp.compareAllDefVars(indexVector[rx-1], indexVector[rx], m1);
-			bool m2;
-			cmp.compareMissingnessPart(false, indexVector[rx-1], indexVector[rx], m2);
-			if (!m1 && !m2) ofiml->ordinalMissingSame[rx] = true;
-			bool m3;
-			cmp.compareMissingnessPart(true, indexVector[rx-1], indexVector[rx], m3);
-			if (!m1 && !m3) ofiml->continuousMissingSame[rx] = true;
-			bool m4;
-			cmp.compareMissingness(indexVector[rx-1], indexVector[rx], m4);
-			if (!m1 && !m4) ofiml->missingSame[rx] = true;
-			bool m7;
-			cmp.compareDataPart(false, indexVector[rx-1], indexVector[rx], m7);
-			if (!m1 && !m2 && !m7) ofiml->ordinalSame[rx] = true;
-			if (!m1 && !m4 && !m7) {
-				ofiml->missingSameOrdinalSame[rx] = true;
-				if (prevSS == -1 && !cmp.isAllMissingnessPart(true, indexVector[rx-1])) {
-					prevSS = rx-1;
-				}
-			} else {
-				if (prevSS != -1) {
-					addSufficientSet(off, prevSS, rx-1);
-					prevSS = -1;
-				}
-			}
-			bool m5;
-			cmp.compareDataPart(true, indexVector[rx-1], indexVector[rx], m5);
-			if (!m1 && !m3 && !m5) ofiml->continuousSame[rx] = true;
-			if (!m1 && !m4 && !m5) ofiml->missingSameContinuousSame[rx] = true;
-
-			if (m1 || m4) continue;
-			bool m6;
-			cmp.compareData(indexVector[rx-1], indexVector[rx], m6);
-			if (m6) continue;
-			ofiml->sameAsPrevious[rx] = true;
-		}
-		if (prevSS != -1) addSufficientSet(off, prevSS, rows-1);
-		if (ofiml->verbose >= 3) {
-			mxLog("key: row ordinalMissingSame continuousMissingSame missingSameOrdinalSame missingSameContinuousSame continuousSame missingSame ordinalSame");
-			for (int rx=0; rx < rows; ++rx) {
-				mxLog("row=%d sortedrow=%d %d %d %d %d %d %d %d", rx, indexVector[rx],
-				      bool(ofiml->ordinalMissingSame[rx]),
-				      bool(ofiml->continuousMissingSame[rx]),
-				      bool(ofiml->missingSameOrdinalSame[rx]),
-				      bool(ofiml->missingSameContinuousSame[rx]),
-				      bool(ofiml->continuousSame[rx]),
-				      bool(ofiml->missingSame[rx]),
-				      bool(ofiml->ordinalSame[rx]));
-			}
-		}
-		break;}
 	}
 }
 
@@ -781,10 +747,6 @@ static bool dispatchByRow(FitContext *_fc, omxFitFunction *_localobj,
 			  omxFIMLFitFunction *parent, omxFIMLFitFunction *ofiml)
 {
 	switch (ofiml->jointStrat) {
-	case JOINT_OLD:{
-		oldByRow batch(_fc, _localobj, parent, ofiml);
-		return batch.eval();
-	}
 	case JOINT_CONDORD:{
 		condOrdByRow batch(_fc, _localobj, parent, ofiml);
 		return batch.eval();
@@ -829,7 +791,7 @@ static void recalcRowBegin(FitContext *fc, omxMatrix *fitMatrix, int parallelism
 	}
 }
 
-static void setParallelism(FitContext *fc, omxData *data, omxFIMLFitFunction *parent,
+static void setParallelism(FitContext *fc, omxFIMLFitFunction *parent,
 			   omxMatrix *fitMatrix, int parallelism)
 {
 	int rows = parent->indexVector.size();
@@ -855,6 +817,9 @@ void omxFIMLFitFunction::invalidateCache()
 	builtCache = false;
 	indexVector.clear();
 	openmpUser = false;
+
+	rowCount = std::numeric_limits<typeof(rowCount)>::max();
+	omxResizeMatrix(rowLikelihoods, data->rows, 1);
 }
 
 void omxFIMLFitFunction::compute(int want, FitContext *fc)
@@ -897,8 +862,8 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 
 	bool failed = false;
 
-	if (myParent->curParallelism > 1 && fc->childList.size() == 0) {
-		setParallelism(fc, data, myParent, fitMatrix, 1);
+	if (fc->childList.size() == 0) {
+		setParallelism(fc, myParent, fitMatrix, 1);
 	}
 
 	int childStateId = 0;
@@ -911,7 +876,7 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 		int parallelism = (numChildren == 0 || !off->openmpUser) ? 1 : numChildren;
 		if (OMX_DEBUG_FIML_STATS) parallelism = 1;
 		if (parallelism > rows) parallelism = rows;
-		setParallelism(fc, data, myParent, fitMatrix, parallelism);
+		setParallelism(fc, myParent, fitMatrix, parallelism);
 		myParent->origStateId = childStateId;
 		myParent->curElapsed = 0;
 	}
@@ -983,12 +948,12 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 
 	if (ofiml->verbose >= 3) mxLog("%s done in %.2fms", off->name(), (get_nanotime() - startTime)/1000000.0);
 
-	if (!returnRowLikelihoods && ofiml->skippedRows == rows) {
+	if (!returnVector && ofiml->skippedRows == rows) {
 		// all rows skipped
 		failed = true;
 	}
 	if (failed) {
-		if(!returnRowLikelihoods) {
+		if(!returnVector) {
 			omxSetMatrixElement(off->matrix, 0, 0, NA_REAL);
 		} else {
 			EigenArrayAdaptor got(off->matrix);
@@ -997,8 +962,13 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 		return;
 	}
 
-	if(!returnRowLikelihoods) {
-		if (myParent->curParallelism > 1) {
+	if (!returnVector) {
+		if (wantRowLikelihoods) {
+			double sum = 0.0;
+			EigenVectorAdaptor rl(ofiml->rowLikelihoods);
+			sum = rl.array().log().sum();
+			omxSetMatrixElement(off->matrix, 0, 0, sum);
+		} else if (myParent->curParallelism > 1) {
 			double sum = 0.0;
 			for(int i = 0; i < myParent->curParallelism; i++) {
 				FitContext *kid = fc->childList[i];
@@ -1023,7 +993,7 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 		}
 	}
 	if (reduceParallelism) {
-		setParallelism(fc, data, myParent, fitMatrix, myParent->curParallelism - 1);
+		setParallelism(fc, myParent, fitMatrix, myParent->curParallelism - 1);
 		if (ofiml->verbose >= 2) {
 			mxLog("reducing number of threads to %d", myParent->curParallelism);
 		}
@@ -1060,6 +1030,7 @@ void omxFIMLFitFunction::init()
 	newObj->ordSetupCount = 0;
 	newObj->ordDensityCount = 0;
 	newObj->contDensityCount = 0;
+	newObj->wantRowLikelihoods = false;
 
 	cov = omxGetExpectationComponent(expectation, "cov");
 	if(cov == NULL) { 
@@ -1083,7 +1054,7 @@ void omxFIMLFitFunction::init()
 	}
 	newObj->data = off->expectation->data;
 	newObj->rowBegin = 0;
-	newObj->rowCount = newObj->data->rows;
+	newObj->rowCount = std::numeric_limits<typeof(rowCount)>::max();
 
 	if(OMX_DEBUG) {
 		mxLog("Accessing row likelihood option.");
@@ -1102,23 +1073,23 @@ void omxFIMLFitFunction::init()
 		newObj->jointStrat = JOINT_CONDORD;
 	} else if (strEQ(jointStratName, "continuous")) {
 		newObj->jointStrat = JOINT_CONDCONT;
-	} else if (strEQ(jointStratName, "old")) {
-		newObj->jointStrat = JOINT_OLD;
 	} else { Rf_error("jointConditionOn '%s'?", jointStratName); }
 
-	newObj->returnRowLikelihoods = Rf_asInteger(R_do_slot(rObj, Rf_install("vector")));
+	returnVector = Rf_asInteger(R_do_slot(rObj, Rf_install("vector")));
 
-	units = returnRowLikelihoods? FIT_UNITS_PROBABILITY : FIT_UNITS_MINUS2LL;
+	units = returnVector? FIT_UNITS_PROBABILITY : FIT_UNITS_MINUS2LL;
+	if (returnVector) wantRowLikelihoods = true;
 
-	newObj->useSufficientSets = !newObj->returnRowLikelihoods;
 	newObj->rowLikelihoods = omxInitMatrix(newObj->data->rows, 1, TRUE, off->matrix->currentState);
 	
 	
 	if(OMX_DEBUG) {
 		mxLog("Accessing row likelihood population option.");
 	}
-	newObj->populateRowDiagnostics = Rf_asInteger(R_do_slot(rObj, Rf_install("rowDiagnostics")));
+	populateRowDiagnostics = Rf_asInteger(R_do_slot(rObj, Rf_install("rowDiagnostics")));
+	if (populateRowDiagnostics) wantRowLikelihoods = true;
 
+	newObj->useSufficientSets = !newObj->wantRowLikelihoods;
 
 	if(OMX_DEBUG) {
 		mxLog("Accessing variable mapping structure.");

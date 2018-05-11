@@ -21,3 +21,4 @@ mxAvailableOptimizers()
 \seealso{
 - \code{\link{mxOption}}(model, "Default optimizer")
 }
+\concept{Miscellaneous Utility Functions}

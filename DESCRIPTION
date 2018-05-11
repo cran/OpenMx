@@ -1,5 +1,5 @@
 Package: OpenMx
-Date: 2018-03-16
+Date: 2018-05-11
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -20,7 +20,11 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Association for Computing Machinery", role="cph"),
     person("Dieter", "Kraft", role="cph"),
     person("Stefan", "Wilhelm", role="cph"),
-    person("Manjunath B G", role="cph"))
+    person("Sarah", "Medland", role="cph"),
+    person(c("Carl", 'F.'), "Falk", role="cph"),
+    person("Matt", "Keller", role="cph"),
+    person("Manjunath B G", role="cph"),
+    person("The Regents of the University of California.", role="cph"))
 URL: http://openmx.ssri.psu.edu, https://github.com/OpenMx/OpenMx
 BugReports: http://openmx.ssri.psu.edu/forums
 Description: Facilitates treatment of statistical model specifications
@@ -80,10 +84,11 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxFitFunctionGREML.R' 'MxExpectationGREML.R' 'MxMI.R'
         'MxFactorScores.R' 'MxRobustSE.R' 'MxAvailableOptimizers.R'
         'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'zzz.R'
-Version: 2.9.6
-RoxygenNote: 6.0.1
+Biarch: true
+Version: 2.9.9
+RoxygenNote: 6.0.1.9000
 NeedsCompilation: yes
-Packaged: 2018-03-16 19:16:17 UTC; joshua
+Packaged: 2018-05-11 18:00:09 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -109,7 +114,11 @@ Author: Steven M. Boker [aut],
   Association for Computing Machinery [cph],
   Dieter Kraft [cph],
   Stefan Wilhelm [cph],
-  Manjunath B G [cph]
+  Sarah Medland [cph],
+  Carl F. Falk [cph],
+  Matt Keller [cph],
+  Manjunath B G [cph],
+  The Regents of the University of California. [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2018-03-18 14:05:17 UTC
+Date/Publication: 2018-05-11 20:29:23 UTC

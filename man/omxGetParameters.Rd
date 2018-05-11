@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 The OpenMx Project
+%   Copyright 2007-2018 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -71,10 +71,10 @@ A$free
 # [1,]  TRUE TRUE
 # [2,] FALSE TRUE
 
-A$labels
-#      [,1]  [,2] 
-# [1,] "A11" "A12"
-# [2,] "A21" NA   
+A$values
+#      [,1] [,2]
+# [1,]    1    2
+# [2,]    3    4
 
 # Example using un-labelled parameters
 

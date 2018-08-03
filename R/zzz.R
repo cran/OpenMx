@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -42,15 +42,13 @@ imxHasOpenMP <- function() .Call(hasOpenMP_wrapper)
 		packageStartupMessage(paste("Notice: R GUI cannot display verbose output from the OpenMx backend.",
 					    "If you need detail diagnostics then R CMD BATCH is one option."))
 	}
-	 if (.Platform$OS.type != "windows") {
-		 if (!imxHasOpenMP()) {
-			 packageStartupMessage("OpenMx may run faster if it is compiled to take advantage of multiple cores.")
-		 } else if (Sys.getenv("OMP_NUM_THREADS") == "") {
-			 packageStartupMessage(paste0("To take full advantage of multiple cores, use:\n",
-				 "  mxOption(NULL, 'Number of Threads', parallel::detectCores()) #now\n",
-				 "  Sys.setenv(OMP_NUM_THREADS=parallel::detectCores()) #before library(OpenMx)"))
-		 }
-	 }
+	if (!imxHasOpenMP()) {
+		packageStartupMessage("OpenMx is not compiled to take advantage of computers with multiple cores.")
+	} else if (Sys.getenv("OMP_NUM_THREADS") == "") {
+		packageStartupMessage(paste0("To take full advantage of multiple cores, use:\n",
+					     "  mxOption(NULL, 'Number of Threads', parallel::detectCores()) #now\n",
+					     "  Sys.setenv(OMP_NUM_THREADS=parallel::detectCores()) #before library(OpenMx)"))
+	}
 	if (!is.na(match("package:expm", search()))) {
 		packageStartupMessage(paste("** Holy cannoli! You must be a pretty advanced and awesome user.",
 					    "The expm package is loaded.",

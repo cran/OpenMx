@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2015 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-gitVersion <- "v2.9.9"
+gitVersion <- "v2.10.0"
 
 mxVersion <- function (model=NULL, verbose=TRUE) {
 	pvers <- pkg_globals$myVersion

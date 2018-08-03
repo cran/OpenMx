@@ -2088,7 +2088,6 @@
 *
       INFORM = 2
       FUNCLS = 0
-      DIVAXN = 0
       CALL BSINIT(NDIM, WEGHTS, LENRUL, POINTS)
       IF ( MINCLS .GE. 0) THEN
 *

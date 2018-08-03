@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -628,16 +628,12 @@ modelModifyFilter <- function(model, entries, action) {
   thresholdFilter <- sapply(entries, is, "MxThreshold")
 	unknownFilter <- !(boundsFilter | namedEntityFilter | intervalFilter | characterFilter | thresholdFilter)
 	if (any(pathFilter)) {
-		stop(paste("The model",
-			omxQuotes(class(model)),
-			"named",
+		stop(paste("The model type of model",
 			omxQuotes(model@name), "does not recognize paths."),
 			call. = FALSE)
 	}
 	if (any(thresholdFilter)) {
-	  stop(paste("The model",
-			omxQuotes(class(model)),
-			"named",
+	  stop(paste("The model type of model",
 	             omxQuotes(model@name), "does not recognize thresholds."),
 	       call. = FALSE)
 	}

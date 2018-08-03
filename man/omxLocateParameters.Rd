@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2018 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -16,17 +16,10 @@
 \name{omxLocateParameters}
 \alias{omxLocateParameters}
 
-\title{Get the location (model, matrix, row, column) and other info for a parameter}
+\title{Summarize Model Parameters}
 
 \description{
-    Returns a data.frame summarizing the \emph{free} parameters in a model,
-	possibly filtered using \sQuote{labels}.
-
-	For each located parameter, the label, model, matrix, row, col, value, 
-	and lbound & ubound are given as a row in the dataframe.
-	
-	Duplicated labels return a row for each location in which they are found. 
-
+    Return a data.frame object summarizing the free parameters in the model.
 }
 
 \usage{
@@ -43,7 +36,7 @@ omxLocateParameters(model, labels = NULL, indep = FALSE)
    Invoking the function with the default value for the \sQuote{labels}
    argument retrieves all the free parameters.  The \sQuote{labels}
    argument can be used to select a subset of the free parameters.
-   Note that \sQuote{NA} is a valid input to \sQuote{labels}.
+   Note that \sQuote{NA} is a valid possible input to the \sQuote{labels} argument.
 }
 
 \seealso{
@@ -52,7 +45,7 @@ omxLocateParameters(model, labels = NULL, indep = FALSE)
 
 \examples{
 
-A <- mxMatrix('Full', 2, 2, labels = c("A11", "A12", NA, "A11"), values= 1:4,
+A <- mxMatrix('Full', 2, 2, labels = c("A11", "A12", NA, NA), values= 1:4,
    free = TRUE, byrow = TRUE, name = 'A')
 
 model <- mxModel(A, name = 'model')
@@ -63,12 +56,5 @@ omxLocateParameters(model)
 # Request free parameters "A11" and all NAs
 omxLocateParameters(model, c("A11", NA))
 
-# Works with submodel
-B = mxMatrix(name = 'B', 'Full', 1, 2, labels = c("B11", "notme"),
-  free = c(TRUE, FALSE), values= pi)
-model <- mxModel(model, mxModel(B, name = 'subB'))
-
-# nb: only returns free parameters ('notme' not shown)
-omxLocateParameters(model)
 
 }

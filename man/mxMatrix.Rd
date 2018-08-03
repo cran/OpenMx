@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2018 The OpenMx Project
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 }
 
 \usage{
-mxMatrix(type = c('Full', 'Diag', 'Iden', 'Lower',
-	'Sdiag', 'Stand', 'Symm', 'Unit', 'Zero'), nrow = NA, ncol = NA, 
+mxMatrix(type = "Full", nrow = NA, ncol = NA, 
     free = FALSE, values = NA, labels = NA, lbound = NA, 
     ubound = NA, byrow = getOption('mxByrow'), dimnames = NA, name = NA, 
     condenseSlots=getOption('mxCondenseMatrixSlots'),

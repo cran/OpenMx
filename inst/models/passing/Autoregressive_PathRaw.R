@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -53,8 +53,7 @@ autoregressivePathRaw <-mxRun(model)
 afterRunSize <- object.size(autoregressivePathRaw)
 bareRunSize <- object.size(omxModelDeleteData(autoregressivePathRaw))
 
-print(c(afterRunSize, 2*dataSize, bareRunSize))
-omxCheckCloseEnough(afterRunSize - 2*dataSize, bareRunSize, 340)
+omxCheckCloseEnough(afterRunSize - 2*dataSize, bareRunSize, 310)
 
 # Comparing to old Mx Output
 omxCheckCloseEnough(autoregressivePathRaw$output$estimate[["beta"]], 0.4267, 0.001)

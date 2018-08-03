@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2018 The OpenMx Project
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -64,9 +64,8 @@ omxCheckError(mxRun(model),
 loadings <- c(1, -0.625, 0.1953125, 1,  -0.625, 0.1953125)
 loadings <- matrix(loadings, 2, 3, byrow = TRUE)
 omxCheckError(
-	mxMatrix("wrong", free=FALSE, values=loadings, name="L", byrow=TRUE),
-	"'wrong' should be one of 'Full', 'Diag', 'Iden', 'Lower', 'Sdiag', 'Stand', 'Symm', 'Unit', and 'Zero'")
-
+  mxMatrix("wrong", free=FALSE, values=loadings, name="L", byrow=TRUE),
+  '\'type\' must be one of: Diag Full Iden Lower Stand Sdiag Symm Unit Zero in mxMatrix("wrong", free = FALSE, values = loadings, name = "L", byrow = TRUE)')
 #Error check when both nrow and ncol are NA:
 loadings <- c(1, -0.625, 0.1953125, 1,  -0.625, 0.1953125)
 omxCheckError(mxMatrix("Full", free=FALSE, values=loadings, name="L", byrow=TRUE),

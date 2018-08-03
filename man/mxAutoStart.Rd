@@ -4,12 +4,10 @@
 \alias{mxAutoStart}
 \title{Automatically set starting values for an MxModel}
 \usage{
-mxAutoStart(model, type = c("ULS", "DWLS"))
+mxAutoStart(model)
 }
 \arguments{
 \item{model}{The MxModel for which starting values are desired}
-
-\item{type}{The type of starting values to obtain, currently unweighted or diagonally weighted least squares, ULS or DWLS}
 }
 \value{
 an MxModel with new free parameter values
@@ -23,9 +21,9 @@ It works for models with algebras. Models of continuous, ordinal, and joint ordi
 It works for model with covariance or raw data.
 However, it does not currently work for models with definition variables, state space models, and item factor analysis models.
 
-The method used to obtain new starting values is quite simple. The user's model is changed to an unweighted least squares (ULS) model. The ULS model is estimated and its final point estimates are returned as the new starting values. Optionally, diagonally weighted least squares (DWLS) can be used instead with the \code{type} argument.
+The method used to obtain new starting values is quite simple. The user's model is changed to an unweighted least squares (ULS) model. The ULS model is estimated and its final point estimates are returned as the new starting values.
 
-Please note that ULS is sensitive to the scales of your variables. For example, if you have variables with means of 20 and variances of 0.001, then ULS will "weight" the means 20,000 times more than the variances and might result in zero variance estimates. Likewise if one variable has a variance of 20 and another has a variance of 0.001, the same problem may arise. To avoid this, make sure your variables are scaled accordingly. You could also use \code{type='DWLS'} to have the function use diagonally weighted least squares to obtain starting values.  Of course, using diagonally weighted least squares will take much much longer and will usually not provide better starting values than unweighted least squares.
+Please note that ULS is sensitive to the scales of your variables. For example, if you have variables with means of 20 and variances of 0.001, then ULS will "weight" the means 20,000 times more than the variances and might result in zero variance estimates. Likewise if one variable has a variance of 20 and another has a variance of 0.001, the same problem may arise. To avoid this, make sure your variables are scaled accordingly. You could also use diagonally weighted least squares to obtain your own starting values.
 }
 \examples{
 # Use the frontpage model with negative variances to show better

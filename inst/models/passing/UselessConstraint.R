@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -56,5 +56,15 @@ if (mxOption(NULL, "Default optimizer") != 'CSOLNP') {  # TODO
 	broken <- mxModel(broken, mxConstraint(GV>2, "infeasible"));
 	broken <- omxCheckWarning(mxRun(broken, silent=TRUE),
 				  "In model 'OneFactorPath' Optimizer returned a non-zero status code 3. The nonlinear constraints and bounds could not be satisfied. The problem may have no feasible solution.")
+	omxCheckEquals(broken$output$status$code, 3)
+} else{
+	plan <- omxDefaultComputePlan()
+	plan$steps$GD <- mxComputeNelderMead(ineqConstraintMthd="eqMthd",eqConstraintMthd="l1p")
+	plan$steps <- list(GD=plan$steps$GD)
+	broken <- mxModel(factorModelPath, remove=TRUE, names(factorModelPath$constraints))
+	broken <- mxModel(broken, mxConstraint(GV>2, "infeasible"), plan);
+	broken <- omxCheckWarning(
+		mxRun(broken, silent=TRUE),
+		"In model 'OneFactorPath' Optimizer returned a non-zero status code 3. The nonlinear constraints and bounds could not be satisfied. The problem may have no feasible solution.")
 	omxCheckEquals(broken$output$status$code, 3)
 }

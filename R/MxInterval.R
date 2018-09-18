@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -355,7 +355,7 @@ omxParallelCI <- function(model, run = TRUE, verbose=0L, independentSubmodels=TR
 		stop("argument 'optimizer' must be one of 'NPSOL', 'CSOLNP', or 'SLSQP'")
 	}
 	if(!independentSubmodels){
-		optionList <- generateOptionsList(model, !as.logical(verifyNoConstraints(model)), TRUE)
+		optionList <- generateOptionsList(model, imxHasConstraint(model), TRUE)
 		ctype <- ifelse(optimizer=="SLSQP","ineq","none")
 		ciOpt <- mxComputeGradientDescent(
 			verbose=verbose, engine=optimizer,
@@ -390,7 +390,7 @@ omxParallelCI <- function(model, run = TRUE, verbose=0L, independentSubmodels=TR
 		intervals <- expandConfidenceIntervals(model, intervals)
 		template <- model
 		template <- removeAllIntervals(template)
-		optionList <- generateOptionsList(model, !as.logical(verifyNoConstraints(model)), TRUE)
+		optionList <- generateOptionsList(model, imxHasConstraint(model), TRUE)
 		ctype <- ifelse(optimizer=="SLSQP","ineq","none")
 		ciOpt <- mxComputeGradientDescent(
 			verbose=verbose, engine=optimizer,

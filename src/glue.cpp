@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -59,6 +59,8 @@ void markAsDataFrame(SEXP list, int rows)
 
 SEXP makeFactor(SEXP vec, int levels, const char **labels)
 {
+	Rf_protect(vec);
+
 	SEXP classes;
 	Rf_protect(classes = Rf_allocVector(STRSXP, 1));
 	SET_STRING_ELT(classes, 0, Rf_mkChar("factor"));
@@ -397,6 +399,8 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 				Global->maxStackDepth = atoi(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "Feasibility tolerance")) {
 				Global->feasibilityTolerance = atof(nextOptionValue);
+			} else if (matchCaseInsensitive(nextOptionName, "max minutes")) {
+				Global->maxSeconds = nearbyint(atof(nextOptionValue) * 60);
 			} else if (matchCaseInsensitive(nextOptionName, "Optimality tolerance")) {
 				Global->optimalityTolerance = atof(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "Major iterations")) {
@@ -413,7 +417,6 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 					Global->RAMMaxDepth = atoi(nextOptionValue);
 				}
 				//mxLog("ram max depth = %s %d", nextOptionValue, Global->RAMMaxDepth);
-			} else if (matchCaseInsensitive(nextOptionName, "Function precision_CSOLNP")) {
 			} else {
 				// ignore
 			}
@@ -589,7 +592,10 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	globalState->loadDefinitionVariables(true);
 
 	omxCompute *topCompute = NULL;
-	if (Global->computeList.size()) topCompute = Global->computeList[0];
+	if (Global->computeList.size()) {
+		topCompute = Global->computeList[0];
+		Global->ComputePersist = topCompute->isPersist();
+	}
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	Global->omxProcessConfidenceIntervals(intervalList, globalState);
@@ -605,6 +611,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 
 	if (topCompute && !isErrorRaised()) {
 		topCompute->compute(fc);
+		if (Global->computeLoopContext.size() != 0) Rf_error("computeLoopContext imbalance");
 
 		if (fc->wanted & FF_COMPUTE_FIT) {
 			if (!std::isfinite(fc->fit)) {
@@ -774,6 +781,7 @@ static R_CallMethodDef callMethods[] = {
 	{".dtmvnorm.marginal2", (DL_FUNC) dtmvnorm_marginal2, 7},
 	{".mtmvnorm", (DL_FUNC) mtmvnorm, 3},
 	{".enableMxLog", (DL_FUNC) &enableMxLog, 0},
+	{".storeData", (DL_FUNC) storeData, 2},
 	{NULL, NULL, 0}
 };
 

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -237,7 +237,9 @@ fitStatistics <- function(model, useSubmodels, retval) {
 	IC[,'par'] <- c(AIC.p, BIC.p)
 	IC['BIC:','sample'] <- sBIC
 	IC['AIC:','sample'] <- AICc
-	retval[['informationCriteria']] <- IC
+	if(length(model@output) && (is.null(model@output$fitUnits) || model@output$fitUnits=="-2lnL")){
+		retval[['informationCriteria']] <- IC
+	}
 	
 	retval$fitUnits <- model@output$fitUnits
 	
@@ -261,14 +263,16 @@ omxRMSEA <- function(model, lower=.025, upper=.975, null=.05, ...){
 rmseaConfidenceIntervalHelper <- function(chi.squared, df, N, lower, upper){
 	# Lower confidence interval
 	if( pchisq(chi.squared, df=df, ncp=0) >= upper){ #sic
-		lower.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared, degf=df, goal=upper)$root
+		lower.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared,
+			degf=df, goal=upper, extendInt="upX")$root
 		# solve pchisq(ch, df=df, ncp=x) == upper for x
 	} else{
 		lower.lam <- 0
 	}
 	# Upper confidence interval
 	if( pchisq(chi.squared, df=df, ncp=0) >= lower){ #sic
-		upper.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared, degf=df, goal=lower)$root
+		upper.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared,
+			degf=df, goal=lower, extendInt="upX")$root
 		# solve pchisq(ch, df=df, ncp=x) == lower for x
 	} else{
 		upper.lam <- 0
@@ -472,6 +476,11 @@ print.summary.mxmodel <- function(x,...) {
 	}
 	if (!is.null(x$npsolMessage)) {
 		cat(x$npsolMessage,'\n','\n')
+		if ((x$statusCode == "not convex/red" || x$statusCode == "nonzero gradient/red") &&
+			    (is.na(x$maxRelativeOrdinalError) || x$maxRelativeOrdinalError > 0)) {
+			cat(paste("Your ordinal model may converge if you reduce mvnRelEps\n",
+				"  try: model <- mxOption(model, 'mvnRelEps', mxOption(model, 'mvnRelEps')/5)\n\n"))
+		}
 	}
 	params <- x$parameters
 	if (!is.null(params) && nrow(params)) {
@@ -578,10 +587,12 @@ print.summary.mxmodel <- function(x,...) {
 		cat("chi-square:  ", "\U03C7\U00B2 ( df=", chidof, " ) = ", chival, ",  p = ", chipee, '\n', sep="")
 	}
 	#
-	cat("Information Criteria: \n")
-	IC <- x$informationCriteria
-	colnames(IC) <- c(" |  df Penalty", " |  Parameters Penalty", " |  Sample-Size Adjusted")
-	print(IC)
+	if(length(x$informationCriteria)){
+		cat("Information Criteria: \n")
+		IC <- x$informationCriteria
+		colnames(IC) <- c(" |  df Penalty", " |  Parameters Penalty", " |  Sample-Size Adjusted")
+		print(IC)
+	}
 	#
 	# Absolute fit indices
 	if(x$verbose==TRUE || any(!is.na(c(x$CFI, x$TLI, x$RMSEA)))){
@@ -919,9 +930,12 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 		}))
 	}
 	retval$CIcodes <- model@output$confidenceIntervalCodes
-	if (!is.null(model@output$status$code)) {
-		message <- optimizerMessages[[as.character(model@output$status$code)]]
+	statusCode <- model@output$status$code
+	if (!is.null(statusCode)) {
+		message <- optimizerMessages[[as.character(statusCode)]]
 		retval[['npsolMessage']] <- message
+		retval[['statusCode']] <- as.statusCode(statusCode)
+		retval[['maxRelativeOrdinalError']] <- model@output[['maxRelativeOrdinalError']]
 	}
 	if( .hasSlot(model,"compute") && length(model$compute$steps$CI) ){
 		retval$CIdetail <- model$compute$steps$CI$output$detail
@@ -967,9 +981,11 @@ assertModelFreshlyRun <- function(model) {
 
 logLik.MxModel <- function(object, ...) {
 	model <- object
+	moreModels <- list(...)
 	assertModelFreshlyRun(model)
 	ll <- NA
-	if (!is.null(model@output) & !is.null(model@output$Minus2LogLikelihood)) {
+	if (length(model@output) && !is.null(model@output$Minus2LogLikelihood) && 
+			!is.null(model@output$fitUnits) && model@output$fitUnits=="-2lnL") {
 		ll <- -0.5*model@output$Minus2LogLikelihood
 	}
 
@@ -979,15 +995,20 @@ logLik.MxModel <- function(object, ...) {
 	}
 
 	if (!is.null(model@output))
+		#TODO: this doesn't count "implicit" free parameters that are "profiled out":
 		attr(ll,"df")<- length(model@output$estimate)
 	else
 		attr(ll,"df") <- NA
 	class(ll) <- "logLik"
-	return(ll)
+	if (length(moreModels)) {
+		c(list(ll), lapply(moreModels, logLik.MxModel))
+	} else {
+		ll
+	}
 }
 
 
-.standardizeParams <- function(x=NULL, model, Apos, Spos, give.matrices=FALSE){
+.standardizeParams <- function(x=NULL, model, Apos, Spos, Mpos, give.matrices=FALSE){
   if(is.null(x)){x <- omxGetParameters(model)}
   param <- omxGetParameters(model)
   paramNames <- names(param)
@@ -998,6 +1019,13 @@ logLik.MxModel <- function(object, ...) {
   model_S <- model[[model$expectation$S]] #<--Likewise for S
   S <- list( model_S$values, model_S$result )
   S <- S[[which.max(c( length(S[[1]]), length(S[[2]]) ))]]
+  M <- NULL
+  if(!is.null(Mpos)){
+  	model_M <- model[[model$expectation$M]]
+  	M <- list( model_M$values, model_M$result )
+  	M <- M[[which.max(c( length(M[[1]]), length(M[[2]]) ))]]
+  }
+  else{model_M <- NULL}
   I <- diag(1, nrow(A))
   ImAInv <- solve(I-A)
   SD <- sqrt(diag(ImAInv %*% S %*% t(ImAInv)))
@@ -1006,10 +1034,19 @@ logLik.MxModel <- function(object, ...) {
   InvSD <- diag(InvSD,nrow=length(InvSD))
   Az <- InvSD %*% A %*% SD
   Sz <- InvSD %*% S %*% InvSD
-  sparam <- c(Az[!is.na(Apos)],Sz[!is.na(Spos)])
-  names(sparam) <- c(Apos[!is.na(Apos)],Spos[!is.na(Spos)])
-  if(!give.matrices){return(sparam)}
-  else{return(list(sparam=sparam,Az=Az,Sz=Sz))}
+  if(!is.null(M)){
+  	Mz <- M %*% InvSD
+  	sparam <- c(Az[!is.na(Apos)],Sz[!is.na(Spos)],Mz[!is.na(Mpos)])
+  	names(sparam) <- c(Apos[!is.na(Apos)],Spos[!is.na(Spos)],Mpos[!is.na(Mpos)])
+  	if(!give.matrices){return(sparam)}
+  	else{return(list(sparam=sparam,Az=Az,Sz=Sz,Mz=Mz))}
+  }
+  else{
+  	sparam <- c(Az[!is.na(Apos)],Sz[!is.na(Spos)])
+  	names(sparam) <- c(Apos[!is.na(Apos)],Spos[!is.na(Spos)])
+  	if(!give.matrices){return(sparam)}
+  	else{return(list(sparam=sparam,Az=Az,Sz=Sz))}
+  }
 }
 .mxStandardizeRAMhelper <- function(model,SE=FALSE,ParamsCov,inde.subs.flag=FALSE,ignoreSubmodels=FALSE){
   #Recur the function for the appropriate submodels, if any:
@@ -1028,13 +1065,27 @@ logLik.MxModel <- function(object, ...) {
   model_S <- model[[model$expectation$S]] #<--Likewise for S
   S <- list( model_S$values, model_S$result )
   S <- S[[which.max(c( length(S[[1]]), length(S[[2]]) ))]]
+  M <- NULL
+  if(!is.na(model$expectation$M)){
+  	model_M <- model[[model$expectation$M]]
+  	M <- list( model_M$values, model_M$result )
+  	M <- M[[which.max(c( length(M[[1]]), length(M[[2]]) ))]]
+  }
   #Find positions of nonzero paths:
   Apos <- matrix(NA,nrow=nrow(A),ncol=ncol(A),dimnames=dimnames(A))
   Spos <- matrix(NA,nrow=nrow(S),ncol=ncol(S),dimnames=dimnames(S))
   A_need_pos <- which(A!=0,arr.ind=T)
   S_need_pos <- which(S!=0,arr.ind=T)
   S_need_pos <- subset(S_need_pos, S_need_pos[,1]>=S_need_pos[,2]) #<--Lower tri only
-  numelem <- nrow(A_need_pos)+nrow(S_need_pos)
+  if(!is.null(M)){
+  	Mpos <- matrix(NA,nrow=1,ncol=ncol(M),dimnames=dimnames(M))
+  	M_need_pos <- which(M!=0)
+  }
+  else{
+  	Mpos <- NULL
+  	M_need_pos <- NULL
+  }
+  numelem <- nrow(A_need_pos)+nrow(S_need_pos)+length(M_need_pos)
   #Create output object:
   out <- data.frame(name=vector(mode="character",length=numelem),label=vector(mode="character",length=numelem),
                     matrix=vector(mode="character",length=numelem),
@@ -1074,10 +1125,24 @@ logLik.MxModel <- function(object, ...) {
       j <- j+1
     }
   }
+  if(length(M_need_pos)){
+  	for(i in 1:length(M_need_pos)){
+  		Mpos[1,M_need_pos[i]] <- out$name[j] <- paste(
+  			model@name,".M[1,",M_need_pos[i],"]",sep="")
+  		if(!all.na(model_M$labels)){
+  			out$label[j] <- model_M$labels[1,M_need_pos[i]]
+  		}
+  		out$matrix[j] <- "M"
+  		out$Raw.Value[j] <- M[1,M_need_pos[i]]
+  		out$row[j] <- 1
+  		out$col[j] <- ifelse(length(colnames(M))>0,colnames(M)[M_need_pos[i]],M_need_pos[i])
+  		j <- j+1
+  	}
+  }
   #Get standardized values:
   freeparams <- omxGetParameters(model)
   paramnames <- names(freeparams)
-  zout <- .standardizeParams(x=freeparams,model=model,Apos=Apos,Spos=Spos)
+  zout <- .standardizeParams(x=freeparams,model=model,Apos=Apos,Spos=Spos,Mpos=Mpos)
   #Compute SEs, or assign them 'not requested' values, as the case may be:
   if(SE){ 
   	if(!all(paramnames %in% rownames(ParamsCov))){
@@ -1089,13 +1154,13 @@ logLik.MxModel <- function(object, ...) {
   	}
     #From Mike Hunter's delta method example:
     covParam <- ParamsCov[paramnames,paramnames]#<--submodel will usually not contain all free param.s
-    jacStand <- numDeriv::jacobian(func=.standardizeParams, x=freeparams, model=model, Apos=Apos, Spos=Spos)
+    jacStand <- numDeriv::jacobian(func=.standardizeParams, x=freeparams, model=model, Apos=Apos, Spos=Spos, Mpos=Mpos)
     covSparam <- jacStand %*% covParam %*% t(jacStand)
     dimnames(covSparam) <- list(names(zout),names(zout))
     SEs <- sqrt(diag(covSparam))
     #SEs[diag(covSparam)<.Machine$double.eps] <- 0
   }
-  else{SEs <- rep("not requested",length(zout)); names(SEs) <- names(zout)}
+  else{SEs <- rep("not_requested",length(zout)); names(SEs) <- names(zout)}
   #Add standardized values and SEs to output:
   out$Std.Value <- zout
   out$Std.SE <- SEs
@@ -1107,7 +1172,7 @@ logLik.MxModel <- function(object, ...) {
         out$Raw.SE[i] <- sqrt(covParam[ifelse(is.na(out$label[i]),out$name[i],out$label[i]),
                                        ifelse(is.na(out$label[i]),out$name[i],out$label[i])])
   }}}
-  else{out$Raw.SE <- "not requested"}
+  else{out$Raw.SE <- "not_requested"}
   return(out)
 }
 mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){

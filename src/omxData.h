@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -86,12 +86,11 @@ struct ColumnData {
 	// exactly one of these is non-null
 	double *realData;
 	int    *intData;
-	SEXP levels;       // factors only
+	std::vector<std::string> levels;       // factors only
 };
 
 class omxData {
  private:
-	SEXP rownames;
 	void addDynamicDataSource(omxExpectation *ex);
 	int primaryKey;   // column of primary key
 	int weightCol;
@@ -125,6 +124,8 @@ class omxData {
 	std::vector<ColumnData> rawCols;
 	int numFactor, numNumeric;			// Number of ordinal and continuous columns
 	bool needSort;
+
+	SEXP owner;	// The R object owning data or NULL if we own it.
 
 	std::vector<omxDefinitionVar> defVars;
  public:
@@ -161,6 +162,9 @@ class omxData {
 	}
 	int numRawRows();
 	void prohibitNAs(int col);
+	void reloadFromFile(const std::string &path);
+	void freeInternal();
+	bool isDynamic() { return expectation.size() != 0; };
 };
 
 omxData* omxNewDataFromMxData(SEXP dataObject, const char *name);
@@ -260,5 +264,6 @@ int omxDataNumFactor(omxData *od);                    // Number of factor column
 /* Function wrappers that switch based on inclusion of algebras */
 
 double omxDataDF(omxData *od);
+SEXP storeData(SEXP Rmxd, SEXP Rfile);
 
 #endif /* _OMXDATA_H_ */

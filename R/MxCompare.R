@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -55,48 +55,32 @@ mxCompare <- function(base, comparison, ..., all = FALSE,
 	return(resultsTable)
 }
 
-mxCompareMatrix <- function(models, statistic, ...,
-			    boot=FALSE, replications=400, previousRun=NULL, checkHess=FALSE) {
+mxCompareMatrix <- function(models,
+			    diag=c('minus2LL','ep','df','AIC'),
+			    stat=c('p', 'diffLL','diffdf'), ...,
+			    boot=FALSE, replications=400, previousRun=NULL, checkHess=FALSE,
+			    wholeTable=FALSE) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
-		stop("mxCompareMatrix does not accept values for the '...' argument")
-	}
-	if (is.list(base)) {
-		base <- unlist(base)
-	} else {
-		base <- list(base)
-	}
-	if(!all(sapply(base, is, "MxModel"))) {
-		stop("The 'base' argument must consist of MxModel objects")
+		stop(paste("mxCompareMatrix does not accept values for the '...' argument",
+			omxQuotes(names(garbageArguments))))
 	}
 	
 	if (missing(checkHess)) checkHess <- as.logical(NA)
 	if (missing(boot) && (!missing(replications) || !missing(previousRun))) boot <- TRUE
 
+	diagpick <- match.arg(diag)
+	offdiagpick <- match.arg(stat)
+
 	resultsTable <- iterateNestedModels(models, boot, replications, previousRun, checkHess)
 
-	if (missing(statistic)) stop(paste("Available statistics are:", omxQuotes(colnames(resultsTable))))
-
-	unrecog <- !(statistic %in% c('raw', colnames(resultsTable)))
-	if (any(unrecog)) {
-		stop(paste("Statistic", omxQuotes(statistic[unrecog]), "is not available"))
-	}
-	if (statistic == 'raw') return(resultsTable)
-
-	diagstat <- c('ep','minus2LL','df','AIC')
-	offdiag <- c('diffLL','diffdf','p')
+	if (wholeTable) return(resultsTable)
 
 	modelNames <- sapply(models, function(m) m$name)
 	mat <- matrix(NA, length(models), length(models),
 		      dimnames=list(modelNames, modelNames))
-	offdiagpick <- intersect(statistic, offdiag)
-	if (length(offdiagpick)) {
-		mat[,] <- resultsTable[,offdiagpick[1]]
-	}
-	diagpick <- intersect(statistic, diagstat)
-	if (length(diagpick)) {
-		diag(mat) <- resultsTable[!is.na(resultsTable$ep), diagpick[1]]
-	}
+	mat[,] <- resultsTable[,offdiagpick[1]]
+	diag(mat) <- resultsTable[!is.na(resultsTable$ep), diagpick[1]]
 	if (!is.null(attr(resultsTable, "bootData"))) {
 		attr(mat, "bootData") <- attr(resultsTable, "bootData")
 	}
@@ -759,10 +743,10 @@ mxPowerSearch <- function(trueModel, falseModel, n=NULL, sig.level=0.05, ...,
     curX <- meanSampleSize(trueModel)
   } else {
     origSampleSize <- meanSampleSize(trueModel)
-    par <- omxGetParameters(falseModel, free=FALSE)
+    par <- omxGetParameters(falseModel, free=FALSE, labels=interest)
     if (!(interest %in% names(par))) {
       stop(paste("Cannot find", omxQuotes(interest),
-                 "in falseModel. Please label it and try again"))
+                 "in falseModel. Please label it in both models and try again"))
     }
     nullInterestValue <- par[interest]
     curX <- (coef(trueModel)[interest] - nullInterestValue)/2
@@ -902,6 +886,8 @@ mxPower <- function(trueModel, falseModel, n=NULL, sig.level=0.05, power=0.8, ..
   if (length(garbageArguments) > 0) {
     stop("mxPower does not accept values for the '...' argument")
   }
+  if (length(power) == 1 && is.na(power)) power <- c()
+  if (length(n) == 1 && is.na(n)) n <- c()
   if (length(falseModel) > 1) {
     if (length(n) > 1 || length(power) > 1) {
       stop(paste("You cannot pass more than 1 falseModel at the same time",
@@ -929,13 +915,15 @@ mxPower <- function(trueModel, falseModel, n=NULL, sig.level=0.05, power=0.8, ..
   
   method <- match.arg(method)
   statistic <- match.arg(statistic)
-  
+  detail <- list(method=method, sig.level=sig.level, statistic=statistic)
   if (is.null(power)) {
     if (is.null(n)) stop("To estimate power, it is necessary to fix sample size")
     if (method == 'ncp') {
       got <- mxPowerSearch(trueModel, falseModel, sig.level=sig.level, method=method,
                            grid=n, statistic=statistic)
-      got[,'power']
+      ret <- got[,'power']
+      detail$n <- n
+      detail$power <- ret
     } else {
       result <- data.frame(seed=as.integer(runif(probes, min = -2e9, max=2e9)),
         reject=NA, mseTrue=NA,
@@ -946,6 +934,7 @@ mxPower <- function(trueModel, falseModel, n=NULL, sig.level=0.05, power=0.8, ..
 
       prevProgressLen <- 0L
 
+      detail$probes <- probes
       for (rx in 1:probes) {
         set.seed(result[rx,'seed'])
         info <- paste(rx, "/", probes)
@@ -990,28 +979,52 @@ mxPower <- function(trueModel, falseModel, n=NULL, sig.level=0.05, power=0.8, ..
       if (!silent) imxReportProgress('', prevProgressLen)
       # return detailed results somehow? TODO
       okResult <- result[result$statusTrue %in% OK & result$statusFalse %in% OK,]
-      sum(okResult$reject) / nrow(okResult)
+      ret <- sum(okResult$reject) / nrow(okResult)
+      detail$power <- ret
+      detail$n <- n
     }
-  } else {
-    # length(power) > 0
+  } else { # length(power) > 0
+	  detail$power <- power
+	  detail$probes <- probes
     if (is.null(n)) {
       # search n:power relationship
       result <- mxPowerSearch(trueModel, falseModel, probes=probes, gdFun=gdFun,
-                              method=method, statistic=statistic, OK=OK, checkHess=checkHess)
+	      method=method, statistic=statistic, OK=OK, checkHess=checkHess)
     } else {
       # search parameter:power relationship
       result <- mxPowerSearch(trueModel, falseModel, n=n, probes=probes, gdFun=gdFun,
-                              method=method, statistic=statistic, OK=OK, checkHess=checkHess)
+	      method=method, statistic=statistic, OK=OK, checkHess=checkHess)
+	    detail$parameter <- setdiff(names(coef(trueModel)), names(coef(falseModel)))
+	    detail$n <- n
     }
     model <- attr(result, "model")
     if (is.null(model)) {
-      sapply(power, function(p1) {
+      ret <- sapply(power, function(p1) {
         ind <- min(1 + findInterval(p1, result$power, all.inside = TRUE), nrow(result))
         ceiling(result[ind, 'N'])
       })
     } else {
-      qlogis(power, -coef(model)[1]/coef(model)[2], 1/coef(model)[2])
+      ret <- qlogis(power, -coef(model)[1]/coef(model)[2], 1/coef(model)[2])
+    }
+    if (is.null(n)) {
+	    detail$n <- ret
+    } else {
+	    detail$parameterDiff <- ret
     }
   }
+  if (length(ret) == 1) {
+	  attr(ret, 'detail') <- detail
+	  class(ret) <- 'result.mxPower'
+  }
+  ret
 }
 
+print.result.mxPower <- function(x,...) {
+	detail <- attr(x, 'detail')
+	keys <- sort(names(detail))
+	klen <- max(nchar(keys))
+	for (kx in 1:length(keys)) {
+		cat(sprintf(paste0("%", klen, "s = ",
+			format(detail[[ keys[kx] ]])), keys[kx]), fill=TRUE)
+	}
+}

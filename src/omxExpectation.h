@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -80,6 +80,11 @@ class omxExpectation {					// An Expectation
 	virtual void mutate(const char*, omxMatrix*) {};
 	virtual void invalidateCache() {};
 	virtual void generateData(FitContext *fc, MxRList &out);
+	virtual int numSummaryStats();
+	virtual void asVector1(FitContext *fc, int row, Eigen::Ref<Eigen::VectorXd> out);
+	template <typename T> void asVector(FitContext *fc, int row, Eigen::MatrixBase<T> &out) {
+		asVector1(fc, row, out.derived());
+	}
 
 	void loadFromR();
 	bool loadDefVars(int row);

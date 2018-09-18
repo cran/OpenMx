@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 
 # Step 1: load libraries
 require(OpenMx)
-mxOption(NULL, "mvnRelEps", 1e-4)
 
 #
 # Step 2: set up simulation parameters 
@@ -81,10 +80,16 @@ thresholdModel <- mxModel("thresholdModel",
             mxData(observed=ordinalData, type='raw')
 )
 
-summary(thresholdModelrun <- mxTryHard(thresholdModel))
+thresholdModel <- mxOption(thresholdModel, 'mvnRelEps', .1)
+thresholdModelrun <- mxRun(thresholdModel)
+omxCheckTrue(thresholdModelrun$output$status$code > 3)
+
+thresholdModel <- mxOption(thresholdModel, 'mvnRelEps', 1e-4)
+thresholdModelrun <- mxTryHard(thresholdModel)
+summary(thresholdModelrun)
 omxCheckCloseEnough(thresholdModelrun$output$fit, 3921.706, .02)
 
 #cat(deparse(round(thresholdModelrun$output$standardErrors, 3)))
-prevSE <- c(0.047, 0.049, 0.047, 0.061, 0.053, 0.054, 0.062,  0.053,
-            0.052, 0.061, 0.055, 0.053)
+prevSE <- c(0.048, 0.050, 0.048, 0.087, 0.056, 0.052, 0.077,  0.057,
+            0.077, 0.066, 0.056, 0.054)
 omxCheckCloseEnough(c(thresholdModelrun$output$standardErrors), prevSE, .01)

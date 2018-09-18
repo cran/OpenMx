@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -180,6 +180,9 @@ void MLFitState::compute(int want, FitContext *fc)
 		} catch (const std::exception& e) {
 			fit = NA_REAL;
 			if (fc) fc->recordIterationError("%s: %s", oo->name(), e.what());
+		} catch (...) {
+			fit = NA_REAL;
+			if (fc) fc->recordIterationError("%s: unknown error", oo->name());
 		}
 		oo->matrix->data[0] = Scale * fit;
 	} else if (strEQ(expectation->expType, "MxExpectationNormal") &&
@@ -231,6 +234,9 @@ void MLFitState::compute(int want, FitContext *fc)
 		} catch (const std::exception& e) {
 			init_log_prob = NA_REAL;
 			if (fc) fc->recordIterationError("%s: %s", oo->name(), e.what());
+		} catch (...) {
+			init_log_prob = NA_REAL;
+			if (fc) fc->recordIterationError("%s: unknown error", oo->name());
 		}
 
 		if (want & FF_COMPUTE_FIT) {
@@ -306,11 +312,11 @@ omxFitFunction *MLFitState::initMorph()
 	if (strcmp(expectation->expType, "MxExpectationBA81")==0) {
 		return omxChangeFitType(oo, "imxFitFunctionBA81");
 	}
-
+	
 	if (strEQ(expectation->expType, "MxExpectationGREML")) {
-		return omxChangeFitType(oo, "MxFitFunctionGREML");
+		return omxChangeFitType(oo, "imxFitFunciontGRMFIML");
 	}
-
+	
 	if (strEQ(expectation->expType, "MxExpectationStateSpace")) {
 		return omxChangeFitType(oo, "imxFitFunciontStateSpace");
 	}
@@ -390,6 +396,8 @@ void MLFitState::init()
 
 	auto dc = oo->expectation->getDataColumns();
 	if (dc.size()) {
+		if (dataMat->isDynamic()) Rf_error("%s: dynamic data & column reordering"
+						   " is not implemented yet", name());
 		newObj->copiedData = true;
 		newObj->observedCov = omxCreateCopyOfMatrix(newObj->observedCov, oo->matrix->currentState);
 		newObj->observedMeans = omxCreateCopyOfMatrix(newObj->observedMeans, oo->matrix->currentState);
@@ -428,8 +436,8 @@ void MLFitState::init()
 
 	// add expectation API for derivs TODO
 	if (strEQ(expectation->expType, "MxExpectationNormal") &&
-	    !newObj->expectedCov->algebra &&
-	    (!newObj->expectedMeans || !newObj->expectedMeans->algebra)) {
+	    newObj->expectedCov->isSimple() &&
+	    (!newObj->expectedMeans || newObj->expectedMeans->isSimple())) {
 		oo->gradientAvailable = true;
 		oo->hessianAvailable = true;
 	}

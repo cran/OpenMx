@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -309,9 +309,6 @@ univariateThresholdStatisticsHelper <- function(od, data, nvar, n, ntvar, useMin
 	### univariate thresholds 
 	# prep objects
 	nlevel <- unlist(lapply(od, nlevels))
-	if(nvar > 0){
-		varn <- apply(!is.na(od), 2, sum)
-	}
 	counts <- lapply(od, table)
 	thresh <- matrix(NA, ifelse(nvar > 0, max(nlevel)-1, 0), nvar)
 	threshHess <- list(NULL)

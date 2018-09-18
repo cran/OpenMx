@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,6 +45,12 @@ struct populateLocation {
 	void transpose() { std::swap(destRow, destCol); }
 };
 
+namespace mini {
+	namespace csv {
+		class ifstream;
+	}
+}
+
 class omxMatrix {
 	std::vector< populateLocation > populate;  // For inclusion of values from other matrices
 	// Note: some overlap with FreeVarGroup::cacheDependencies
@@ -52,8 +58,9 @@ class omxMatrix {
 	bool dependsOnDefVarCache;
 	int joinKey;
 	class omxExpectation *joinModel;
+	int shape;
  public:
-	omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1), joinModel(0) {};
+   omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1), joinModel(0), shape(0) {};
 	void setDependsOnParameters() { dependsOnParametersCache = true; };
 	void setDependsOnDefinitionVariables() { dependsOnDefVarCache = true; };
 	bool dependsOnParameters() const { return dependsOnParametersCache; };
@@ -112,6 +119,9 @@ class omxMatrix {
 		return what;
 	}
 	void copyAttr(omxMatrix *src);
+	bool isSimple() { return !algebra && !fitFunction && populate.size()==0; };
+	void loadFromStream(mini::csv::ifstream &st);
+	int size() const { return rows * cols; }
 };
 
 void omxEnsureColumnMajor(omxMatrix *mat);

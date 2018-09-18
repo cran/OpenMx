@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #endif
 
 #define EIGEN_NO_DEBUG 1
-#define EIGEN_DONT_PARALLELIZE
+//#define EIGEN_DONT_PARALLELIZE
 #define  _OpenMx_Compilation_ 1  // work around bug in Eigen 3.2.5
 #define EIGEN_DEFAULT_DENSE_INDEX_TYPE int   // default is 8 but 4 bytes is plenty for us
 

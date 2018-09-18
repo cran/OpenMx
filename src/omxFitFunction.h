@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -104,6 +104,7 @@ omxFitFunction *InitMarkovFF();
 omxFitFunction *omxInitGREMLFitFunction();
 omxFitFunction *InitFellnerFitFunction();
 omxFitFunction *ssMLFitInit();
+omxFitFunction *GRMFIMLFitInit();
 
 void ba81SetFreeVarGroup(omxFitFunction *oo, FreeVarGroup *fvg);
 

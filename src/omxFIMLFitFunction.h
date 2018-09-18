@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@ class omxFIMLFitFunction : public omxFitFunction {
 	bool wantRowLikelihoods;
 	bool returnVector;   // Whether or not to return row-by-row likelihoods
 	bool populateRowDiagnostics; // Whether or not to populated the row-by-row likelihoods back to R
+	omxMatrix* otherRowwiseValues; // row-by-row values also stored and returned for row diagnostics (e.g. Mahalanobis distances and number of observed variables)
 
 	int skippedRows;
 	int origStateId;
@@ -168,6 +169,7 @@ class mvnByRow {
 	omxMatrix *rowLikelihoods;
 	bool returnVector;
 	bool wantRowLikelihoods;
+	omxMatrix *otherRowwiseValues;
 	std::vector<bool> &isOrdinal;
 	int numOrdinal;
 	int numContinuous;
@@ -226,6 +228,7 @@ class mvnByRow {
 		rowLikelihoods = ofiml->rowLikelihoods;
 		returnVector = ofiml->returnVector;
 		wantRowLikelihoods = ofiml->wantRowLikelihoods;
+		otherRowwiseValues = ofiml->otherRowwiseValues;
 		localobj = _localobj;
 		omxSetMatrixElement(localobj->matrix, 0, 0, 0.0);
 		numOrdinal = ofiml->numOrdinal;
@@ -338,7 +341,7 @@ class mvnByRow {
 		return rowMult[row1];
 	}
 
-	void recordRow(double contLogLik, double ordLik)
+	void recordRow(double contLogLik, double ordLik, double maha, double numCont)
 	{
 		if (ordLik == 0.0 || !std::isfinite(contLogLik)) {
 			skipRow();
@@ -349,6 +352,7 @@ class mvnByRow {
 		}
 		if (wantRowLikelihoods) {
 			EigenVectorAdaptor rl(rowLikelihoods);
+			EigenMatrixAdaptor rowVals(otherRowwiseValues);
 			double rowLik = exp(contLogLik) * ordLik;
 			double rowLik1 = rowLik;
 			double prevWeight = 1.0;
@@ -358,6 +362,8 @@ class mvnByRow {
 				prevWeight = curWeight;
 			}
 			rl[sortedRow] = rowLik1;
+			rowVals(sortedRow, 0) = maha;
+			rowVals(sortedRow, 1) = numCont;
 			row += 1;
 			while (row < rows && sameAsPrevious[row]) {
 				sortedRow = indexVector[row];
@@ -367,6 +373,8 @@ class mvnByRow {
 					prevWeight = curWeight;
 				}
 				rl[sortedRow] = rowLik1;
+				rowVals(sortedRow, 0) = maha;
+				rowVals(sortedRow, 1) = numCont;
 				row += 1;
 			}
 		} else {

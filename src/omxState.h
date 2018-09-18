@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -215,6 +215,7 @@ class omxGlobal {
  public:
 	omxManageProtectInsanity *mpi;
 	bool silent;
+	bool ComputePersist;
 	int numThreads;
 	int parallelDiag;
 	int analyticGradients;
@@ -225,6 +226,9 @@ class omxGlobal {
 	double feasibilityTolerance;
 	double optimalityTolerance;
 	int majorIterations;
+	time_t startTime;
+	int maxSeconds;
+	bool timedOut;
 	bool intervals;
 	double gradientTolerance;
 	int dataTypeWarningCount;
@@ -261,6 +265,8 @@ class omxGlobal {
 	std::vector< omxCompute* > computeList;
 	void omxProcessMxComputeEntities(SEXP rObj, omxState *currentState);
 
+	std::vector<const char *> computeLoopContext;
+	std::vector<int> computeLoopIndex;
 	std::vector< std::string > bads;
 
 	// Will need revision if multiple optimizers are running in parallel

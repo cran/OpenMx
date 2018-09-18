@@ -95,4 +95,6 @@ const omxAlgebraTableEntry omxAlgebraSymbolTable[] = {
 {91,	"Column sums",	"colSums",	 1,	omxColSumsCheck,	omxColSums},
 {92,	"Evaluate on grid",	"mxEvaluateOnGrid",	 2,	evaluateOnGridCheck,	evaluateOnGrid},
 {93,	"Element-wise robust log",	"mxRobustLog",	 1,	omxElementRobustLogCheck,	omxElementRobustLog},
+{94,	"Pearson Selection covariance",	"mxPearsonSelCov",	 2,	pearsonSelCovCheck,	pearsonSelCov},
+{95,	"Pearson Selection mean",	"mxPearsonSelMean",	 3,	pearsonSelMeanCheck,	pearsonSelMean},
 };

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ bivSatModel4 <- mxModel("bivSat4",
 	    type="Symm", 
 	    nrow=2, 
 	    ncol=2, 
-	    free=T, 
+	    free = TRUE, 
 	    values=c(1,.5,1), 
 	    name="expCov"
 	),
@@ -63,7 +63,7 @@ bivSatModel4 <- mxModel("bivSat4",
 	    type="Full", 
 	    nrow=1, 
 	    ncol=2, 
-	    free=T, 
+	    free = TRUE, 
 	    values=c(0,0), 
 	    name="expMean"
 	),

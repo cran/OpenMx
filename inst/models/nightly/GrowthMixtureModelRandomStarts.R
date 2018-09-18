@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ for (i in 1: trials){
 		temp2$output$Minus2LogLikelihood,
 		temp2$output$status[[1]],
 		temp2$output$iterations,
-		round(temp2$classProbs$result[1,1], 4),
+		round(temp2$expectation$output$weights[1], 4),
 		temp2$output$wallTime
 		)
 	}
@@ -138,7 +138,7 @@ fitStats <- function(model){
 		model$output$Minus2LogLikelihood,
 		model$output$status[[1]],
 		model$output$iterations,
-		round(model$classProbs$result[1,1], 4)
+		round(model$expectation$output$weights[1], 4)
 		)	
 	return(retval)
 }

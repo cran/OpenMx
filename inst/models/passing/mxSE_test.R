@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ sdrun <- mxRun(sdmod)
 omxCheckCloseEnough(
 	varrun$output$standardErrors[2],
 	mxSE(x=Sigma2,model=sdrun),
-	1e-6
+	5e-6
 )
 
 omxCheckCloseEnough(
@@ -53,5 +53,5 @@ omxCheckCloseEnough(
 	1e-6
 )
 
-omxCheckCloseEnough(mxSE(sigma^2, sdrun), mxSE(sigma2, varrun), 1e-6)
+omxCheckCloseEnough(mxSE(sigma^2, sdrun), mxSE(sigma2, varrun), 5e-6)
 

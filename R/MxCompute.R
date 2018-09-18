@@ -1,5 +1,5 @@
 #
-#   Copyright 2013 The OpenMx Project
+#   Copyright 2013-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -810,6 +810,109 @@ setMethod("displayCompute", signature(Ob="MxComputeNewtonRaphson", indent="integ
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeSimAnnealing",
+	 contains = "BaseCompute",
+	 representation = representation(
+	   fitfunction = "MxCharOrNumber",
+	   verbose = "integer",
+	   plan = "MxCompute",
+	   method = "character",
+	   control = "list",
+	   defaultGradientStepSize = "numeric",
+	   defaultFunctionPrecision = "numeric"))
+
+setMethod("assignId", signature("MxComputeSimAnnealing"),
+	function(.Object, id, defaultFreeSet) {
+		.Object <- callNextMethod()
+		defaultFreeSet <- .Object@freeSet
+		id <- .Object@id
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- assignId(slot(.Object, sl), id, defaultFreeSet)
+			id <- slot(.Object, sl)@id + 1L
+		}
+		.Object@id <- id
+		.Object
+	})
+
+setMethod("getFreeVarGroup", signature("MxComputeSimAnnealing"),
+	function(.Object) {
+		result <- callNextMethod()
+		for (step in c(.Object@plan)) {
+			got <- getFreeVarGroup(step)
+			if (length(got)) result <- append(result, got)
+		}
+		result
+	})
+
+setMethod("qualifyNames", signature("MxComputeSimAnnealing"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('fitfunction')) {
+			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+		}
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- qualifyNames(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeSimAnnealing"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@fitfunction)) {
+			.Object@fitfunction <- imxLocateIndex(flatModel, .Object@fitfunction, .Object)
+		}
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- convertForBackend(slot(.Object, sl), flatModel, model)
+		}
+		.Object
+	})
+
+setMethod("updateFromBackend", signature("MxComputeSimAnnealing"),
+	function(.Object, computes) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- updateFromBackend(slot(.Object, sl), computes)
+		}
+		.Object
+	})
+
+setMethod("initialize", "MxComputeSimAnnealing",
+	function(.Object, freeSet, fit, verbose, plan, method, control,
+		 defaultGradientStepSize, defaultFunctionPrecision) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object@fitfunction <- fit
+		  .Object@verbose <- verbose
+		  .Object@plan <- plan
+		  .Object@method <- method
+		  .Object@control <- control
+		  .Object@defaultGradientStepSize <- defaultGradientStepSize
+		  .Object@defaultFunctionPrecision <- defaultFunctionPrecision
+		  .Object
+	  })
+
+mxComputeSimAnnealing <- function(freeSet=NA_character_, ..., fitfunction='fitfunction',
+			   plan=mxComputeOnce('fitfunction','fit'),
+			   verbose=0L, method=c("tsallis1996", "ingber2012"),
+			   control=list(),
+			   defaultGradientStepSize=imxAutoOptionValue("Gradient step size"),
+			   defaultFunctionPrecision=imxAutoOptionValue("Function precision"))
+{
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeSimAnnealing does not accept values for the '...' argument")
+	}
+
+	method <- match.arg(method)
+	verbose <- as.integer(verbose)
+	new("MxComputeSimAnnealing", freeSet, fitfunction, verbose, plan, method, control,
+		defaultGradientStepSize, defaultFunctionPrecision)
+}
+
+#----------------------------------------------------
+
 setClass(Class = "ComputeSteps",
 	 contains = "BaseCompute",
 	 representation = representation(
@@ -925,17 +1028,19 @@ setMethod("displayCompute", signature(Ob="MxComputeIterate", indent="integer"),
 	  })
 
 #----------------------------------------------------
-setClass(Class = "MxComputeBenchmark",
+setClass(Class = "MxComputeLoop",
 	 contains = "ComputeSteps",
 	 representation = representation(
+		 indices = "integer",
 	   maxIter = "integer",
 	   maxDuration = "numeric"))
 
-setMethod("initialize", "MxComputeBenchmark",
-	  function(.Object, steps, maxIter, freeSet, maxDuration) {
+setMethod("initialize", "MxComputeLoop",
+	  function(.Object, steps, indices, maxIter, freeSet, maxDuration) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@steps <- steps
+		  .Object@indices <- indices
 		  .Object@maxIter <- maxIter
 		  .Object@freeSet <- freeSet
 		  .Object@maxDuration <- maxDuration
@@ -945,28 +1050,36 @@ setMethod("initialize", "MxComputeBenchmark",
 ##' Repeatedly invoke a series of compute objects
 ##'
 ##' @param steps a list of compute objects
-##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param ...  Not used.  Forces remaining arguments to be specified
+##'         by name.
+##' @param i the values to iterate over
 ##' @param maxIter the maximum number of iterations
 ##' @param freeSet Names of matrices containing free variables.
-##' @param maxDuration the maximum amount of time (in seconds) to iterate
-##' @aliases
-##' MxComputeBenchmark-class
-mxComputeBenchmark <- function(steps, ..., maxIter=500L, freeSet=NA_character_,
+##' @param maxDuration the maximum amount of time (in seconds) to
+##'         iterate
+##' @description When \code{i} is given then these values are iterated
+##'         over instead of the sequence 1 to the number of
+##'         iterations.  If \code{i} is not given then \code{maxIter}
+##'         is set to 500 to prevent infinite loops.
+##' @aliases MxComputeLoop-class mxComputeBenchmark
+mxComputeLoop <- function(steps, ..., i=NULL, maxIter=as.integer(NA), freeSet=NA_character_,
 			     maxDuration=as.numeric(NA)) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxComputeBenchmark does not accept values for the '...' argument")
 	}
 
+	if (is.null(i)) maxIter <- 500L
 	maxIter <- as.integer(maxIter)
-	new("MxComputeBenchmark", steps=steps, maxIter=maxIter,
+	new("MxComputeLoop", steps=steps, indices=as.integer(i), maxIter=maxIter,
 	    freeSet, maxDuration)
 }
 
-setMethod("displayCompute", signature(Ob="MxComputeBenchmark", indent="integer"),
+setMethod("displayCompute", signature(Ob="MxComputeLoop", indent="integer"),
 	  function(Ob, indent) {
 		  callNextMethod();
 		  sp <- paste(rep('  ', indent), collapse="")
+		  cat(sp, "indices :", Ob@indices, '\n')
 		  cat(sp, "maxIter :", Ob@maxIter, '\n')
 		  cat(sp, "maxDuration :", Ob@maxDuration, '\n')
 		  for (step in 1:length(Ob@steps)) {
@@ -975,6 +1088,8 @@ setMethod("displayCompute", signature(Ob="MxComputeBenchmark", indent="integer")
 		  }
 		  invisible(Ob)
 	  })
+
+mxComputeBenchmark <- mxComputeLoop
 
 #----------------------------------------------------
 
@@ -1546,6 +1661,59 @@ setMethod("displayCompute", signature(Ob="MxComputeNumericDeriv", indent="intege
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeJacobian",
+	contains = "BaseCompute",
+	representation = representation(
+		of = "MxCharOrNumber",
+		defvar.row = "integer"))
+
+setMethod("initialize", "MxComputeJacobian",
+	  function(.Object, freeSet, of, defvar.row) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object@of <- of
+		  .Object@defvar.row <- defvar.row
+		  .Object
+	  })
+
+setMethod("qualifyNames", signature("MxComputeJacobian"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('of')) {
+			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeJacobian"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (any(!is.integer(.Object@of))) {
+			expNum <- match(.Object@of, names(flatModel@expectations))
+			algNum <- match(.Object@of, names(flatModel@algebras))
+			if (any(is.na(expNum)) && any(is.na(algNum))) {
+				stop(paste("Can only apply MxComputeJacobian to MxAlgebra *or* MxExpectation not",
+					   deparse(.Object@of)))
+			}
+			if (!any(is.na(expNum))) {
+					# Usually negative numbers indicate matrices; not here
+				.Object@of <- - expNum
+			} else {
+				.Object@of <- algNum - 1L
+			}
+		}
+		.Object
+	})
+
+mxComputeJacobian <-
+	function(freeSet=NA_character_, ..., of="expectation", defvar.row=1L)
+{
+	new("MxComputeJacobian", freeSet, of, as.integer(defvar.row))
+}
+
+#----------------------------------------------------
+
 setClass(Class = "MxComputeStandardError",
 	 contains = "BaseCompute")
 
@@ -1836,6 +2004,168 @@ setMethod("convertForBackend", signature("MxComputeGenerateData"),
 
 mxComputeGenerateData <- function(expectation='expectation') {
 	new("MxComputeGenerateData", expectation)
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeLoadData",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 dest = "MxCharOrNumber",
+		 path = "character",
+		 originalDataIsIndexOne = "logical"
+	 ))
+
+setMethod("initialize", "MxComputeLoadData",
+	  function(.Object, dest, path, originalDataIsIndexOne) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@dest <- dest
+		  .Object@path <- path
+		  .Object@originalDataIsIndexOne <- originalDataIsIndexOne
+		  .Object
+	  })
+
+setMethod("convertForBackend", signature("MxComputeLoadData"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@dest)) {
+			full <- grepl('.', .Object@dest, fixed=TRUE)
+			for (dx in 1:length(.Object@dest)) {
+				if (full[dx]) next
+				.Object@dest[dx] <- paste0(.Object@dest[dx], '.data')
+			}
+			.Object@dest <- imxLocateIndex(flatModel, .Object@dest, .Object)
+		}
+		.Object
+	})
+
+mxComputeLoadData <- function(dest, path, ..., originalDataIsIndexOne=FALSE) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeLoadData does not accept values for the '...' argument")
+	}
+	new("MxComputeLoadData", dest, path, originalDataIsIndexOne)
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeLoadMatrix",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 dest = "MxCharOrNumber",
+		 path = "character",
+		 originalDataIsIndexOne = "logical",
+		 row.names = "logical",
+		 col.names = "logical"
+	 ))
+
+setMethod("initialize", "MxComputeLoadMatrix",
+	  function(.Object, dest, path, originalDataIsIndexOne, row.names, col.names) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@dest <- dest
+		  .Object@path <- path
+		  .Object@originalDataIsIndexOne <- originalDataIsIndexOne
+		  .Object@row.names <- row.names
+		  .Object@col.names <- col.names
+		  .Object
+	  })
+
+setMethod("qualifyNames", signature("MxComputeLoadMatrix"), 
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod();
+		.Object@dest <- imxConvertIdentifier(.Object@dest, modelname, namespace)
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeLoadMatrix"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (any(is.character(.Object@dest))) {
+			.Object@dest <- sapply(.Object@dest,
+				function(dd) imxLocateIndex(flatModel, dd, .Object))
+		}
+		.Object
+	})
+
+mxComputeLoadMatrix <- function(dest, path, ..., originalDataIsIndexOne=FALSE,
+				row.names=FALSE, col.names=FALSE) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeLoadMatrix does not accept values for the '...' argument")
+	}
+	new("MxComputeLoadMatrix", dest, path, originalDataIsIndexOne,
+		as.logical(row.names), as.logical(col.names))
+}
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputeCheckpoint",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 what = "MxCharOrNumber",
+		 toReturn = "logical",
+		 path = "MxOptionalChar",
+		 append = "logical",
+		 header = "logical",
+		 log = "MxListOrNull",
+		 parameters = "logical",
+		 loopIndices = "logical",
+		 fit = "logical",
+		 counters = "logical",
+		 status = "logical"
+	 ))
+
+setMethod("initialize", "MxComputeCheckpoint",
+	  function(.Object, what, path, append, header, toReturn, parameters, loopIndices, fit, counters, status) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@what <- what
+		  .Object@path <- path
+		  .Object@append <- append
+		  .Object@header <- header
+		  .Object@toReturn <- toReturn
+		  .Object@parameters <- parameters
+		  .Object@loopIndices <- loopIndices
+		  .Object@fit <- fit
+		  .Object@counters <- counters
+		  .Object@status <- status
+		  .Object
+	  })
+
+setMethod("qualifyNames", signature("MxComputeCheckpoint"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('what')) {
+			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputeCheckpoint"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@what)) {
+			.Object@what <- imxLocateIndex(flatModel, .Object@what, .Object)
+		}
+		.Object
+	})
+
+mxComputeCheckpoint <- function(what=NULL, ..., path=NULL, append=FALSE, header=TRUE, toReturn=FALSE,
+				parameters=TRUE, loopIndices=TRUE, fit=TRUE, counters=TRUE, status=TRUE) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeCheckpoint does not accept values for the '...' argument")
+	}
+	what <- as.character(what)
+	path <- as.character(path)
+	new("MxComputeCheckpoint", what, path, as.logical(append), as.logical(header), as.logical(toReturn),
+		as.logical(parameters), as.logical(loopIndices), as.logical(fit), as.logical(counters),
+		as.logical(status))
 }
 
 #----------------------------------------------------

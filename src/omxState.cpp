@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -216,7 +216,11 @@ omxGlobal::omxGlobal()
 {
 	mpi = 0;
 	silent = true;
-	lastProgressReport = time(0);
+	ComputePersist = false;
+	startTime = time(0);
+	maxSeconds = 0;
+	timedOut = false;
+	lastProgressReport = startTime;
 	previousReportLength = 0;
 	previousReportFit = 0;
 	previousComputeCount = 0;
@@ -427,10 +431,17 @@ void omxState::invalidateCache()
 	for(size_t ex = 0; ex < expectationList.size(); ex++) {
 		expectationList[ex]->invalidateCache();
 	}
+	for (int ax=0; ax < (int) matrixList.size(); ++ax) {
+		omxMatrix *matrix = matrixList[ax];
+		omxMarkDirty(matrix);
+	}
 	for (int ax=0; ax < (int) algebraList.size(); ++ax) {
 		omxMatrix *matrix = algebraList[ax];
-		if (!matrix->fitFunction) continue;
-		matrix->fitFunction->invalidateCache();
+		if (!matrix->fitFunction) {
+			omxMarkDirty(matrix);
+		} else {
+			matrix->fitFunction->invalidateCache();
+		}
 	}
 }
 
@@ -622,6 +633,11 @@ void omxGlobal::reportProgress(const char *context, FitContext *fc)
 	R_CheckUserInterrupt();
 
 	time_t now = time(0);
+	if (Global->maxSeconds > 0 && now > Global->startTime + Global->maxSeconds && !Global->timedOut) {
+		Global->timedOut = true;
+		Rf_warning("Time limit of %d minutes %d seconds exceeded",
+			   Global->maxSeconds/60, Global->maxSeconds % 60);
+	}
 	if (silent || now - lastProgressReport < 1 || fc->getGlobalComputeCount() == previousComputeCount) return;
 
 	lastProgressReport = now;

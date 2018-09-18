@@ -4,22 +4,34 @@
 \alias{mxSE}
 \title{Compute standard errors in OpenMx}
 \usage{
-mxSE(x, model, details = FALSE, cov, ...)
+mxSE(x, model, details = FALSE, cov, forceName = FALSE, silent = FALSE,
+  ..., defvar.row = 1L)
 }
 \arguments{
 \item{x}{the parameter to get SEs on (reference or expression)}
 
 \item{model}{the \code{\link{mxModel}} to use.}
 
-\item{details}{logical. Whether to provide further details, e.g. the full sampling covariance matrix of x.}
+\item{details}{logical. Whether to provide further details, e.g. the full
+sampling covariance matrix of x.}
 
-\item{cov}{optional matrix of covariances among the free parameters. If missing, the inverse Hessian from the fitted model is used.}
+\item{cov}{optional matrix of covariances among the free parameters. If 
+missing, the inverse Hessian from the fitted model is used.}
+
+\item{forceName}{logical; defaults to \code{FALSE}.  Set to \code{TRUE}
+if \code{x} is an R symbol that refers to a character string.}
+
+\item{silent}{logical; defaults to \code{FALSE}.  If \code{TRUE},
+message-printing is suppressed.}
 
 \item{...}{further named arguments passed to \code{\link{mxEval}}}
+
+\item{defvar.row}{which row to load for any definition variables}
 }
 \value{
 SE value(s) returned as a matrix when \code{details} is FALSE.
-When \code{details} is TRUE, a list of the SE value(s) and the full sampling covariance matrix.
+When \code{details} is TRUE, a list of the SE value(s) and the full 
+sampling covariance matrix.
 }
 \description{
 This function allows you to obtain standard errors for arbitrary
@@ -33,7 +45,9 @@ sampling covariance matrix of \code{x} is also returned as part of a list.
 The square root of the diagonals of this sampling covariance matrix are
 the standard errors.
 
-When supplying the \code{cov} argument, take care that the free parameter covariance matrix is given, not the information matrix.  These two are inverses of one another.
+When supplying the \code{cov} argument, take care that the free parameter
+covariance matrix is given, not the information matrix.  These 
+two are inverses of one another.
 }
 \examples{
 library(OpenMx)

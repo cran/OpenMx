@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013 The OpenMx Project
+ *  Copyright 2013-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -319,10 +319,7 @@ void ComputeNR::computeImpl(FitContext *fc)
 	// complain if there are non-linear constraints TODO
 
 	size_t numParam = varGroup->vars.size();
-	if (numParam <= 0) {
-		Rf_error("Model has no free parameters");
-		return;
-	}
+	if (numParam <= 0) { complainNoFreeParam(); return; }
 
 	fc->setInform(INFORM_UNINITIALIZED);
 
@@ -385,7 +382,7 @@ void ComputeNR::computeImpl(FitContext *fc)
 
 		fc->copyParamToModel();
 
-		if (converged || iter >= maxIter || isErrorRaised()) break;
+		if (converged || iter >= maxIter || isErrorRaised() || Global->timedOut) break;
 	}
 
 	if (converged) {

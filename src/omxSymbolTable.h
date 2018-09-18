@@ -105,5 +105,7 @@ void omxRowSums(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxColSums(omxMatrix** args, int numArgs, omxMatrix* result);
 void evaluateOnGrid(omxMatrix** args, int numArgs, omxMatrix* result);
 void omxElementRobustLog(omxMatrix** args, int numArgs, omxMatrix* result);
+void pearsonSelCov(omxMatrix** args, int numArgs, omxMatrix* result);
+void pearsonSelMean(omxMatrix** args, int numArgs, omxMatrix* result);
 extern const omxAlgebraTableEntry omxAlgebraSymbolTable[];
 #endif

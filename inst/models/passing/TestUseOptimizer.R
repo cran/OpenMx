@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -63,6 +63,9 @@ fixedModel <- omxSetParameters(fixedModel, names(params), free = FALSE, name = '
 omxCheckEquals(model$name, "model")
 omxCheckEquals(fixedModel$name, "modelFixed")
 fixedModelOut <- mxRun(fixedModel)
+
+omxCheckError(mxRun(mxModel(fixedModel, mxComputeGradientDescent())),
+	"The job for model 'modelFixed' exited abnormally with the error message: MxComputeGradientDescent: model has no free parameters; You may want to reset your model's compute plan with model$compute <- mxComputeDefault() and try again")
 
 modelUnfitted <- mxRun(model, useOptimizer=FALSE)
 omxCheckCloseEnough(mxEval(objective, fixedModelOut), mxEval(objective, modelUnfitted), 0.0001)

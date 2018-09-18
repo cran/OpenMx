@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ univSatModel2 <- mxModel("univSat2",
     mxPath(
         from=c("X"), 
         arrows=2, 
-        free=T, 
+        free = TRUE, 
         values=1, 
         lbound=.01, 
         labels="vX"
@@ -59,7 +59,7 @@ univSatModel2 <- mxModel("univSat2",
     mxPath(
     	from=c("one"),
     	to=c("X"),
-    	free=T,
+    	free = TRUE,
     	values=0,
     	labels="mX"
     ),

@@ -75,21 +75,24 @@ setMethod("genericGetExpected", signature("MxExpectationMixture"),
 				weights <- exp(weights)
 			} else if (.Object@scale == 'sum') {
 				#OK
+			} else if(.Object@scale == 'none') {
+				#OK
 			} else { stop(.Object@scale) }
-			weights <- weights / rowSums(weights)
+			if(.Object@scale != 'none'){
+				weights <- weights / rowSums(weights)
+			}
 			ret[['weights']] <- weights
 		}
 		ret
 	})
 
 setMethod("genericGenerateData", signature("MxExpectationMixture"),
-	function(.Object, model, nrows) {
-		origData <- NULL
-		if (!is.null(model$data) && model$data$type == 'raw') origData <- model$data$observed
+	function(.Object, model, nrows, subname) {
+		origData <- findDataForSubmodel(model, subname)
 
 		cdata <- list()
 		for (c1 in .Object@components) {
-			cdata[[c1]] <- mxGenerateData(model[[c1]], returnModel=FALSE, nrows=nrows, use.miss=FALSE)
+			cdata[[c1]] <- mxGenerateData(model, returnModel=FALSE, nrows=nrows, use.miss=FALSE, subname=c1)
 		}
 		data <- cdata[[1]]
 
@@ -99,7 +102,13 @@ setMethod("genericGenerateData", signature("MxExpectationMixture"),
 		# it that way because the API is not really set up for
 		# generating data 1 row at a time.
 		cpick <- NULL
-		if(imxHasDefinitionVariable(model)){
+		doDefVar <- imxHasDefinitionVariable(model)
+		if(doDefVar){
+			if (origData$type != 'raw') {
+				stop(paste("Definition variable(s) found, but original data is type",
+					omxQuotes(origData$type)))
+			}
+			origData <- origData$observed
 			if(nrows != nrow(origData)){
 				stop("Definition variable(s) found, but the number of rows in the data do not match the number of rows requested for data generation.")
 			}
@@ -115,7 +124,7 @@ setMethod("genericGenerateData", signature("MxExpectationMixture"),
 		if (length(.Object@components) > 1) for (cx in 2:length(.Object@components)) {
 			data[cpick==cx,] <- cdata[[cx]][cpick == cx,]
 		}
-		if(imxHasDefinitionVariable(model)){
+		if(doDefVar){
 			for (dcol in setdiff(colnames(origData), colnames(data))) {
 				data[[dcol]] <- origData[[dcol]]
 			}
@@ -124,7 +133,7 @@ setMethod("genericGenerateData", signature("MxExpectationMixture"),
 	})
 
 mxExpectationMixture <- function(components, weights="weights",
-				      ..., verbose=0L, scale=c('softmax','sum')) {
+				      ..., verbose=0L, scale=c('softmax', 'sum', 'none')) {
 	if (length(list(...)) > 0) {
 		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
 	}

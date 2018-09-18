@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 The OpenMx Project
+%   Copyright 2007-2018 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@
 
 \usage{
 omxGetParameters(model, indep = FALSE, free = c(TRUE, FALSE, NA),
-    fetch = c('values', 'free', 'lbound', 'ubound', 'all'))
+    fetch = c('values', 'free', 'lbound', 'ubound', 'all'),
+    labels = c())
 }
 
 \arguments{
@@ -32,10 +33,23 @@ omxGetParameters(model, indep = FALSE, free = c(TRUE, FALSE, NA),
    \item{indep}{fetch parameters from independent submodels.}
    \item{free}{fetch either free parameters (TRUE), or fixed parameters or both types. Default value is TRUE.}
    \item{fetch}{which attribute of the parameters to fetch. Default choice is \sQuote{values}.}
-}
+   \item{labels}{additional labels to fetch}
+ }
 
 \details{
-  The argument \sQuote{free} dictates whether to return only free parameters or only fixed parameters or both free and fixed parameters. The function can return unlabelled free parameters (parameters with a label of NA). These anonymous free parameters will be identified as \sQuote{modelname.matrixname[row,col]}.  It will not return fixed parameters that have a label of NA. No distinction is made between ordinary labels, definition variables, and square bracket constraints. The function will return either a vector of parameter values, or free/fixed designations, or lower bounds, or upper bounds, depending on the \sQuote{fetch} argument. Using fetch with \sQuote{all} returns a data frame that is populated with all of the attributes.
+  The argument \sQuote{free} dictates whether to return only free
+  parameters or only fixed parameters or both free and fixed
+  parameters. The function can return unlabelled free parameters
+  (parameters with a label of NA). These anonymous free parameters will
+  be identified as \sQuote{modelname.matrixname[row,col]}.  It will not
+  return fixed parameters that have a label of NA.
+
+  If provided, the argument \sQuote{labels} takes precedent over the
+  selection criteria specified by \sQuote{free}. Any labels mentioned in
+  \sQuote{labels}, including those of the form
+  \sQuote{modelname.matrixname[row,col]}, will be returned.
+
+  No distinction is made between ordinary labels, definition variables, and square bracket constraints. The function will return either a vector of parameter values, or free/fixed designations, or lower bounds, or upper bounds, depending on the \sQuote{fetch} argument. Using fetch with \sQuote{all} returns a data frame that is populated with all of the attributes.
 }
 
 \seealso{
@@ -71,10 +85,10 @@ A$free
 # [1,]  TRUE TRUE
 # [2,] FALSE TRUE
 
-A$labels
-#      [,1]  [,2] 
-# [1,] "A11" "A12"
-# [2,] "A21" NA   
+A$values
+#      [,1] [,2]
+# [1,]    1    2
+# [2,]    3    4
 
 # Example using un-labelled parameters
 

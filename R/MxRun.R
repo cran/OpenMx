@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -246,6 +246,11 @@ runHelper <- function(model, frontendStart,
 		}
 		model@output$chi <- wlsChi$Chi
 		model@output$chiDoF <- wlsChi$ChiDoF
+		model@output$chiM <- wlsChi$ChiM
+		model@output$chiMV <- wlsChi$ChiMV
+		model@output$chiMadjust <- wlsChi$mAdjust
+		model@output$chiMVadjust <- wlsChi$mvAdjust
+		model@output$chiDoFstar <- wlsChi$dstar
 	}
 	if (is.na(model@output$status$code) ||
 	    (!is.na(model@output$status$code) && model@output$status$code < 5)) {
@@ -257,7 +262,7 @@ runHelper <- function(model, frontendStart,
 	mroe <- model@output[['maxRelativeOrdinalError']]
 	if (!is.null(mroe) && mroe > options[["mvnRelEps"]]) {
 		warning(paste("model$output[['maxRelativeOrdinalError']] is larger than mvnRelEps (",
-			      options[["mvnRelEps"]],").\n",
+			      options[["mvnRelEps"]],") at the optimum.\n",
 			      "Standardized ordinal thresholds are too far from zero or",
 			      "you have too many ordinal variables with nonzero covariance.\n",
 			      "Increase the maximum number of integration points or reduce mvnRelEps."))

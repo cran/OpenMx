@@ -23,7 +23,9 @@ exportPattern("^imx.+")
 
 # matrix algebra functions exported by the library
 export(tr, "%&%", "%^%", rvectorize, cvectorize, vech, vechs, diag2vec, vec2diag, eigenvec, eigenval, ieigenvec, 
-			 ieigenval, vech2full, vechs2full, logm, expm, p2z, logp2z, lgamma1p, as.statusCode)
+	ieigenval, vech2full, vechs2full, logm, expm, p2z, logp2z, lgamma1p, as.statusCode)
+
+export(write.cbor)  # maybe should be S3?
 
 # export S4 classes in the OpenMx library
 exportClassPattern("^.+Matrix")
@@ -36,6 +38,7 @@ exportMethods(nrow, ncol, length, names, dimnames, show, print)
 # export S3 methods in the OpenMx library
 S3method(print, summary.mxmodel)
 S3method(print, result.mxCompareMatrix)
+S3method(print, result.mxPower)
 S3method(logLik, MxModel)
 S3method(coef, MxModel)
 S3method(summary, MxModel)

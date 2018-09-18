@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -119,11 +119,11 @@ summary(growthCurveFit)
 coef(growthCurveFit)
 
 
-omxCheckCloseEnough(growthCurveFit$output$estimate[["meani"]], 9.930, 0.01)
-omxCheckCloseEnough(growthCurveFit$output$estimate[["means"]], 1.813, 0.01)
-omxCheckCloseEnough(growthCurveFit$output$estimate[["vari"]], 3.886, 0.01)
-omxCheckCloseEnough(growthCurveFit$output$estimate[["vars"]], 0.258, 0.01)
-omxCheckCloseEnough(growthCurveFit$output$estimate[["cov"]], 0.460, 0.01)
-omxCheckCloseEnough(growthCurveFit$output$estimate[["residual"]], 2.316, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["meani"]], 9.930, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["means"]], 1.813, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["vari"]], 3.886, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["vars"]], 0.258, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["cov"]], 0.460, 0.01)
+omxCheckCloseEnough(coef(growthCurveFit)[["residual"]], 2.316, 0.01)
 # Compare OpenMx results to Mx results 
 # -----------------------------------------------------------------------------

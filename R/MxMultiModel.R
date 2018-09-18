@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 The OpenMx Project
+#   Copyright 2007-2018 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -85,6 +85,18 @@ imxFreezeModel <- function(model) {
 	model@intervals <- list()
 	model@submodels <- lapply(model@submodels, imxFreezeModel)
 	return(model)
+}
+
+findDataForSubmodel <- function(model, subname, defaultData=NULL) {
+	if (!is.null(model$data)) defaultData <- model$data
+	if (model$name == subname) {
+		return(defaultData)
+	}
+	if (length(model@submodels) > 0) for (mx in 1:length(model@submodels)) {
+		got <- findDataForSubmodel(model@submodels[[mx]], subname, defaultData)
+		if (!is.null(got)) return(got)
+	}
+	c()
 }
 
 ##' Remove heirarchical structure from model

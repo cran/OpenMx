@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -366,7 +366,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	}
 
 	numParams = int(fc->numParam);
-	if (numParams <= 0) Rf_error("%s: model has no free parameters", name);
+	if (numParams <= 0) { complainNoFreeParam(); return; }
 
 	optima.resize(numParams);
 	memcpy(optima.data(), fc->est, sizeof(double) * numParams);
@@ -383,7 +383,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	int numChildren = 0;
 	if (parallel && !fc->openmpUser) numChildren = fc->childList.size();
 
-	if (!fc->haveReferenceFit(fitMat)) return;
+	if (!fc->haveReferenceFit(fitMat) || Global->timedOut) return;
 
 	minimum = fc->fit;
 

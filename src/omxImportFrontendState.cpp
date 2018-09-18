@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 The OpenMx Project
+ *  Copyright 2007-2018 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -176,6 +176,9 @@ void omxGlobal::omxProcessMxComputeEntities(SEXP rObj, omxState *currentState)
 	omxCompute *compute = omxNewCompute(currentState, CHAR(s4class));
 	compute->initFromFrontend(currentState, rObj);
 	computeList.push_back(compute);
+
+	if (Global->computeLoopContext.size())
+		Rf_error("computeLoopContext imbalance in initFromFrontend");
 }
 
 // This is called at initialization and when we copy

@@ -3,13 +3,17 @@
 \name{mxComputeStandardError}
 \alias{mxComputeStandardError}
 \alias{MxComputeStandardError-class}
-\title{Compute standard errors given the Hessian or inverse Hessian}
+\title{Compute standard errors}
 \usage{
-mxComputeStandardError(freeSet = NA_character_)
+mxComputeStandardError(freeSet = NA_character_, fitfunction = "fitfunction")
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}
+
+\item{fitfunction}{name of the fitfunction (defaults to 'fitfunction')}
 }
 \description{
-The fit is assumed to be in deviance units (-2 log likelihood).
+When the fit is in -2 log likelihood units, the SEs are derived
+from the diagonal of the Hessian or inverse Hessian. The Hessian
+(in some form) must already be available.
 }

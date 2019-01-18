@@ -3,7 +3,7 @@
 \name{imxConDecMatrixSlots}
 \alias{imxConDecMatrixSlots}
 \alias{imxConDecMatrixSlots,MxMatrix-method}
-\title{Condense/decondense slots of an MxMatrix}
+\title{Condense/de-condense slots of an MxMatrix}
 \usage{
 imxConDecMatrixSlots(object)
 }

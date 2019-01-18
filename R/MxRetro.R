@@ -1,4 +1,4 @@
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 ##' 
 ##' @details
 ##' If you're a nostalgic old sod and you miss the warm, fuzzy
-##' feelings you got from reading one of Mike Neale's pattented error messages,
+##' feelings you got from reading one of Mike Neale's patented error messages,
 ##' then this function is here to save you from the depths of dire depression.
 ##' All credit for this function is due to Sarah Medland, but of course the wisdom
 ##' is from Mike Neale.

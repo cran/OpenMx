@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -85,13 +85,13 @@ For raw data (to save computational time), the reference models needed to comput
 
 The \code{refModels}, \code{SaturatedLikelihood}, \code{SaturatedDoF}, \code{IndependenceLikelihood}, and \code{IndependenceDoF} arguments can be used to obtain these additional fit statistics.   An easy way to make reference models for most cases is provided by the \link{mxRefModels} function (see the example given in \link{mxRefModels}).
 
-When the \code{SaturatedLikelihood} or \code{IndependenceLikelihood} arguments are used, OpenMx attempts to calculate the appropriate degrees of freedom.  However, depending on the model, it may sometimes be necessary for the user to also explicity provide the corresponding \code{SaturatedDoF} and/or \code{IndependenceDoF}.  Again, for the vast majority of cases, the \link{mxRefModels} function handles these situations effectively and conveniently.
+When the \code{SaturatedLikelihood} or \code{IndependenceLikelihood} arguments are used, OpenMx attempts to calculate the appropriate degrees of freedom.  However, depending on the model, it may sometimes be necessary for the user to also explicitly provide the corresponding \code{SaturatedDoF} and/or \code{IndependenceDoF}.  Again, for the vast majority of cases, the \link{mxRefModels} function handles these situations effectively and conveniently.
 
 \strong{Notes on fit statistics}
 
 With regard to RMSEA, it is important to note that OpenMx does not currently make a multigroup adjustment that some other structural equation modeling programs make.  In particular, we do not multiply the single-group RMSEA by the square root of the number of groups as suggested by Steiger (1998).  The RMSEA we use is based on the model likelihood (and degrees of freedom) as compared to the saturated model likelihood (and degrees of freedom), and we do not feel the adjustment is appropriate in this case.
 
-OpenMx does not recommend (and does not compute) some fit indices including GFI, AGFI, NFI, and SRMR.  The Goodness of Fit Index (GFI) and Adjusted Goodness of Fit Index (AGFI) are not recommended because they are strongly influeced by sample size and have rather high Type I error rates (Sharma, Mukherjee, Kumar, & Dillon, 2005).  The Normed Fit Index (NFI) has no penalty for model complexity.  That is, adding more parameters to a model always improves the NFI, regardless of how useful those parameters are.  Because the Non-Normed Fit Index (NNFI), also known as the Tucker-Lewis Index (TLI), does adjust for model complexity it is used instead.  Lastly, the Standardized Root Mean Square Residual (SRMR) is not reported because it (1) only applies to covariance models, having no direct extension to missing data, (2) has no penalty for model complexity, similar to the NFI, and (3) is positively biased (Hu & Bentler, 1999).
+OpenMx does not recommend (and does not compute) some fit indices including GFI, AGFI, NFI, and SRMR.  The Goodness of Fit Index (GFI) and Adjusted Goodness of Fit Index (AGFI) are not recommended because they are strongly influenced by sample size and have rather high Type I error rates (Sharma, Mukherjee, Kumar, & Dillon, 2005).  The Normed Fit Index (NFI) has no penalty for model complexity.  That is, adding more parameters to a model always improves the NFI, regardless of how useful those parameters are.  Because the Non-Normed Fit Index (NNFI), also known as the Tucker-Lewis Index (TLI), does adjust for model complexity it is used instead.  Lastly, the Standardized Root Mean Square Residual (SRMR) is not reported because it (1) only applies to covariance models, having no direct extension to missing data, (2) has no penalty for model complexity, similar to the NFI, and (3) is positively biased (Hu & Bentler, 1999).
 
 
 \strong{verbose}

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include "unsupported/Eigen/MatrixFunctions"
 #include "omxState.h"
 #include <limits>
+#include <Eigen/SVD>
 #include "Compute.h"
 #include "minicsv.h"
 #include "EnableWarnings.h"
@@ -221,6 +222,9 @@ void omxFreeMatrix(omxMatrix *om) {
 		delete om->fitFunction;
 		om->fitFunction = NULL;
 	}
+
+	if (om->freeColnames) for (auto cn : om->colnames) free((void*)cn);
+	if (om->freeRownames) for (auto rn : om->rownames) free((void*)rn);
 	
 	if (!om->hasMatrixNumber) delete om;
 }
@@ -468,34 +472,13 @@ void omxMatrix::loadDimnames(SEXP dimnames)
 		Rf_error("Attempt to load dimnames more than once for %s", name());
 	}
 
-	SEXP names;
 	if (Rf_length(dimnames) >= 1) {
-		ScopedProtect p1(names, VECTOR_ELT(dimnames, 0));
-		if (!Rf_isNull(names) && !Rf_isString(names)) {
-			Rf_warning("rownames for '%s' is of "
-				   "type '%s' instead of a string vector (ignored)",
-				   name(), Rf_type2char(TYPEOF(names)));
-		} else {
-			int nlen = Rf_length(names);
-			rownames.resize(nlen);
-			for (int nx=0; nx < nlen; ++nx) {
-				rownames[nx] = CHAR(STRING_ELT(names, nx));
-			}
-		}
+		ProtectedSEXP names(VECTOR_ELT(dimnames, 0));
+		loadCharVecFromR(name(), names, rownames);
 	}
 	if (Rf_length(dimnames) >= 2) {
-		ScopedProtect p1(names, VECTOR_ELT(dimnames, 1));
-		if (!Rf_isNull(names) && !Rf_isString(names)) {
-			Rf_warning("colnames for '%s' is of "
-				   "type '%s' instead of a string vector (ignored)",
-				   name(), Rf_type2char(TYPEOF(names)));
-		} else {
-			int nlen = Rf_length(names);
-			colnames.resize(nlen);
-			for (int nx=0; nx < nlen; ++nx) {
-				colnames[nx] = CHAR(STRING_ELT(names, nx));
-			}
-		}
+		ProtectedSEXP names(VECTOR_ELT(dimnames, 1));
+		loadCharVecFromR(name(), names, colnames);
 	}
 
 	if (OMX_DEBUG) {
@@ -527,7 +510,7 @@ void omxMatrix::omxProcessMatrixPopulationList(SEXP matStruct)
 
 	if(OMX_DEBUG) { mxLog("Processing Population List: %d elements.", numPopLocs); }
 
-	unshareMemroyWithR();
+	unshareMemoryWithR();
 
 	populate.resize(numPopLocs);
 
@@ -544,7 +527,14 @@ void omxMatrix::omxProcessMatrixPopulationList(SEXP matStruct)
 	}
 }
 
-void omxMatrix::unshareMemroyWithR()
+void omxMatrix::addPopulate(omxMatrix *from, int srcRow, int srcCol, int destRow, int destCol)
+{
+	if (!from->hasMatrixNumber) Rf_error("omxMatrix::addPopulate %s must have matrix number",
+					     from->name());
+	populate.emplace_back(from->matrixNumber, srcRow, srcCol, destRow, destCol);
+}
+
+void omxMatrix::unshareMemoryWithR()
 {
 	if (!owner) return;
 
@@ -1101,3 +1091,47 @@ void omxMatrix::loadFromStream(mini::csv::ifstream &st)
 		break;
 	}
 }
+
+void MoorePenroseInverse(Eigen::Ref<Eigen::MatrixXd> mat)
+{
+	Eigen::BDCSVD<Eigen::MatrixXd> svd(mat, Eigen::ComputeFullV | Eigen::ComputeFullU);
+	Eigen::VectorXd sv = svd.singularValues();
+	for (int v1=0; v1 < sv.size(); ++v1) {
+		if (sv[v1] > 1e-6) sv[v1] = 1.0/sv[v1];
+		else sv[v1] = 0;
+	}
+	mat.derived() = svd.matrixV() * sv.asDiagonal() * svd.matrixU().transpose();
+}
+
+SEXP omxMatrix::asR()
+{
+	int m = rows, n = cols;
+	ProtectedSEXP ans(Rcpp::wrap(data, data + m * n));
+	ProtectedSEXP dd(Rf_allocVector(INTSXP, 2));
+	int *d = INTEGER(dd);
+	d[0] = m;
+	d[1] = n;
+	Rf_setAttrib(ans, R_DimSymbol, dd);
+	bool validColnames = int(colnames.size()) == cols;
+	bool validRownames = int(rownames.size()) == rows;
+	if (validRownames || validColnames) {
+		ProtectedSEXP dimnames(Rf_allocVector(VECSXP, 2));
+		if (validRownames) {
+			ProtectedSEXP names(Rf_allocVector(STRSXP, rows));
+			for (int dx=0; dx < rows; ++dx) {
+				SET_STRING_ELT(names, dx, Rf_mkChar(rownames[dx]));
+			}
+			SET_VECTOR_ELT(dimnames, 0, names);
+		}
+		if (validColnames) {
+			ProtectedSEXP names(Rf_allocVector(STRSXP, cols));
+			for (int dx=0; dx < cols; ++dx) {
+				SET_STRING_ELT(names, dx, Rf_mkChar(colnames[dx]));
+			}
+			SET_VECTOR_ELT(dimnames, 1, names);
+		}
+		Rf_setAttrib(ans, R_DimNamesSymbol, dimnames);
+	}
+	return ans;
+}
+

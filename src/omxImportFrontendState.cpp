@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -53,7 +53,8 @@ void omxState::omxProcessMxDataEntities(SEXP data, SEXP defvars)
 		dvar.row = ilist[3];
 		dvar.col = ilist[4];
 
-		od->prohibitNAs(dvar.column);
+		od->prohibitNAdefVar(dvar.column);
+		od->prohibitFactor(dvar.column);
 
 		int numDeps = Rf_length(itemList) - 5;
 		dvar.numDeps = numDeps;
@@ -72,7 +73,8 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 	matrixList.clear();
 	ProtectedSEXP matListNames(Rf_getAttrib(matList, R_NamesSymbol));
 
-	int preDepth = Global->mpi->getDepth();
+	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
+
 	for(int index = 0; index < Rf_length(matList); index++) {
 		ProtectedSEXP nextLoc(VECTOR_ELT(matList, index));		// This is the matrix + populations
 		ProtectedSEXP nextMat(VECTOR_ELT(nextLoc, 0));		// The first element of the list is the matrix of values
@@ -84,18 +86,12 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 
 		if (isErrorRaised()) return;
 	}
-	int postDepth = Global->mpi->getDepth();
-	if (preDepth != postDepth) {
-		Rf_warning("omxState::omxProcessMxMatrixEntities: "
-			   "protect stack usage %d > 0, PLEASE REPORT TO OPENMX DEVELOPERS",
-			   postDepth - preDepth);
-	}
 }
 
 void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 {
 	ProtectedSEXP algListNames(Rf_getAttrib(algList, R_NamesSymbol));
-	int preDepth = Global->mpi->getDepth();
+	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
 
 	if(OMX_DEBUG) { mxLog("Processing %d algebras.", Rf_length(algList)); }
 
@@ -124,12 +120,6 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 			omxFillMatrixFromMxAlgebra(amat, formula, name, dimnames, verbose);
 		}
 		if (isErrorRaised()) return;
-	}
-	int postDepth = Global->mpi->getDepth();
-	if (preDepth != postDepth) {
-		Rf_warning("omxState::omxProcessMxAlgebraEntities: "
-			   "protect stack usage %d > 0, PLEASE REPORT TO OPENMX DEVELOPERS",
-			   postDepth - preDepth);
 	}
 }
 
@@ -309,13 +299,14 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 	}
 }
 
-void omxState::omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues)
+void omxState::omxProcessFreeVarList(SEXP varList)
 {
-	int preDepth = Global->mpi->getDepth();
+	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
 	if(OMX_DEBUG) { mxLog("Processing Free Parameters."); }
 
 	int numVars = Rf_length(varList);
-	startingValues->resize(numVars);
+	auto &startingValues = Global->startingValues;
+	startingValues.resize(numVars);
 	for (int fx = 0; fx < numVars; fx++) {
 		omxFreeVar *fv = new omxFreeVar;
 		// default group has free all variables
@@ -360,7 +351,7 @@ void omxState::omxProcessFreeVarList(SEXP varList, std::vector<double> *starting
 		}
 		ProtectedSEXP Rsv(VECTOR_ELT(nextVar, Rf_length(nextVar)-1));
 		double sv = REAL(Rsv)[0];
-		(*startingValues)[fx] = sv;
+		startingValues[fx] = sv;
 		if(OMX_DEBUG) {
 			mxLog("Free var %d %s, bounds (%.3g, %.3g), %d loc, starting %f", fx, fv->name,
 			      fv->lbound, fv->ubound, numLocs, sv);
@@ -368,13 +359,6 @@ void omxState::omxProcessFreeVarList(SEXP varList, std::vector<double> *starting
 	}
 
 	Global->deduplicateVarGroups();
-
-	int postDepth = Global->mpi->getDepth();
-	if (preDepth != postDepth) {
-		Rf_warning("omxState::omxProcessFreeVarList: "
-			   "protect stack usage %d > 0, PLEASE REPORT TO OPENMX DEVELOPERS",
-			   postDepth - preDepth);
-	}
 }
 
 ConfidenceInterval::ConfidenceInterval()

@@ -7,8 +7,8 @@
 \alias{imxModelBuilder,MxRAMModel-method}
 \title{imxModelBuilder}
 \usage{
-imxModelBuilder(model, lst, name, manifestVars, latentVars, submodels, remove,
-  independent)
+imxModelBuilder(model, lst, name, manifestVars, latentVars, submodels,
+  remove, independent)
 }
 \arguments{
 \item{model}{model}

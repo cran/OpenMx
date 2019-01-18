@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@
 \usage{
 mxExpectationLISREL(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA, TE=NA, TH=NA,
                     TX = NA, TY = NA, KA = NA, AL = NA,
-                    dimnames = NA, thresholds = NA, threshnames = dimnames)
+                    dimnames = NA, thresholds = NA,
+	 threshnames = dimnames, verbose=0L)
 }
 
 
@@ -49,10 +50,11 @@ mxExpectationLISREL(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA, TE=NA, TH=N
    \item{dimnames}{An optional character vector that is currently ignored}%to be assigned to the column names of the 'F' and 'M' matrices.}   
    \item{thresholds}{An optional character string indicating the name of the thresholds matrix.}
    \item{threshnames}{An optional character vector to be assigned to the column names of the thresholds matrix.}
+   \item{verbose}{integer. Level of runtime diagnostic output.}
 }
 
 \details{
-Expectation functions define the way that model expectations are calculated. The mxExpectationLISREL calculates the expected covariance and means of a given \link{MxData} object given a LISREL model. This model is defined by LInear Structual RELations (LISREL; J\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}reskog & S\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}rbom, 1982, 1996).  Arguments 'LX' through 'AL' must refer to \link{MxMatrix} objects with the associated properties of their respective matrices in the LISREL modeling approach.
+Expectation functions define the way that model expectations are calculated. The mxExpectationLISREL calculates the expected covariance and means of a given \link{MxData} object given a LISREL model. This model is defined by LInear Structural RELations (LISREL; J\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}reskog & S\ifelse{latex}{\out{\"o}}{\ifelse{html}{\out{&ouml;}}{o}}rbom, 1982, 1996).  Arguments 'LX' through 'AL' must refer to \link{MxMatrix} objects with the associated properties of their respective matrices in the LISREL modeling approach.
 
 The full LISREL specification has 13 matrices and is sometimes called the extended LISREL model.  It is defined by the following equations.
 

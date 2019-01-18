@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ The MxNonNullData class has the following slots:
     observed \tab - \tab Either a matrix or a data frame \cr
     vector \tab - \tab A vector for means, or NA if missing \cr
     type \tab - \tab Either 'raw', 'cov', or  'cor' \cr
-    numObs \tab - \tab The number of oberservations \cr
+    numObs \tab - \tab The number of observations \cr
   }
   
 The 'name' slot is the name of the MxData object. %Use of MxData objects in other functions in the \link{OpenMx} library may require reference by name.

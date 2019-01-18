@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -88,13 +88,6 @@ setMethod("imxVerifyModel", "MxRAMModel",
 		  }
 		  expectation <- model$expectation
 		  if (!is.null(expectation) && is(expectation, "MxExpectationRAM")) {
-			  if (!is.null(model@data) && !single.na(model@data@means) &&
-			      is.null(model$M)) {
-				  msg <- paste("The RAM model", omxQuotes(model@name),
-					       "contains an observed means vector",
-					       "but has not specified any means paths.")
-				  stop(msg, call. = FALSE)
-			  }
 			  if (!is.null(model@data)) {
 				  threshNames <- intersect(getDataThresholdNames(model@data), model@manifestVars)
 				  # Only pay attention to (1) manifest variables (2) that need thresholds.
@@ -263,10 +256,8 @@ addEntriesRAM <- function(model, entries) {
 		data <- data[[1]]
 		model@data <- data
 		# If the data are WLS, then change the fit function to WLS away from the default ML.
-		if(model@data@type=="acov" && class(model@fitfunction) %in% "MxFitFunctionML"){
+		if(is(model@data,"MxDataLegacyWLS") && class(model@fitfunction) %in% "MxFitFunctionML"){
 			model[['fitfunction']] <- mxFitFunctionWLS()
-		} else if(model@data@type %in% c('raw', 'cov') && !(class(model@fitfunction) %in% "MxFitFunctionML")){
-			model[['fitfunction']] <- mxFitFunctionML()
 		}
 		model[['F']] <- createMatrixF(model)
 	}
@@ -757,7 +748,7 @@ createMatrixF <- function(model) {
 	len <- length(variables)
 	values <- diag(nrow = length(model@manifestVars), ncol = len)
 	names <- list(model@manifestVars, variables)
-	if (!is.null(model@data) && (model@data@type != 'raw')) {
+	if (!is.null(model@data) && (model@data@type != 'raw' && model@data@type != 'acov')) {
 		manifestNames <- rownames(model@data@observed)
 		extraData <- setdiff(manifestNames, model@manifestVars)
 		extraVars <- setdiff(model@manifestVars, manifestNames)

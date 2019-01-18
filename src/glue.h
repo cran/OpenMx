@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ SEXP dtmvnorm_marginal2(SEXP Rxq, SEXP Rxr, SEXP Rq, SEXP Rr,
 SEXP mtmvnorm(SEXP sigma, SEXP lower, SEXP upper);
 
 void friendlyStringToLogical(const char *key, SEXP rawValue, int *out);
+
+void loadCharVecFromR(const char *context, SEXP names, std::vector<const char *> &dest);
 
 #ifndef M_LN_2PI
 #define M_LN_2PI        1.837877066409345483560659472811        /* log(2*pi) */

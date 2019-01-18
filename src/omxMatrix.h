@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +42,9 @@ struct populateLocation {
 	int srcRow, srcCol;
 	int destRow, destCol;
 
+	populateLocation() {};
+	populateLocation(int _from, int _srcRow, int _srcCol, int _destRow, int _destCol)
+	: from(_from), srcRow(_srcRow), srcCol(_srcCol), destRow(_destRow), destCol(_destCol) {};
 	void transpose() { std::swap(destRow, destCol); }
 };
 
@@ -60,12 +63,15 @@ class omxMatrix {
 	class omxExpectation *joinModel;
 	int shape;
  public:
-   omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1), joinModel(0), shape(0) {};
+ 	omxMatrix() : dependsOnParametersCache(false), dependsOnDefVarCache(false), joinKey(-1),
+		joinModel(0), shape(0), freeRownames(false), freeColnames(false)
+		{};
 	void setDependsOnParameters() { dependsOnParametersCache = true; };
 	void setDependsOnDefinitionVariables() { dependsOnDefVarCache = true; };
 	bool dependsOnParameters() const { return dependsOnParametersCache; };
 	bool dependsOnDefinitionVariables() const { return dependsOnDefVarCache; };
 	bool hasPopulateSubstitutions() const { return populate.size(); };
+	void addPopulate(omxMatrix *from, int srcRow, int srcCol, int destRow, int destCol);
 	void transposePopulate();
 	void setJoinInfo(SEXP Rmodel, SEXP Rkey);
 	void omxProcessMatrixPopulationList(SEXP matStruct);
@@ -102,7 +108,7 @@ class omxMatrix {
 	std::string nameStr;
 	const char *name() const { return nameStr.c_str(); }
 
-	// char pointers are from R and should not be freed
+	bool freeRownames, freeColnames;
 	std::vector<const char *> rownames;
 	std::vector<const char *> colnames;
 	int lookupColumnByName(const char *target);
@@ -110,7 +116,7 @@ class omxMatrix {
 	friend void omxCopyMatrix(omxMatrix *dest, omxMatrix *src);  // turn into method later TODO
 	void take(omxMatrix *orig);
 
-	void unshareMemroyWithR();
+	void unshareMemoryWithR();
 	void loadDimnames(SEXP dimnames);
 	const char *getType() const {
 		const char *what = "matrix";
@@ -122,6 +128,9 @@ class omxMatrix {
 	bool isSimple() { return !algebra && !fitFunction && populate.size()==0; };
 	void loadFromStream(mini::csv::ifstream &st);
 	int size() const { return rows * cols; }
+	SEXP asR();
+	bool isValidElem(int row, int col)
+	{ return row >= 0 && col >= 0 && row < rows && col < cols; };
 };
 
 void omxEnsureColumnMajor(omxMatrix *mat);
@@ -158,6 +167,8 @@ struct EigenStdVectorAdaptor : Eigen::Map< Eigen::Matrix<Scalar, Eigen::Dynamic,
 // If you call these functions directly then you need to free the memory with omxFreeMatrix.
 // If you obtain a matrix from omxNewMatrixFromSlot then you must NOT free it.
 omxMatrix* omxInitMatrix(int nrows, int ncols, unsigned short colMajor, omxState* os);
+inline omxMatrix* omxInitMatrix(int nrows, int ncols, omxState* os)
+{ return omxInitMatrix(nrows, ncols, 1, os); }
 omxMatrix *omxCreateCopyOfMatrix(omxMatrix *orig, omxState *os);
 
 	void omxFreeMatrix(omxMatrix* om);						// Ditto, traversing argument trees
@@ -224,7 +235,7 @@ static OMXINLINE int omxIsMatrix(omxMatrix *mat) {
 /* BLAS Wrappers */
 
 static OMXINLINE void omxSetMatrixElement(omxMatrix *om, int row, int col, double value) {
-	if((row < 0) || (col < 0) || (row >= om->rows) || (col >= om->cols)) {
+	if (!om->isValidElem(row, col)) {
 		setMatrixError(om, row + 1, col + 1, om->rows, om->cols);
 		return;
 	}
@@ -238,7 +249,7 @@ static OMXINLINE void omxSetMatrixElement(omxMatrix *om, int row, int col, doubl
 }
 
 static OMXINLINE void omxAccumulateMatrixElement(omxMatrix *om, int row, int col, double value) {
-        if((row < 0) || (col < 0) || (row >= om->rows) || (col >= om->cols)) {
+	if (!om->isValidElem(row, col)) {
                 setMatrixError(om, row + 1, col + 1, om->rows, om->cols);
                 return;
         }
@@ -253,7 +264,7 @@ static OMXINLINE void omxAccumulateMatrixElement(omxMatrix *om, int row, int col
 
 static OMXINLINE double omxMatrixElement(omxMatrix *om, int row, int col) {
 	int index = 0;
-	if((row < 0) || (col < 0) || (row >= om->rows) || (col >= om->cols)) {
+	if (!om->isValidElem(row, col)) {
 		matrixElementError(row + 1, col + 1, om);
         return (NA_REAL);
 	}
@@ -465,11 +476,12 @@ void expm_eigen(int n, double *rz, double *out);
 void logm_eigen(int n, double *rz, double *out);
 
 template <typename T>
-std::string mxStringifyMatrix(const char *name, const Eigen::DenseBase<T> &mat, std::string &xtra)
+std::string mxStringifyMatrix(const char *name, const Eigen::DenseBase<T> &mat, std::string &xtra,
+			      bool debug=false)
 {
 	std::string buf;
 
-	if (mat.rows() * mat.cols() > 1000) {
+	if (!debug && mat.rows() * mat.cols() > 1000) {
 		buf = string_snprintf("%s is too large to print # %dx%d\n",
 				name, mat.rows(), mat.cols());
 		return buf;
@@ -558,5 +570,7 @@ double trace_prod(const Eigen::MatrixBase<T1> &t1, const Eigen::MatrixBase<T2> &
 	}
 	return sum;
 }
+
+void MoorePenroseInverse(Eigen::Ref<Eigen::MatrixXd> mat);
 
 #endif /* _OMXMATRIX_H_ */

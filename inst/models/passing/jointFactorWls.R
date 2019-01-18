@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@
 
 require(OpenMx)
 
+if (mxOption(NULL, "Default optimizer") == 'NPSOL') stop('SKIP')
+
 rms <- function(x, y=NA){
 	if(is.matrix(x) && is.vector(y) && nrow(x) == length(y)){
 		sqrt(colMeans((x-y)^2))
@@ -51,13 +53,6 @@ rms <- function(x, y=NA){
 
 jointData <- suppressWarnings(try(read.table("models/passing/data/jointdata.txt", header=TRUE), silent=TRUE))
 jointData <- read.table("data/jointdata.txt", header=TRUE)
-
-badJointData <- jointData
-badJointData[,c(2,4,5)] <- data.frame(mapply(factor, jointData[,c(2,4,5)],
-					     levels=list(c(0,1), c(0, 1, 2, 3), c(0, 1, 2)),
-		  SIMPLIFY=FALSE), check.names = FALSE, row.names=rownames(jointData))
-omxCheckError(mxDataWLS(badJointData),
-              "Factors 'z2', 'z4', and 'z5' must be ordered and are not")
 
 # specify ordinal columns as ordered factors
 jointData[,c(2,4,5)] <- mxFactor(jointData[,c(2,4,5)], 
@@ -150,16 +145,16 @@ ramResult1 <- mxRun(ramModel1)
 summary(ramResult1)
 
 # Create WLS Data
-wd <- mxDataWLS(jointData, "WLS")
-dd <- mxDataWLS(jointData, "DLS")
-ud <- mxDataWLS(jointData, "ULS")
+wd <- mxData(jointData, "raw")
+dd <- mxData(jointData, "raw")
+ud <- mxData(jointData, "raw")
 
 # WLS form(s) of model
-jointWlsModel <- mxModel(jointModel1, name='wlsModel', wd, mxFitFunctionWLS())
-jointDlsModel <- mxModel(jointModel1, name='dlsModel', dd, mxFitFunctionWLS())
-jointUlsModel <- mxModel(jointModel1, name='ulsModel', ud, mxFitFunctionWLS())
+jointWlsModel <- mxModel(jointModel1, name='wlsModel', wd, mxFitFunctionWLS('WLS'))
+jointDlsModel <- mxModel(jointModel1, name='dlsModel', dd, mxFitFunctionWLS('DWLS'))
+jointUlsModel <- mxModel(jointModel1, name='ulsModel', ud, mxFitFunctionWLS('ULS'))
 
-ramWlsModel <- mxModel(ramModel1, name='wlsModel', wd, mxFitFunctionWLS())
+ramWlsModel <- mxModel(ramModel1, name='wlsModel', mxFitFunctionWLS())
 
 # Run 'em
 jointWlsResults <- mxRun(jointWlsModel)
@@ -180,17 +175,17 @@ plot(cmp[1:5,1], cmp[1:5,2])
 abline(0, 1)
 
 print(rms(cmp))
-omxCheckTrue(all(rms(cmp) < 0.035))
+omxCheckCloseEnough(vechs(rms(cmp)), c(0.01, 0.02, 0.029, 0.027, 0.036, 0.01), .002)
 
 round(seCmp <- cbind(ML=jointResults1$output$standardErrors,
                      WLS=jointWlsResults$output$standardErrors,
                      DLS=jointDlsResults$output$standardErrors,
                      ULS=jointUlsResults$output$standardErrors), 3)
 
-omxCheckCloseEnough(cor(seCmp)[1,2:4], rep(1,3), .62)
+omxCheckCloseEnough(cor(seCmp)[1,2:4], rep(1,3), .04)
 
-se1 <- c(0.05, 0.107, 0.056, 0.102, 0.074, 0.111, 0.116,
-         0.009,  0.057, 0.073, 0.083, 0.074, 0.101, 0.069, 0.06)
+se1 <- c(0.065, 0.113, 0.072, 0.106, 0.068, 0.064, 0.067,  0.061,
+         0.061, 0.074, 0.083, 0.075, 0.098, 0.067, 0.06)
 omxCheckCloseEnough(c(jointDlsResults$output$standardErrors), se1, .01)
 
 #------------------------------------------------------------------------------
@@ -232,17 +227,20 @@ omxCheckWithinPercentError(shan$Chi, swls$Chi, 28)
 #------------------------------------------------------------------------------
 # Check that ML saturated model estimates are close
 #  to the WLS saturated model estimates.
+
+obsStats <- jointWlsResults$data$observedStats
+
 mxGetExpected(jointResults2, 'covariance')
-wd$observed
+obsStats$cov
 
 mxGetExpected(jointResults2, 'means')
-wd$means
+obsStats$means
 
 mxGetExpected(jointResults2, 'thresholds')
-wd$thresholds
+obsStats$thresholds
 
 ml.sat <- mxGetExpected(jointResults2, 'vector')
-wls.sat <- c(vech(wd$observed), wd$means, na.omit(c(wd$thresholds)))
+wls.sat <- c(vech(obsStats$cov), obsStats$means, na.omit(c(obsStats$thresholds)))
 
 omxCheckTrue(rms(ml.sat, wls.sat) < .01)
 omxCheckCloseEnough(ml.sat, wls.sat, .03) #could adjust to 0.009

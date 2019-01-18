@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 		# need to revisit TODO
 		return(list(0, historySet))
 	}
+	obsStats <- data@observedStats
 	if (data@type == 'cov' || data@type == 'sscp') {
 		if (data@name %in% historySet) {
 			return (list(0, historySet))
@@ -86,12 +87,12 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 		} else {
 			return(list(NA, historySet))
 		}
-	} else if (data@type == 'acov') {
+	} else if (!is.null(obsStats[['cov']])) {
 		if (data@name %in% historySet) {
 			return (list(0, historySet))
 		}
-		numThresh <- sum(!is.na(data@thresholds))
-		numMeans <- sum(!is.na(data@means))
+		numThresh <- sum(!is.na(obsStats$thresholds))
+		numMeans <- sum(!is.na(obsStats$means))
 		n <- nrow(data@observed)
 		# Include diagonal of observed when no thresholds
 		dof <- numThresh + numMeans + ifelse(numThresh > 0, n*(n-1)/2, n*(n+1)/2)
@@ -150,13 +151,13 @@ computeFValue <- function(datalist, likelihood, chi) {
 	if(length(datalist) == 0) return(NA)
 	datalist <- Filter(function(x) !is(x,"MxDataDynamic"), datalist)
 	if(all(sapply(datalist, function(x) 
+		{length(x@observedStats) > 0 || is(x,"MxDataLegacyWLS") }))) return(chi)
+	if(all(sapply(datalist, function(x) 
 		{x@type == 'raw'}))) return(likelihood)
 	if(all(sapply(datalist, function(x) 
 		{x@type == 'cov'}))) return(chi)
 	if(all(sapply(datalist, function(x) 
 		{x@type == 'cor'}))) return(chi)
-	if(all(sapply(datalist, function(x) 
-		{x@type == 'acov'}))) return(chi)
 	return(NA)
 }
 

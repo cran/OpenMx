@@ -4,8 +4,8 @@
 \alias{mxSE}
 \title{Compute standard errors in OpenMx}
 \usage{
-mxSE(x, model, details = FALSE, cov, forceName = FALSE, silent = FALSE,
-  ..., defvar.row = 1L)
+mxSE(x, model, details = FALSE, cov, forceName = FALSE,
+  silent = FALSE, ..., defvar.row = as.integer(NA), data = "data")
 }
 \arguments{
 \item{x}{the parameter to get SEs on (reference or expression)}
@@ -27,6 +27,8 @@ message-printing is suppressed.}
 \item{...}{further named arguments passed to \code{\link{mxEval}}}
 
 \item{defvar.row}{which row to load for any definition variables}
+
+\item{data}{name of data from which to load definition variables}
 }
 \value{
 SE value(s) returned as a matrix when \code{details} is FALSE.

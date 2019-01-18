@@ -7,9 +7,10 @@
 \alias{print,MxExpectationBA81-method}
 \title{Create a Bock & Aitkin (1981) expectation}
 \usage{
-mxExpectationBA81(ItemSpec, item = "item", ..., qpoints = 49L, qwidth = 6,
-  mean = "mean", cov = "cov", verbose = 0L, weightColumn = NA_integer_,
-  EstepItem = NULL, debugInternal = FALSE)
+mxExpectationBA81(ItemSpec, item = "item", ..., qpoints = 49L,
+  qwidth = 6, mean = "mean", cov = "cov", verbose = 0L,
+  weightColumn = NA_integer_, EstepItem = NULL,
+  debugInternal = FALSE)
 }
 \arguments{
 \item{ItemSpec}{a single item model (to replicate) or a list of
@@ -40,7 +41,7 @@ E-step. This option is mainly of use for debugging derivatives.}
 returned in $debug. This is mainly of use to developers.}
 }
 \description{
-Used in conjuction with \link{mxFitFunctionML}, this expectation
+Used in conjunction with \link{mxFitFunctionML}, this expectation
 models ordinal data with a modest number of latent dimensions.
 Currently, only a multivariate Normal latent distribution is
 supported.  An equal-interval quadrature is used to integrate over
@@ -56,9 +57,10 @@ item \eqn{j} from person \eqn{i} with item parameters
 \deqn{L(x_i|\xi,\theta_i) = \prod_j \mathrm{Pr}(\mathrm{pick}=x_{ij} | \xi_j,\theta_i).}{%
 L(x[i]|\xi,\theta[i]) = \prod_j Pr(pick=x[i,j] | \xi[j],\theta[i]).}
 
-Items are assumed conditionally independent.
-That is, the outcome of one item is assumpted to not influence
+Items are assumed to be conditionally independent.
+That is, the outcome of one item is assumed to not influence
 another item after controlling for \eqn{\xi} and \eqn{\theta_i}{\theta[i]}.
+
 The unconditional likelihood is obtained by integrating over
 the latent distribution \eqn{\theta_i}{\theta[i]},
 
@@ -108,7 +110,7 @@ interest to developers.
 When a two-tier covariance matrix is recognized, this expectation
 automatically enables analytic dimension reduction (Cai, 2010).
 
-The optional `weightColumn' is superceded by the weight
+The optional `weightColumn' is superseded by the weight
 argument in \link{mxData}. For data with many repeated
 response patterns, model evaluation time can be
 reduced. An easy way to transform your data into this form is to

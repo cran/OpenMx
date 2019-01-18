@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013-2018 by the individuals mentioned in the source code history
+ *  Copyright 2013-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,11 +21,6 @@
 #include <Eigen/SparseCore>
 #include "glue.h"
 #include "omxState.h"
-
-enum GradientAlgorithm {
-	GradientAlgorithm_Forward,
-	GradientAlgorithm_Central
-};
 
 // See R/MxRunHelperFunctions.R optimizerMessages
 // Also see the NPSOL manual, section 6 "Error Indicators and Warnings"
@@ -168,7 +163,7 @@ class FitContext {
 	Eigen::VectorXd grad;
 	int infoDefinite;
 	double infoCondNum;
-	double *stderrs;   // plural to distinguish from stdio's stderr
+	Eigen::VectorXd stderrs;   // plural to distinguish from stdio's stderr
 	enum ComputeInfoMethod infoMethod;
 	double *infoA; // sandwich, the bread
 	double *infoB; // sandwich, the meat
@@ -184,12 +179,12 @@ class FitContext {
 	// for confidence intervals
 	CIobjective *ciobj;
 
-	FitContext(omxState *_state, std::vector<double> &startingValues);
+	FitContext(omxState *_state);
 	FitContext(FitContext *parent, FreeVarGroup *group);
 	bool openmpUser;  // whether some fitfunction/expectation uses OpenMP
 	void createChildren(omxMatrix *alg);
 	void destroyChildren();
-	void allocStderrs();
+	void calcStderrs();
 	void ensureParamWithinBox(bool nudge);
 	void copyParamToModel();
 	void copyParamToModelClean();
@@ -319,6 +314,8 @@ class FitContext {
 };
 
 void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at);
+void copyParamToModelFake1(omxState *os, Eigen::Ref<Eigen::VectorXd> point);
+void copyParamToModelRestore(omxState *os, const Eigen::Ref<const Eigen::VectorXd> point);
 
 typedef std::vector< std::pair<int, MxRList*> > LocalComputeResult;
 
@@ -413,6 +410,20 @@ void printSparse(Eigen::SparseMatrixBase<T> &sm) {
 		buf += "\n";
 	}
 	mxLogBig(buf);
+}
+
+template <typename T1>
+void copyParamToModelFake1(omxState *os, Eigen::MatrixBase<T1> &point)
+{
+	auto varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
+	size_t numParam = varGroup->vars.size();
+	point.derived().resize(numParam);
+
+	for(size_t k = 0; k < numParam; k++) {
+		omxFreeVar* freeVar = varGroup->vars[k];
+		point[k] = freeVar->getCurValue(os);
+		freeVar->copyToState(os, 1.0);
+	}
 }
 
 #endif

@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -24,8 +24,9 @@
 
 \usage{
    mxData(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=NA,
-          thresholds=NA, ..., sort=NA, primaryKey = as.character(NA),
-          weight = as.character(NA), frequency = as.character(NA))
+          thresholds=NA, ..., observedStats=NA, sort=NA, primaryKey = as.character(NA),
+          weight = as.character(NA), frequency = as.character(NA),
+          verbose = 0L)
 }
 
 \arguments{
@@ -33,15 +34,18 @@
    \item{type}{A character string defining the type of data in the \sQuote{observed} argument. Must be one of \dQuote{raw}, \dQuote{cov}, \dQuote{cor}, \dQuote{'sscp'} or \dQuote{acov}.}
    \item{means}{An optional vector of means for use when \sQuote{type} is \dQuote{cov}, or \dQuote{cor}.}
    \item{numObs}{The number of observations in the data supplied in the \sQuote{observed} argument. Required unless \sQuote{type} equals \dQuote{raw}.}
-   \item{acov}{Asymptotic covariance matrix of observed, means, and thresholds.  Used for weighted least squares weight matrix.}
-   \item{fullWeight}{Full asymptotic covariance matrix of observed, means, and thresholds.  Used for weighted least squares in standard error and quasi-chi-squared calculation.}
-   \item{thresholds}{Observed thresholds.  Used for weighted least squares with ordinal data.}
+   \item{acov}{Deprecated.}
+   \item{fullWeight}{Deprecated.}
+   \item{thresholds}{Deprecated.}
    \item{...}{Not used. Forces remaining arguments to be specified by name.}
+   \item{observedStats}{A list containing observed statistics for
+   weighted least squares estimation.}
    \item{sort}{Whether to sort raw data prior to use (default NA)}
    \item{primaryKey}{The column name of the primary key used to uniquely
      identify rows (default NA)}
    \item{weight}{The column name containing row weights}
    \item{frequency}{The column name containing row frequencies}
+\item{verbose}{level of diagnostic output}
 }
 
 \details{
@@ -54,7 +58,20 @@ The mxData function creates \link{MxData} objects, which can be used as argument
 
 \item{cor}{The contents of the \sQuote{observed} argument are treated as a correlation matrix. The \sQuote{means} argument is not required, but may be included for estimations involving means. The \sQuote{numObs} argument is required, which should reflect the number of observations or rows in the data described by the covariance matrix. Data of this type may use the fit functions such as \link{mxFitFunctionML} functions, depending on the specified model.}
 
-\item{acov}{The best way to create data of this type is to use the \link{mxDataWLS} function.  The contents of the \sQuote{observed} argument are treated as the polychoric correlation matrix of the ordinal variables. The \sQuote{means} argument is not required, but may be included for estimations involving means.  The \sQuote{thresholds} argument is not required, but may be included for estimation involving thresholds and ordinal variables. The \sQuote{numObs} argument is required, which should reflect the number of observations or rows in the data described by the polychoric correlation matrix. Data of this type almost certainly use the \link{mxFitFunctionWLS} function, but may depend on the specified model.}
+\item{acov}{The best way to create data of this type is to use the
+  \link{mxDataWLS} function.  The contents of the \sQuote{observed}
+  argument is regarded as raw data. The \sQuote{observedStats} slot
+  contains a list of observed statistics. The list is expected to
+  contain a number of named objects: \sQuote{cov} is the (polychoric)
+  covariance matrix of the continuous and ordinal
+  variables. \sQuote{means} (optional) may be included for estimations
+  involving means.  \sQuote{thresholds} should be included for
+  estimation involving thresholds and ordinal variables. \sQuote{acov}
+  is the asymptotic covariance matrix. \sQuote{acov} can be diagonal for
+  diagonally weighted least squares. \sQuote{fullWeight} (optional) is
+  the complete asymptotic weight matrix (all entries non-zero). Data of this
+  type almost certainly use the \link{mxFitFunctionWLS} function, but
+  may depend on the specified model.}
 }
 
 MxData objects may not be included in \link{MxAlgebra} objects or use the \link{mxFitFunctionAlgebra} function. If these capabilities are desired, data should be appropriately input or transformed using the \link{mxMatrix} and \link{mxAlgebra} functions.

@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -15,8 +15,9 @@
 
 \name{mxDataWLS}
 \alias{mxDataWLS}
+\alias{MxDataLegacyWLS-class}
 
-\title{Create MxData Object for Least Squares (WLS, DWLS, ULS) Analyses}
+\title{Create legacy MxData Object for Least Squares (WLS, DWLS, ULS) Analyses}
 
 \description{
    This function creates a new \link{MxData} object of type 
@@ -28,7 +29,7 @@
 \usage{
    mxDataWLS(data, type = "WLS", useMinusTwo = TRUE, returnInverted = TRUE, 
     fullWeight = TRUE, suppressWarnings = TRUE, allContinuousMethod =
-   "cumulants", ..., silent=!interactive())
+   c("cumulants", "marginals"), silent=!interactive())
 }
 
 \arguments{
@@ -45,23 +46,14 @@
  \item{allContinuousMethod}{A character string 'cumulants' (default) or
    'marginals'. See Details.}
 \item{...}{Not used.  Forces remaining arguments to be specified by name.}
- \item{silent}{Whether to report progress}
+\item{silent}{Whether to report progress}
 }
 
 \details{
 The mxDataWLS function creates an \link{MxData} object, which can be used in
-\link{MxModel} objects.  This function takes raw data and returns 
-an \code{MxData} object to be used in a model to fit with weighted least squares.
+\link{MxModel} objects.  This function takes raw data and returns an \code{MxData} object to be used in a model to fit with weighted least squares.
 
-Both Ordinal and continuous data are supported.  A combination of these data 
-types also succeeds. Early tests suggested that full 'WLS' might be biased in 
-this joint ordinal and continuous case, whereas 'ULS' and 'DWLS' were unbiased.
-However further investigation revealed that all of these were unbiased when the model is correct, but full
-'WLS' is highly sensitive to model misspecification. Full 'WLS' can heavily weight the
-fourth-order moments of the distribution, so small deviations between the observed 
-fourth-order moments and those implied by the model can lead to poor estimates.
-
-By default when only continuous variables are present, the argument \code{allContinuousMethod} dictates that the asymptotically distribution free (ADF) method of Browne (1984) is used.  This method computes the fourth order \emph{cumulants} for the weight matrix: thus, the name.  The method does not readily handle missing data and does not return weights or summary statistics for the means, but it is generally fast and ADF up to elliptical distributions.  The other option, 'marginals', uses similar methods to the ordinal and joint ordinal-continuous cases.  It does return weights and summary statistics for the means.  When there are any ordinal variables present, \code{allContinuousMethod} is ignored.
+This method is deprecated. Use \link{mxData} and \link{mxFitFunctionWLS} instead.
 }
 
 \value{

@@ -28,7 +28,7 @@ mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
 }
 \description{
 There are various equivalent ways to pose the optimization
-problems required to estimate confindence intervals. Most accurate
+problems required to estimate confidence intervals. Most accurate
 solutions are achieved when the problem is posed using non-linear
 constraints. However, the available optimizers (CSOLNP, SLSQP, and NPSOL) often have difficulty with non-linear
 constraints.
@@ -39,7 +39,7 @@ confidence intervals in genetic models.  \emph{Behavior Genetics,
 27}(2), 113-120.
 
 Pek, J. & Wu, H. (2015). Profile likelihood-based confidence intervals and regions for structural equation models.
-\emph{Psychometrica, 80}(4), 1123-1145.
+\emph{Psychometrika, 80}(4), 1123-1145.
 
 Wu, H. & Neale, M. C. (2012). Adjusted confidence intervals for a
 bounded parameter. \emph{Behavior genetics, 42}(6), 886-898.

@@ -19,7 +19,7 @@ Automatically set starting values for an MxModel
 }
 \details{
 This function automatically picks very good starting values for many models (RAM, LISREL, Normal), including multiple group versions of these.
-It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continous variables are also acceptable.
+It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continuous variables are also acceptable.
 It works for model with covariance or raw data.
 However, it does not currently work for models with definition variables, state space models, and item factor analysis models.
 

@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ mxMatrix(type = c('Full', 'Diag', 'Iden', 'Lower',
 \item{...}{Not used.  Forces remaining arguments to be specified by
   name.}
 \item{joinKey}{The name of the column in current model's raw data that
-  is used as a foreign key to match against the primary key in
+  is used as a foreign key to match against the primary key in the
   joinModel's raw data.}
 \item{joinModel}{The name of the model that this matrix joins against.}
 }
@@ -70,7 +70,7 @@ Objects created by the \code{mxMatrix()} function are of a specific \sQuote{type
 
 \sQuote{Sdiag}  \tab matrices must be square, with a value of 0 for all entries in the upper triangle and along the diagonal. No free parameters in the upper triangle or along the diagonal. \cr
 
-\sQuote{Symm}   \tab matrices must be square, and elements in the principle diagonal and lower triangular portion of the matrix may be free parameters of any value. Elements in the upper triangular portion of the matrix are constrained to be equal to those in the lower triangular portion, such that the value and parameter specificiation of the element in row i and column j is identical to to the value and specification of the element in row j and column i. \cr
+\sQuote{Symm}   \tab matrices must be square, and elements in the principle diagonal and lower triangular portion of the matrix may be free parameters of any value. Elements in the upper triangular portion of the matrix are constrained to be equal to those in the lower triangular portion, such that the value and parameter specification of the element in row i and column j is identical to to the value and specification of the element in row j and column i. \cr
 
 \sQuote{Stand}  \tab matrices are symmetric matrices (see 'Symm') with 1's along the main diagonal. \cr
 

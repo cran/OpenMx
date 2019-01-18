@@ -5,7 +5,7 @@
 #include "omxState.h"
 #include "omxMatrix.h"
 #include "glue.h"
-#include "nloptcpp.h"
+#include "omxNLopt.h"
 #include "Compute.h"
 #include "ComputeGD.h"
 #include "ComputeNM.h"
@@ -112,7 +112,7 @@ static void nloptEqualityFunction(unsigned m, double* result, unsigned n, const 
 						ctx.eqmask[c2] = true;
 						++ctx.eqredundent;
 						if (goc.verbose >= 2) {
-							mxLog("nlopt: eq constraint %d is redundent with %d",
+							mxLog("nlopt: eq constraint %d is redundant with %d",
              c1, c2);
 						}
 					}
@@ -130,7 +130,7 @@ static void nloptEqualityFunction(unsigned m, double* result, unsigned n, const 
 			}
 			if (ctx.eqredundent) {
 				if (goc.verbose >= 1) {
-					mxLog("nlopt: detected %d redundent equality constraints; retrying",
+					mxLog("nlopt: detected %d redundant equality constraints; retrying",
            ctx.eqredundent);
 				}
 				nlopt_opt opt = (nlopt_opt) goc.extraData;
@@ -428,6 +428,83 @@ void omxInvokeNLOPT(GradientOptimizerContext &goc)
 	}
 }
 
+double UnconstrainedSLSQPOptimizer::obj(unsigned n, const double *x, double *grad, void *mythis)
+{ return ((UnconstrainedSLSQPOptimizer*)mythis)->evaluate(x, grad); }
+
+void UnconstrainedSLSQPOptimizer::operator()(UnconstrainedObjective &_uo)
+{
+	uo = &_uo;
+	opt = nlopt_create(NLOPT_LD_SLSQP, uo->lbound.size());
+	nlopt_set_lower_bounds(opt, uo->lbound.data());
+	nlopt_set_upper_bounds(opt, uo->ubound.data());
+	nlopt_set_ftol_rel(opt, tolerance);
+	nlopt_set_ftol_abs(opt, std::numeric_limits<double>::epsilon());
+	nlopt_set_min_objective(opt, obj, this);
+
+	struct nlopt_slsqp_wdump wkspc;
+	wkspc.realwkspc = (double*)calloc(1, sizeof(double)); //<--Just to initialize it; it'll be resized later.
+	opt->work = (nlopt_slsqp_wdump*)&wkspc;
+	
+	double fit = 0;
+	int code = nlopt_optimize(opt, uo->getParamVec(), &fit);
+
+	opt->work = 0;
+	free(wkspc.realwkspc);
+	nlopt_destroy(opt);
+
+	if (code == NLOPT_INVALID_ARGS) {
+		_uo.panic("NLOPT invoked with invalid arguments");
+	} else if (code == NLOPT_OUT_OF_MEMORY) {
+		_uo.panic("NLOPT ran out of memory");
+	} else if (code == NLOPT_ROUNDOFF_LIMITED) {
+		_uo.panic("NLOPT_ROUNDOFF_LIMITED"); // only relevant to constrained optimization
+	} else if (code < 0) {
+		_uo.panic("STARTING_VALUES_INFEASIBLE");
+	} else if (code == NLOPT_MAXEVAL_REACHED) {
+		_uo.panic("ITERATION_LIMIT");
+	}
+	if (iter > maxIter) {
+		_uo.panic("ITERATION_LIMIT");
+	}
+}
+
+double UnconstrainedSLSQPOptimizer::evaluate(const double *x, double *grad)
+{
+	double fit = uo->getFit(x);
+	if (grad) {
+		uo->getGrad(x, grad);
+		Eigen::Map< Eigen::ArrayXd > Egrad(grad, uo->ubound.size());
+		if ((!Egrad.isFinite()).any()) uo->panic("gradient has non-finite entries");
+		if (verbose >= 2) {
+			mxLog("%f", fit);
+			mxPrintMat("grad", Egrad);
+		}
+		if (++iter > maxIter) nlopt_force_stop(opt);
+	} else {
+		if (verbose >= 3) mxLog("%f", fit);
+	}
+	return fit;
+}
+
+UnconstrainedObjective::UnconstrainedObjective()
+	: gwrContext(0)
+{}
+
+UnconstrainedObjective::~UnconstrainedObjective()
+{
+	if (gwrContext) delete gwrContext;
+}
+
+void UnconstrainedObjective::getGrad(const double *x, double *out)
+{
+	if (!gwrContext) {
+		gwrContext = new GradientWithRef(1,lbound.size(),GradientAlgorithm_Central,3,1e-3);
+	}
+	Eigen::Map<const Eigen::VectorXd> Epoint(x, lbound.size());
+	Eigen::Map<Eigen::VectorXd> Egrad(out, lbound.size());
+	(*gwrContext)([&](double *myPars, int thrId)->double{ return getFit(myPars); },
+		   getFit(x), Epoint, Egrad);
+}
 
 void omxInvokeSLSQPfromNelderMead(NelderMeadOptimizerContext* nmoc, Eigen::VectorXd &gdpt)
 {
@@ -480,6 +557,4 @@ void omxInvokeSLSQPfromNelderMead(NelderMeadOptimizerContext* nmoc, Eigen::Vecto
 	opt->work = NULL;
 	free(wkspc.realwkspc);
 	nlopt_destroy(opt);
-	
-	return;
 }

@@ -5,8 +5,8 @@
 \alias{MxComputeOnce-class}
 \title{Compute something once}
 \usage{
-mxComputeOnce(from, what = NULL, how = NULL, ..., freeSet = NA_character_,
-  verbose = 0L, .is.bestfit = FALSE)
+mxComputeOnce(from, what = NULL, how = NULL, ...,
+  freeSet = NA_character_, verbose = 0L, .is.bestfit = FALSE)
 }
 \arguments{
 \item{from}{the object to perform the computation (a vector of expectation or fit function names)}
@@ -32,7 +32,7 @@ comparison to computing the Hessian and then inverting it.
 The information matrix is only valid when parameters are at the
 maximum likelihood estimate. The information matrix is returned in
 model$output$hessian. You cannot request both the information
-matrix and the Hessian. The information matrix is invarient to the
+matrix and the Hessian. The information matrix is invariant to the
 sign of the log likelihood scale whereas the Hessian is not.
 Use the \code{how} parameter to specify which approximation to use
 (one of "default", "hessian", "sandwich", "bread", and "meat").

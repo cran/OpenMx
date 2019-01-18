@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ getThresholdMask <- function(model, cols, subname) {
 				    omxQuotes(subname), "has no data"))
 	if (d1@type == 'raw') {
 		lev <- sapply(d1$observed[,cols], function(x) length(levels(x)))
-		mask <- matrix(FALSE, length(cols), max(lev)-1)
+		mask <- matrix(FALSE, max(lev)-1, length(cols))
 		colnames(mask) <- cols
 		for (lx in 1:length(cols)) mask[1:(lev[lx]-1), lx] <- TRUE
 		mask
@@ -193,7 +193,6 @@ setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
 			thrNames <- outer(paste0('thr', 1:nrow(thr)), 1:ncol(thr), paste, sep='_')
 			dth <- getThresholdMask(model, colnames(thr), subname)
 			v <- .standardizeCovMeansThresholds(cov, mns, thr, dth, vector=TRUE)
-			names(v) <- c(covNames, mnsNames[!is.na(mns)], thrNames[dth])
 		}
 		return(v)
 })
@@ -215,7 +214,29 @@ setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
 	if(!vector){
 		return(list(cov=cov, means=means, thresholds=thresholds))
 	} else {
-		return(c(vech(cov), means[!is.na(means)], thresholds[dth]))
+		v <- c()
+		vn <- c()
+		for (vx in 1:length(mnames)) {
+			tcol <- which(vx == ordInd)
+			if (length(tcol) == 0) {
+				v <- c(v, means[vx])
+				vn <- c(vn, mnames[vx])
+			} else {
+				tcount <- sum(dth[,tcol])
+				v <- c(v, thresholds[1:tcount,tcol])
+				vn <- c(vn, paste0(mnames[vx], 't', 1:tcount))
+			}
+		}
+		for (vx in 1:length(mnames)) {
+			if (any(vx == ordInd)) next
+			v <- c(v, cov[vx,vx])
+			vn <- c(vn, paste0('var_', mnames[vx]))
+		}
+		v <- c(v, vechs(cov))
+		nv <- length(mnames)
+		vn <- c(vn, paste0('poly_', vechs(outer(mnames[1:nv], mnames[1:nv], FUN=paste, sep='_'))))
+		names(v) <- vn
+		return(v)
 	}
 }
 
@@ -292,11 +313,12 @@ omxManifestModelByParameterJacobian <- function(model, defvar.row=1, standardize
 		tmpModel <- mxModel(model, mxComputeJacobian(defvar.row=defvar.row, of=ex))
 		tmpModel <- mxRun(tmpModel, silent=TRUE)
 		jac <- tmpModel$compute$output$jacobian
+		dimnames(jac) <- list(names(mxGetExpected(model, 'standVector')), names(theParams))
 	} else {
 		jac <- numDeriv::jacobian(func=.mat2param, x=theParams, method.args=list(r=2), model=model, defvar.row=defvar.row, standardize=standardize)
+		dimnames(jac) <- list(names(mxGetExpected(model, 'vector')), names(theParams))
 	}
 	
-	dimnames(jac) <- list(names(mxGetExpected(model, 'vector')), names(theParams))
 	return(jac)
 }
 
@@ -555,14 +577,14 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 		stop("mxGenerateData does not accept values for the '...' argument")
 	}
 	if (is(model, 'data.frame')) {
-		wlsData <- mxDataWLS(model)
-		fake <- mxModel("fake",
-				mxData(observed=model, type='raw'),
-				mxMatrix(values=wlsData$thresholds, name="thresh"),
-				mxMatrix(values=as.matrix(nearPD(wlsData$observed)$mat), name="cov"),
-				mxMatrix(values=wlsData$means, name="mean"),
-				mxExpectationNormal(thresholds = "thresh", covariance = "cov", means = "mean"))
-		if(is.null(nrows)){nrows <- wlsData@numObs}
+		fake <- omxAugmentDataWithWLSSummary(mxData(model,'raw'), "ULS", "marginals",
+			fullWeight=FALSE, returnModel=TRUE)
+		obsStats <- fake$data$observedStats
+		fake$S$values <- obsStats$cov
+		fake$M$values <- obsStats$means
+		if (!is.null(obsStats$thresholds)) fake$thresh$values <- obsStats$thresholds
+
+		if(is.null(nrows)) nrows <- nrow(model)
 		return(mxGenerateData(fake, nrows, returnModel))
 	}
 	if(is.null(subname)) subname <- model$name
@@ -677,9 +699,9 @@ setMethod("genericExpFunConvert", "MxExpectationNormal",
 		}
 		verifyObservedNames(mxDataObject@observed, mxDataObject@means, mxDataObject@type, flatModel, modelname, "Normal")
 		checkNumericData(mxDataObject)
-		checkNumberOrdinalColumns(mxDataObject)
 		covNames <- colnames(covariance)
 		verifyMvnNames(covName, meansName, "expected", flatModel, modelname, class(.Object))
+		.Object@dataColumnNames <- covNames
 		.Object@dataColumns <- generateDataColumns(flatModel, covNames, dataName)
 		verifyThresholds(flatModel, model, labelsData, dataName, covNames, threshName)
 		if (single.na(.Object@dims)) {

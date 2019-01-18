@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ mxRestore(model, chkpt.directory = ".", chkpt.prefix = "", line=NULL, strict=FAL
 }
 
 \details{
-In general, the arguments \sQuote{chkpt.directory} and \sQuote{chkpt.prefix} should be identical to the \code{\link{mxOption}}: \sQuote{Checkpoint Directory} and \sQuote{Checkpoint Prefix} that were specificed on the model before execution.
+In general, the arguments \sQuote{chkpt.directory} and \sQuote{chkpt.prefix} should be identical to the \code{\link{mxOption}}: \sQuote{Checkpoint Directory} and \sQuote{Checkpoint Prefix} that were specified on the model before execution.
 
 Alternatively, the checkpoint file can be manually loaded as a data.frame in R.  Use \code{\link{read.table}} with the options \code{header=TRUE, sep="\t", stringsAsFactors=FALSE, check.names=FALSE}.
 }

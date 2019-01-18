@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -84,6 +84,7 @@ class omxFreeVar {
 	}
 	// Warning: copyToState does not mark matrices dirty
 	void copyToState(omxState *os, double val);
+	double getCurValue(omxState *os);
 	void markDirty(omxState *os);
 };
 
@@ -271,6 +272,7 @@ class omxGlobal {
 
 	// Will need revision if multiple optimizers are running in parallel
 	std::vector< omxCheckpoint* > checkpointList;
+	std::vector<double> startingValues;
 	FitContext *topFc;
 
 	omxGlobal();
@@ -319,7 +321,7 @@ class omxState {
 	omxState(omxState *src);
 	void initialRecalc(FitContext *fc);
 	void omxProcessMxMatrixEntities(SEXP matList);
-	void omxProcessFreeVarList(SEXP varList, std::vector<double> *startingValues);
+	void omxProcessFreeVarList(SEXP varList);
 	void omxProcessMxAlgebraEntities(SEXP algList);
 	void omxCompleteMxFitFunction(SEXP algList, FitContext *fc);
 	void omxProcessConfidenceIntervals(SEXP intervalList);

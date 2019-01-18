@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -234,7 +234,7 @@ naData <- cbind(t(ty), t(tu))
 naData[10,11] <- NA
 naModel <- mxModel(smod, name='missingDef', mxData(observed=naData, type='raw'))
 
-omxCheckError(naRun <- mxRun(naModel), "missingDef.data: NA in definition variable 'u2' row 10")
+omxCheckError(naRun <- mxRun(naModel), "missingDef.data: NA in definition variable 'u2'")
 
 # Check for proper error message when there exist missing definition variables.
 

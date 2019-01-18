@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ imxWlsStandardErrors(model)
 \details{
 The standard errors for models fit with maximum likelihood are related to the second derivative (Hessian) of the likelihood function with respect to the free parameters.  For models fit with weighted least squares a different expression is required.  If \eqn{J} is the first derivative (Jacobian) of the mapping from the free parameters to the unique elements of the expected covariance, means, and threholds, \eqn{V} is the weight matrix used, \eqn{W} is the inverse of the full weight matrix, and \eqn{U= V J (J' V J)^{-1}}, then the asymptotic covariance matrix of the free parameters is
 \deqn{Acov(\theta) = U' W U}
-with \eqn{U'} indicating the transpode of \eqn{U}.
+with \eqn{U'} indicating the transpose of \eqn{U}.
 }
 
 \value{

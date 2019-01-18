@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ setMethod("genericFitInitialMatrix", "MxFitFunctionML",
 })
 
 setMethod("generateReferenceModels", "MxFitFunctionML",
-	function(.Object, model, distribution) {
+	function(.Object, model, distribution, equateThresholds) {
 		modelName <- model@name
 		datasource <- model$data
 		if (is.null(datasource)) {
@@ -167,7 +167,8 @@ setMethod("generateReferenceModels", "MxFitFunctionML",
 		}
 		
 		generateNormalReferenceModels(modelName, obsdata, datatype, any(!is.na(datasource@means)),
-					      datanobs, datasource@means, distribution=distribution)
+			datanobs, datasource@means, distribution=distribution,
+			equateThresholds)
 	})
 
 mxFitFunctionML <- function(vector = FALSE, rowDiagnostics=FALSE, ..., fellner=as.logical(NA),

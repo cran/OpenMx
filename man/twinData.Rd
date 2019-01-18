@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ Questionnaires were mailed to 5,967 pairs age 18 years and over. These data cons
 
 It is a wide dataset, with two individuals per line. Families are identified by the variable \dQuote{fam}.
 
-Data include zygosity (zyg), along with heights in metres, weights in
+Data include zygosity (zyg), along with heights in meters, weights in
 kg, and the derived variables BMI in kg/m^2 (stored as \dQuote{htwt1}
 and \dQuote{htwt2}), as well as the 7 times the natural log of this variable,
 stored as bmi1 and bmi2. The logged values are more closely
@@ -37,7 +37,7 @@ coded as a factor with 5-levels: MZFF, MZMM, DZFF, DZMM, DZOS. DZOS are in Femal
 \references{
 Martin, N. G. & Jardine, R. (1986). Eysenck's contribution to behavior genetics. In S. Modgil & C. Modgil (Eds.), \emph{Hans Eysenck: Consensus and Controversy.} Falmer Press: Lewes, Sussex.
 
-Martin, N. G., Eaves, L. J., Heath, A. C., Jardine, R., Feindgold, L. M., & Eysenck, H. J. (1986). Transmission of social attitudes. \emph{Proceedings of the National Academy of Science}, \bold{83}, 4364-4368.
+Martin, N. G., Eaves, L. J., Heath, A. C., Jardine, R., Feingold, L. M., & Eysenck, H. J. (1986). Transmission of social attitudes. \emph{Proceedings of the National Academy of Science}, \bold{83}, 4364-4368.
 }
 
 \usage{data(twinData)}

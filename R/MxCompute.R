@@ -1,5 +1,5 @@
 #
-#   Copyright 2013-2018 by the individuals mentioned in the source code history
+#   Copyright 2013-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ setMethod("initialize", "MxComputeOnce",
 ##' The information matrix is only valid when parameters are at the
 ##' maximum likelihood estimate. The information matrix is returned in
 ##' model$output$hessian. You cannot request both the information
-##' matrix and the Hessian. The information matrix is invarient to the
+##' matrix and the Hessian. The information matrix is invariant to the
 ##' sign of the log likelihood scale whereas the Hessian is not.
 ##' Use the \code{how} parameter to specify which approximation to use
 ##' (one of "default", "hessian", "sandwich", "bread", and "meat").
@@ -529,7 +529,7 @@ setMethod("initialize", "MxComputeTryHard",
 ##'
 ##' Upon failure, start values are randomly perturbed.  Currently only
 ##' the uniform distribution is implemented.  The distribution is
-##' parametrized by arguments \code{location} and \code{scale}.  The
+##' parameterized by arguments \code{location} and \code{scale}.  The
 ##' location parameter is the distribution's median.  For the uniform
 ##' distribution, \code{scale} is the absolute difference between its
 ##' median and extrema (i.e., half the width of the rectangle).  Each
@@ -653,7 +653,7 @@ setMethod("initialize", "MxComputeConfidenceInterval",
 ##' Find likelihood-based confidence intervals
 ##'
 ##' There are various equivalent ways to pose the optimization
-##' problems required to estimate confindence intervals. Most accurate
+##' problems required to estimate confidence intervals. Most accurate
 ##' solutions are achieved when the problem is posed using non-linear
 ##' constraints. However, the available optimizers (CSOLNP, SLSQP, and NPSOL) often have difficulty with non-linear
 ##' constraints. 
@@ -672,7 +672,7 @@ setMethod("initialize", "MxComputeConfidenceInterval",
 ##' 27}(2), 113-120.
 ##' 
 ##' Pek, J. & Wu, H. (2015). Profile likelihood-based confidence intervals and regions for structural equation models.
-##' \emph{Psychometrica, 80}(4), 1123-1145.
+##' \emph{Psychometrika, 80}(4), 1123-1145.
 ##'
 ##' Wu, H. & Neale, M. C. (2012). Adjusted confidence intervals for a
 ##' bounded parameter. \emph{Behavior genetics, 42}(6), 886-898.
@@ -766,7 +766,7 @@ setMethod("initialize", "MxComputeNewtonRaphson",
 ##' (even by some small epsilon>0). Non-finite fit values are
 ##' interpreted as soft feasibility constraints. That is, when a
 ##' non-finite fit is encountered, line search is continued after the
-##' step size is multipled by 10%. Comprehensive diagnostics are
+##' step size is multiplied by 10%. Comprehensive diagnostics are
 ##' available by increasing the verbose level.
 ##'
 ##' @param freeSet names of matrices containing free variables
@@ -1204,6 +1204,14 @@ setMethod("initialize", "MxComputeEM",
 ##' a new parameter vector. Repeat these steps until convergence
 ##' criteria are met.
 ##'
+##' The arguments to this function have evolved.  The old style
+##' \code{mxComputeEM(e,p,mstep=m)} is equivalent to the new style
+##' \code{mxComputeEM(estep=mxComputeOnce(e,p), mstep=m)}. This change
+##' allows the API to more closely match the literature on the E-M
+##' method.  You might use \code{mxAlgebra(..., fixed=TRUE)} to
+##' contain the results of the E-step and then cause this algebra to
+##' be recomputed using \code{mxComputeOnce}.
+##'
 ##' This compute plan does not work with any and all expectations. It
 ##' requires a special kind of expectation that can predict its
 ##' missing data to create a completed data model.
@@ -1227,6 +1235,8 @@ setMethod("initialize", "MxComputeEM",
 ##' @param information name of information matrix approximation method
 ##' @param infoArgs arguments to control the information matrix method
 ##' @param estep a compute plan to perform the expectation step
+##' @seealso
+##' \link[=mxAlgebra]{MxAlgebra}, \link{mxComputeOnce}
 ##' @aliases
 ##' MxComputeEM-class
 ##' @references
@@ -1665,14 +1675,16 @@ setClass(Class = "MxComputeJacobian",
 	contains = "BaseCompute",
 	representation = representation(
 		of = "MxCharOrNumber",
+		data = "MxCharOrNumber",
 		defvar.row = "integer"))
 
 setMethod("initialize", "MxComputeJacobian",
-	  function(.Object, freeSet, of, defvar.row) {
+	  function(.Object, freeSet, of, defvar.row, data) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- freeSet
 		  .Object@of <- of
+		  .Object@data <- data
 		  .Object@defvar.row <- defvar.row
 		  .Object
 	  })
@@ -1680,7 +1692,7 @@ setMethod("initialize", "MxComputeJacobian",
 setMethod("qualifyNames", signature("MxComputeJacobian"),
 	function(.Object, modelname, namespace) {
 		.Object <- callNextMethod()
-		for (sl in c('of')) {
+		for (sl in c('of','data')) {
 			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
 		}
 		.Object
@@ -1703,13 +1715,25 @@ setMethod("convertForBackend", signature("MxComputeJacobian"),
 				.Object@of <- algNum - 1L
 			}
 		}
+		if (any(!is.integer(.Object@data))) {
+			if (is.na(.Object@defvar.row)) {
+				.Object@data <- as.integer(NA)
+			} else {
+				dataNum <- match(.Object@data, names(flatModel@datasets))
+				if (any(is.na(dataNum))) {
+					stop(paste(class(.Object), omxQuotes(.Object@data),
+						"not recognized as MxData"))
+				}
+				.Object@data <- dataNum - 1L
+			}
+		}
 		.Object
 	})
 
 mxComputeJacobian <-
-	function(freeSet=NA_character_, ..., of="expectation", defvar.row=1L)
+	function(freeSet=NA_character_, ..., of="expectation", defvar.row=as.integer(NA), data='data')
 {
-	new("MxComputeJacobian", freeSet, of, as.integer(defvar.row))
+	new("MxComputeJacobian", freeSet, of, as.integer(defvar.row), data)
 }
 
 #----------------------------------------------------
@@ -1986,6 +2010,31 @@ mxComputeReportExpectation <- function(freeSet=NA_character_) {
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeSetOriginalStarts",
+	 contains = "BaseCompute")
+
+setMethod("initialize", "MxComputeSetOriginalStarts",
+	  function(.Object, freeSet) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object
+	  })
+
+##' Reset parameter starting values
+##'
+##' Sets the current parameter vector back to the original starting values.
+##'
+##' @param freeSet names of matrices containing free variables
+##' @aliases
+##' MxComputeSetOriginalStarts-class
+
+mxComputeSetOriginalStarts <- function(freeSet=NA_character_) {
+	new("MxComputeSetOriginalStarts", freeSet)
+}
+
+#----------------------------------------------------
+
 setClass(Class = "MxComputeGenerateData",
 	 contains = "BaseCompute",
 	 representation = representation(
@@ -2031,6 +2080,105 @@ mxComputeGenerateData <- function(expectation='expectation') {
 
 #----------------------------------------------------
 
+setClass(Class = "MxComputeLoadData",
+	 contains = "BaseCompute",
+	 representation = representation(
+		 dest = "MxCharOrNumber",
+		 column = "character",
+		 path = "character",
+		 originalDataIsIndexOne = "logical",
+		 byrow = "logical",
+		 row.names = "logical",
+		 col.names = "logical",
+		 verbose = "integer",
+		 cacheSize = "integer"
+	 ))
+
+setMethod("initialize", "MxComputeLoadData",
+	function(.Object, dest, column, path, originalDataIsIndexOne,
+		 row.names, col.names, byrow, verbose, cacheSize) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- NA_character_
+		  .Object@dest <- dest
+		  .Object@column <- column
+		  .Object@path <- path
+		  .Object@originalDataIsIndexOne <- originalDataIsIndexOne
+		  .Object@byrow <- byrow
+		  .Object@row.names <- row.names
+		  .Object@col.names <- col.names
+		  .Object@verbose <- verbose
+		  .Object@cacheSize <- cacheSize
+		  .Object
+	  })
+
+setMethod("convertForBackend", signature("MxComputeLoadData"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		if (is.character(.Object@dest)) {
+			full <- grepl('.', .Object@dest, fixed=TRUE)
+			for (dx in 1:length(.Object@dest)) {
+				if (full[dx]) next
+				.Object@dest[dx] <- paste0(.Object@dest[dx], '.data')
+			}
+			.Object@dest <- imxLocateIndex(flatModel, .Object@dest, .Object)
+		}
+		.Object
+	})
+
+##' Load columns into an MxData object
+##'
+##' The purpose of this compute step is to help quickly perform many
+##' similar analyses. For example, if we are given a sample of people
+##' with a few million SNPs (single-nucleotide polymorphism) per
+##' person then we could fit a separate model for each SNP by iterating
+##' over the SNP data.
+##'
+##' The column names given in the \code{column} parameter must already
+##' exist in the model's MxData object. The data is assumed to be
+##' a placeholder and is not used unless
+##' \code{originalDataIsIndexOne} is set to TRUE.
+##'
+##' When \code{byrow} is FALSE, it is necessary to read through the
+##' whole file on disk to load a single column. To amortize the cost
+##' of reading through the file, \code{cacheSize} are loaded each
+##' pass through the file.
+##'
+##' @param dest the name of the model where the columns will be loaded
+##' @param column a character vector. The column names to replace.
+##' @param method name of the conduit used to load the columns.
+##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param path when method='CSV', the path to the file containing the data
+##' @param originalDataIsIndexOne logical. Whether to use the initial data for index 1
+##' @param byrow logical. Whether the data columns are stored in rows (TRUE)
+##' or columns (FALSE) on disk.
+##' @param row.names logical. Whether row names are present.
+##' @param col.names logical. Whether column names are present.
+##' @param verbose integer. Level of diagnostic output.
+##' @param cacheSize integer. How many columns to cacheSize per
+##' scan through the data.
+##' @aliases
+##' MxComputeLoadData-class
+##' @seealso
+##' \link{mxComputeLoadMatrix}, \link{mxComputeCheckpoint}
+##' @examples
+mxComputeLoadData <- function(dest, column, method='CSV', ..., path,
+			      originalDataIsIndexOne=FALSE, byrow=TRUE,
+			      row.names=FALSE, col.names=FALSE, verbose=0L,
+			      cacheSize=100L) {
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("mxComputeLoadData does not accept values for the '...' argument")
+	}
+	if (method != 'CSV') stop("Only method='CSV' is implemented")
+	if (cacheSize < 1L) stop("cacheSize must be a positive integer")
+	new("MxComputeLoadData", dest, column, path, originalDataIsIndexOne,
+		as.logical(row.names), as.logical(col.names), byrow,
+		as.integer(verbose), as.integer(cacheSize))
+}
+
+#----------------------------------------------------
+
 setClass(Class = "MxComputeLoadMatrix",
 	 contains = "BaseCompute",
 	 representation = representation(
@@ -2071,12 +2219,13 @@ setMethod("convertForBackend", signature("MxComputeLoadMatrix"),
 		.Object
 	})
 
-mxComputeLoadMatrix <- function(dest, path, ..., originalDataIsIndexOne=FALSE,
+mxComputeLoadMatrix <- function(dest, method='CSV', ..., path, originalDataIsIndexOne=FALSE,
 				row.names=FALSE, col.names=FALSE) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxComputeLoadMatrix does not accept values for the '...' argument")
 	}
+	if (method != 'CSV') stop("Only method='CSV' is implemented")
 	new("MxComputeLoadMatrix", dest, path, originalDataIsIndexOne,
 		as.logical(row.names), as.logical(col.names))
 }
@@ -2096,11 +2245,12 @@ setClass(Class = "MxComputeCheckpoint",
 		 loopIndices = "logical",
 		 fit = "logical",
 		 counters = "logical",
-		 status = "logical"
+		 status = "logical",
+		 standardErrors = "logical"
 	 ))
 
 setMethod("initialize", "MxComputeCheckpoint",
-	  function(.Object, what, path, append, header, toReturn, parameters, loopIndices, fit, counters, status) {
+	  function(.Object, what, path, append, header, toReturn, parameters, loopIndices, fit, counters, status, standardErrors) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- NA_character_
@@ -2114,6 +2264,7 @@ setMethod("initialize", "MxComputeCheckpoint",
 		  .Object@fit <- fit
 		  .Object@counters <- counters
 		  .Object@status <- status
+		  .Object@standardErrors <- standardErrors
 		  .Object
 	  })
 
@@ -2136,7 +2287,8 @@ setMethod("convertForBackend", signature("MxComputeCheckpoint"),
 	})
 
 mxComputeCheckpoint <- function(what=NULL, ..., path=NULL, append=FALSE, header=TRUE, toReturn=FALSE,
-				parameters=TRUE, loopIndices=TRUE, fit=TRUE, counters=TRUE, status=TRUE) {
+				parameters=TRUE, loopIndices=TRUE, fit=TRUE, counters=TRUE,
+				status=TRUE, standardErrors=FALSE) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxComputeCheckpoint does not accept values for the '...' argument")
@@ -2145,7 +2297,7 @@ mxComputeCheckpoint <- function(what=NULL, ..., path=NULL, append=FALSE, header=
 	path <- as.character(path)
 	new("MxComputeCheckpoint", what, path, as.logical(append), as.logical(header), as.logical(toReturn),
 		as.logical(parameters), as.logical(loopIndices), as.logical(fit), as.logical(counters),
-		as.logical(status))
+		as.logical(status), as.logical(standardErrors))
 }
 
 #----------------------------------------------------

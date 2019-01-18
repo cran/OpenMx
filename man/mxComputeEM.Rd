@@ -6,9 +6,10 @@
 \title{Fit a model using DLR's (1977) Expectation-Maximization (EM) algorithm}
 \usage{
 mxComputeEM(expectation = NULL, predict = NA_character_, mstep,
-  observedFit = "fitfunction", ..., maxIter = 500L, tolerance = 1e-09,
-  verbose = 0L, freeSet = NA_character_, accel = "varadhan2008",
-  information = NA_character_, infoArgs = list(), estep = NULL)
+  observedFit = "fitfunction", ..., maxIter = 500L,
+  tolerance = 1e-09, verbose = 0L, freeSet = NA_character_,
+  accel = "varadhan2008", information = NA_character_,
+  infoArgs = list(), estep = NULL)
 }
 \arguments{
 \item{expectation}{a vector of expectation names (DEPRECATED)}
@@ -45,6 +46,14 @@ a new parameter vector. Repeat these steps until convergence
 criteria are met.
 }
 \details{
+The arguments to this function have evolved.  The old style
+\code{mxComputeEM(e,p,mstep=m)} is equivalent to the new style
+\code{mxComputeEM(estep=mxComputeOnce(e,p), mstep=m)}. This change
+allows the API to more closely match the literature on the E-M
+method.  You might use \code{mxAlgebra(..., fixed=TRUE)} to
+contain the results of the E-step and then cause this algebra to
+be recomputed using \code{mxComputeOnce}.
+
 This compute plan does not work with any and all expectations. It
 requires a special kind of expectation that can predict its
 missing data to create a completed data model.
@@ -78,4 +87,7 @@ Ramsay, J. O. (1975). Solving implicit equations in psychometric data analysis.
 Varadhan, R. & Roland, C. (2008). Simple and globally convergent
 methods for accelerating the convergence of any EM
 algorithm. \emph{Scandinavian Journal of Statistics, 35}, 335-353.
+}
+\seealso{
+\link[=mxAlgebra]{MxAlgebra}, \link{mxComputeOnce}
 }

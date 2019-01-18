@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,38 +21,40 @@
 
 struct omxWLSFitFunction : omxFitFunction {
 
-	omxMatrix* observedCov;
-	omxMatrix* observedMeans;
 	omxMatrix* expectedCov;
 	omxMatrix* expectedMeans;
+	omxMatrix* expectedSlope;
 	omxMatrix* observedFlattened;
 	omxMatrix* expectedFlattened;
 	omxMatrix* weights;
 	omxMatrix* P;
 	omxMatrix* B;
-	int n;
-	int fullWls;
 	int numOrdinal;
+	int vectorSize;
 	
-	omxWLSFitFunction() :standardMeans(0), standardThresholds(0) {};
+	const char *type;
+	const char *continuousType;
+	bool fullWeight;
+
+	omxWLSFitFunction() :
+		type("WLS"), continuousType("cumulants"), fullWeight(true) {};
 	virtual ~omxWLSFitFunction();
 	virtual void init();
 	virtual void compute(int ffcompute, FitContext *fc);
 	virtual void populateAttr(SEXP algebra);
 	
-	// 'standard' prefix variables are temp space used by flattenDataToVector
-	omxMatrix* standardCov;
-	omxMatrix* standardMeans;
-	omxMatrix* standardThresholds;
-	void flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *thresholdMat,
+	void flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *slope, omxMatrix *thresholdMat,
 				 std::vector< omxThresholdColumn > &thresholds, omxMatrix* vector);
+	void prepData();
+	virtual void invalidateCache() { prepData(); }
 };
 
-void omxWLSFitFunction::flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *thresholdMat,
+void omxWLSFitFunction::flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *slope,
+					    omxMatrix *thresholdMat,
 			 std::vector< omxThresholdColumn > &thresholds, omxMatrix* vector)
 {
 	EigenVectorAdaptor vec1(vector);
-	normalToStdVector(cov, means, thresholdMat, numOrdinal, thresholds, vec1);
+	normalToStdVector(cov, means, slope, thresholdMat, numOrdinal, thresholds, vec1);
 }
 
 omxWLSFitFunction::~omxWLSFitFunction()
@@ -64,9 +66,6 @@ omxWLSFitFunction::~omxWLSFitFunction()
 	omxFreeMatrix(owo->expectedFlattened);
 	omxFreeMatrix(owo->B);
 	omxFreeMatrix(owo->P);
-	omxFreeMatrix(owo->standardCov);
-	omxFreeMatrix(owo->standardMeans);
-	omxFreeMatrix(owo->standardThresholds);
 }
 
 
@@ -97,11 +96,10 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	
 	omxMatrix *expThresholdsMat = expectation->thresholdsMat;
 	
-	flattenDataToVector(eCov, eMeans, expThresholdsMat, eThresh, eFlat);
+	flattenDataToVector(eCov, eMeans, expectedSlope, expThresholdsMat, eThresh, eFlat);
 	
 	omxCopyMatrix(B, oFlat);
 	
-	//if(OMX_DEBUG) {omxPrintMatrix(B, "....WLS Observed Vector: "); }
 	if(OMX_DEBUG) {omxPrintMatrix(eFlat, "....WLS Expected Vector: "); }
 	omxDAXPY(-1.0, eFlat, B);
 	//if(OMX_DEBUG) {omxPrintMatrix(B, "....WLS Observed - Expected Vector: "); }
@@ -112,6 +110,7 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	} else {
 		// ULS Case: Memcpy faster than dgemv.
 		omxCopyMatrix(P, B);
+		omxTransposeMatrix(P);
 	}
 	
 	sum = F77_CALL(ddot)(&(P->cols), P->data, &onei, B->data, &onei);
@@ -190,53 +189,43 @@ void omxWLSFitFunction::populateAttr(SEXP algebra)
 omxFitFunction *omxInitWLSFitFunction()
 { return new omxWLSFitFunction; }
 
-void omxWLSFitFunction::init()
+void omxWLSFitFunction::prepData()
 {
 	auto *oo = this;
 	auto *newObj = this;
-	
-	omxState *currentState = oo->matrix->currentState;
-	omxMatrix *cov, *means;
-	
-	if(OMX_DEBUG) { mxLog("Initializing WLS FitFunction function."); }
-	
-	if(OMX_DEBUG) { mxLog("Retrieving expectation.\n"); }
-	if (!oo->expectation) { Rf_error("%s requires an expectation", oo->fitType); }
-	
-	if(OMX_DEBUG) { mxLog("Retrieving data.\n"); }
+
+	if (vectorSize != expectation->numSummaryStats())
+		Rf_error("%s: vectorSize changed from %d -> %d",
+			 vectorSize, expectation->numSummaryStats());
+
 	omxData* dataMat = oo->expectation->data;
-	if (dataMat->hasDefinitionVariables()) Rf_error("%s: def vars not implemented", oo->name());
+
+	if (!matrix->currentState->isClone()) {
+		std::vector<int> exoPred;
+		expectation->getExogenousPredictors(exoPred);
+		if (dataMat->defVars.size() == exoPred.size()) {
+			// OK
+		} else if (dataMat->hasDefinitionVariables()) {
+			Rf_error("%s: def vars not implemented", oo->name());
+		}
 	
-	if(!strEQ(omxDataType(dataMat), "acov") && !strEQ(omxDataType(dataMat), "cov")) {
-		char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "WLS FitFunction unable to handle data type %s.  Data must be of type 'acov'.\n", omxDataType(dataMat));
-		omxRaiseError(errstr);
-		free(errstr);
-		if(OMX_DEBUG) { mxLog("WLS FitFunction unable to handle data type %s.  Aborting.", omxDataType(dataMat)); }
+		dataMat->prepObsStats(matrix->currentState, expectation->getDataColumnNames(),
+				      exoPred, type, continuousType, fullWeight);
+	}
+
+	auto &obsStat = dataMat->getSingleObsSummaryStats();
+	//obsStat.log();
+	omxMatrix *cov = obsStat.covMat;
+	if (!cov) {
+		omxRaiseErrorf("%s: an observed covariance matrix is required", name());
 		return;
 	}
-	
-	fullWls = strEQ("WLS", CHAR(Rf_asChar(R_do_slot(rObj, Rf_install("weights")))));
 
-	oo->units = fullWls? FIT_UNITS_SQUARED_RESIDUAL_CHISQ : FIT_UNITS_SQUARED_RESIDUAL;
-	
-	/* Get Expectation Elements */
-	newObj->expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
-	newObj->expectedMeans = omxGetExpectationComponent(oo->expectation, "means");
-	
-	/* Read and set expected means, variances, and weights */
-	dataMat->permute(oo->expectation->getDataColumns());
+	omxMatrix *means = obsStat.meansMat;
+	omxMatrix *obsThresholdsMat = obsStat.thresholdMat;
+	weights = obsStat.acovMat;
+	std::vector< omxThresholdColumn > &oThresh = obsStat.thresholdCols;
 
-	cov = omxDataCovariance(dataMat);
-	means = omxDataMeans(dataMat);
-	weights = omxDataAcov(dataMat);
-
-	std::vector< omxThresholdColumn > &oThresh = omxDataThresholds(oo->expectation->data);
-
-	newObj->observedCov = cov;
-	newObj->observedMeans = means;
-	newObj->n = omxDataNumObs(dataMat);
-	
 	numOrdinal = oo->expectation->numOrdinal;
 	auto &eThresh = oo->expectation->getThresholdInfo();
 
@@ -247,7 +236,7 @@ void omxWLSFitFunction::init()
 
 	// Error Checking: Observed/Expected means must agree.  
 	// ^ is XOR: true when one is false and the other is not.
-	if((newObj->expectedMeans == NULL) ^ (newObj->observedMeans == NULL)) {
+	if((newObj->expectedMeans == NULL) ^ (means == NULL)) {
 		if(newObj->expectedMeans != NULL) {
 			omxRaiseError("Observed means not detected, but an expected means matrix was specified.\n  If you  wish to model the means, you must provide observed means.\n");
 			return;
@@ -257,7 +246,7 @@ void omxWLSFitFunction::init()
 		}
 	}
 	
-	if((eThresh.size()==0) ^ (oThresh.size()==0)) {
+	if((eThresh.size()==0) ^ (obsThresholdsMat==0)) {
 		if (eThresh.size()) {
 			omxRaiseError("Observed thresholds not detected, but an expected thresholds matrix was specified.\n   If you wish to model the thresholds, you must provide observed thresholds.\n ");
 			return;
@@ -267,9 +256,10 @@ void omxWLSFitFunction::init()
 		}
 	}
 
-	for(int i = 0, ei=0; i < int(oThresh.size()); i++) {
-		while (ei < int(eThresh.size()) && eThresh[ei].dColumn != oThresh[i].dColumn) ++ei;
-		eThresh[ei].numThresholds = oThresh[i].numThresholds;
+	if (obsThresholdsMat) {
+		for(int i = 0; i < int(oThresh.size()); i++) {
+			eThresh[i].numThresholds = oThresh[i].numThresholds;
+		}
 	}
 
 	if (OMX_DEBUG) {
@@ -279,32 +269,20 @@ void omxWLSFitFunction::init()
 		for (auto &th : oThresh) { th.log(); }
 	}
 	
-	/* Error check weight matrix size */
-	int ncol = newObj->observedCov->cols;
-	int vectorSize = expectation->numSummaryStats();
-	if(OMX_DEBUG) { mxLog("Intial WLSFitFunction vectorSize comes to: %d.", vectorSize); }
+	if(weights) {
+		if (weights->rows != weights->cols || weights->cols != vectorSize) {
+			omxRaiseErrorf("Developer Error in WLS-based FitFunction object: WLS-based expectation specified an incorrectly-sized weight matrix (%d != %d).\nIf you are not developing a new expectation type, you should probably post this to the OpenMx forums.", vectorSize, weights->cols);
+			return;
+		}
 	
-	if(weights != NULL && (weights->rows != weights->cols || weights->cols != vectorSize)) {
-		omxRaiseError("Developer Error in WLS-based FitFunction object: WLS-based expectation specified an incorrectly-sized weight matrix.\nIf you are not developing a new expectation type, you should probably post this to the OpenMx forums.");
-		return;
+		EigenMatrixAdaptor Eweight(weights);
+		Eigen::MatrixXd offDiagW = Eweight.triangularView<Eigen::StrictlyUpper>();
+		double offDiag = offDiagW.array().abs().sum();
+		oo->units = offDiag > 0.0? FIT_UNITS_SQUARED_RESIDUAL_CHISQ : FIT_UNITS_SQUARED_RESIDUAL;
+	} else {
+		oo->units = FIT_UNITS_SQUARED_RESIDUAL;
 	}
 	
-	
-	// FIXME: More Rf_error checking for incoming Fit Functions
-	
-	/* Temporary storage for calculation */
-	newObj->observedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
-	newObj->expectedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
-	newObj->P = omxInitMatrix(1, vectorSize, TRUE, currentState);
-	newObj->B = omxInitMatrix(vectorSize, 1, TRUE, currentState);
-	newObj->standardCov = omxInitMatrix(ncol, ncol, TRUE, currentState);
-	if (oo->expectation->thresholdsMat) {
-		newObj->standardThresholds = omxInitMatrix(oo->expectation->thresholdsMat->rows, oo->expectation->thresholdsMat->cols, TRUE, currentState);
-	}
-	if(means){
-		newObj->standardMeans = omxInitMatrix(1, ncol, TRUE, currentState);
-	}
-	omxMatrix *obsThresholdsMat = oo->expectation->data->obsThresholdsMat;
 	if (obsThresholdsMat && oo->expectation->thresholdsMat) {
 		if (obsThresholdsMat->rows != oo->expectation->thresholdsMat->rows ||
 		    obsThresholdsMat->cols != oo->expectation->thresholdsMat->cols) {
@@ -312,7 +290,52 @@ void omxWLSFitFunction::init()
 		}
 	}
 	
-	flattenDataToVector(newObj->observedCov, newObj->observedMeans, obsThresholdsMat, oThresh, newObj->observedFlattened);
-	flattenDataToVector(newObj->expectedCov, newObj->expectedMeans, oo->expectation->thresholdsMat,
+	flattenDataToVector(cov, means, obsStat.slopeMat, obsThresholdsMat,
+			    oThresh, newObj->observedFlattened);
+	if(OMX_DEBUG) {omxPrintMatrix(newObj->observedFlattened, "....WLS Observed Vector: "); }
+	flattenDataToVector(newObj->expectedCov, newObj->expectedMeans,
+			    newObj->expectedSlope, oo->expectation->thresholdsMat,
 				eThresh, newObj->expectedFlattened);
+}
+
+void omxWLSFitFunction::init()
+{
+	auto *oo = this;
+	
+	omxState *currentState = oo->matrix->currentState;
+	
+	if (!oo->expectation) { Rf_error("%s requires an expectation", name()); }
+	
+	if (R_has_slot(rObj, Rf_install("type"))) {
+		ProtectedSEXP RwlsType(R_do_slot(rObj, Rf_install("type")));
+		type = CHAR(STRING_ELT(RwlsType,0));
+	}
+	if (R_has_slot(rObj, Rf_install("continuousType"))) {
+		ProtectedSEXP RwlsContType(R_do_slot(rObj, Rf_install("continuousType")));
+		continuousType = CHAR(STRING_ELT(RwlsContType,0));
+	}
+	if (R_has_slot(rObj, Rf_install("fullWeight"))) {
+		ProtectedSEXP RwlsFullWeight(R_do_slot(rObj, Rf_install("fullWeight")));
+		fullWeight = Rf_asLogical(RwlsFullWeight);
+	}
+
+	if (!fullWeight && !strEQ(type, "ULS")) {
+		Rf_error("%s: !fullWeight && !strEQ(type, ULS)", name());
+	}
+
+	expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
+	expectedMeans = omxGetExpectationComponent(oo->expectation, "means");
+	expectedSlope = omxGetExpectationComponent(expectation, "slope");
+
+	/* Error check weight matrix size */
+	vectorSize = expectation->numSummaryStats();
+	if(OMX_DEBUG) { mxLog("Intial WLSFitFunction vectorSize comes to: %d.", vectorSize); }
+	
+	/* Temporary storage for calculation */
+	observedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
+	expectedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
+	P = omxInitMatrix(1, vectorSize, TRUE, currentState);
+	B = omxInitMatrix(vectorSize, 1, TRUE, currentState);
+
+	prepData();
 }

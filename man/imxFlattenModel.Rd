@@ -2,7 +2,7 @@
 % Please edit documentation in R/MxMultiModel.R
 \name{imxFlattenModel}
 \alias{imxFlattenModel}
-\title{Remove heirarchical structure from model}
+\title{Remove hierarchical structure from model}
 \usage{
 imxFlattenModel(model, namespace, unsafe = FALSE)
 }
@@ -14,5 +14,5 @@ imxFlattenModel(model, namespace, unsafe = FALSE)
 \item{unsafe}{whether to skip sanity checks}
 }
 \description{
-Remove heirarchical structure from model
+Remove hierarchical structure from model
 }

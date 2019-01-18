@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 ##' 
 ##' @details
 ##' This function automatically picks very good starting values for many models (RAM, LISREL, Normal), including multiple group versions of these.
-##' It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continous variables are also acceptable.
+##' It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continuous variables are also acceptable.
 ##' It works for model with covariance or raw data.
 ##' However, it does not currently work for models with definition variables, state space models, and item factor analysis models.
 ##' 
@@ -75,16 +75,14 @@ mxAutoStart <- function(model, type=c('ULS', 'DWLS')){
 	
 	if( isMultiGroupModel ){
 		submNames <- sapply(strsplit(model$fitfunction$groups, ".", fixed=TRUE), "[", 1)
-		sD <- list()
 		wmodel <- model
 		for(amod in submNames){
-			sD[[amod]] <- autoStartDataHelper(model, subname=amod, type=type)
-			wmodel[[amod]] <- mxModel(model[[amod]], name=paste0('AutoStart', amod), sD[[amod]], mxFitFunctionWLS())
+			
+			wmodel[[amod]] <- mxModel(model[[amod]], name=paste0('AutoStart', amod), autoStartDataHelper(model, subname=amod, type=type))
 		}
 		wmodel <- mxModel(wmodel, name='AutoStart', mxFitFunctionMultigroup(submNames))
 	} else {
-		mdata <- autoStartDataHelper(model, type=type)
-		wmodel <- mxModel(model, name='AutoStart', mdata, mxFitFunctionWLS())
+		wmodel <- mxModel(model, name='AutoStart', autoStartDataHelper(model, type=type))
 	}
 	wmodel <- mxOption(wmodel, "Calculate Hessian", "No")
 	wmodel <- mxOption(wmodel, "Standard Errors", "No")
@@ -103,34 +101,30 @@ autoStartDataHelper <- function(model, subname=model@name, type){
 		stop(paste("Your model named", model[[subname]]@name, "doesn't have any data?  Sad."))
 	}
 	exps <- mxGetExpected(model, c('covariance', 'means', 'thresholds'), subname=subname)
-	wsize <- length(c(vech(exps$covariance), exps$means, exps$thresholds[!is.na(exps$thresholds)]))
 	useVars <- dimnames(exps$covariance)[[1]]
-	data <- model[[subname]]$data$observed[,useVars]
-	hasOrdinal <- any(sapply(data, is.ordered))
-	isCovData <- model[[subname]]$data$type %in% 'cov'
-	I <- diag(1, wsize)
-	if(isCovData){
-		if (any(hasOrdinal)) {
-			stop("Found ordinal data of type='cov'. I go crazy, crazy baby.")
-		}
-		covData <- data[useVars,]
+	data <- model[[subname]]$data$observed
+	origDataType <- model[[subname]]$data$type
+	if(origDataType %in% 'cov'){
+		data <- data[useVars,useVars]
 		nrowData <- model[[subname]]$data$numObs
 		meanData <- model[[subname]]$data$means
-	} else {
-		if(!hasOrdinal){
-			covData <- cov(data, use='pair')
-			nrowData <- nrow(data)
-			meanData <- colMeans(data, na.rm=TRUE)
-		} else {
-			return(mxDataWLS(data, type=type, fullWeight=FALSE))
+		mdata <- mxData(data, type=origDataType, numObs=nrowData, observedStats=list(cov=data))
+		if (length(exps$means) > 0) {
+			mdata$observedStats$means <- meanData
 		}
-	}
-	if(type != 'ULS'){
-		mdata <- mxDataWLS(as.data.frame(data), type=type, allContinuousMethod=ifelse(length(exps$means) > 0, 'marginals', 'cumulants'), fullWeight=FALSE)
+	} else if (origDataType == 'raw') {
+		data <- data[,useVars]
+		if (type == 'ULS' && !any(sapply(data, is.ordered))) {
+			# special case for ULS, all continuous
+			os <- list(cov=cov(data, use='pair'))
+			if (length(exps$means) > 0) os$means <- colMeans(data, na.rm=TRUE)
+			return(list(mxData(data, type='raw', numObs=nrow(data), observedStats=os),
+				mxFitFunctionWLS('ULS', fullWeight=FALSE)))
+		}
+		mdata <- mxData(data, 'raw')
 	} else {
-		mdata <- mxData(observed=I, type='acov', numObs=nrowData, 
-			acov=I, fullWeight=I, means=meanData)
-		mdata@observed <- covData
+		stop(paste("mxAutoStart for",origDataType,"data is not implemented"))
 	}
-	return(mdata)
+	list(mdata, mxFitFunctionWLS(type, ifelse(length(exps$means) > 0, 'marginals', 'cumulants'),
+		type != 'ULS'))
 }

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,6 +21,10 @@ setClassUnion("MxCharOrNumber", c("character", "integer"))
 ##' An optional character
 ##' @name MxOptionalChar-class
 setClassUnion("MxOptionalChar", c("NULL", "character"))
+
+##' An optional data.frame
+##' @name MxOptionalDataFrame-class
+setClassUnion("MxOptionalDataFrame", c("NULL", "data.frame"))
 
 ##' @title An optional logical
 ##' @name MxOptionalLogical-class

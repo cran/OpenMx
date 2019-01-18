@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ second element will be the new persistent state information to be passed into th
 at the next iteration. The single numeric value will be used by the optimizer to perform
 optimization.
 
-The initial default value for the persistant state information is NA.
+The initial default value for the persistent state information is NA.
 
 Throwing an exception (via stop) from inside fitfun may result
 in unpredictable behavior. You may want to wrap your code in

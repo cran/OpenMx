@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -20,6 +20,6 @@ x = mxVersion()
 # OpenMx version: 2.0.0.3627
 # R version: R version 3.1.0 (2014-04-10)
 # Platform: x86_64-apple-darwin10.8.0
-# Default optimiser: NPSOL
+# Default optimizer: NPSOL
 
 omxCheckEquals(x, packageVersion("OpenMx"))

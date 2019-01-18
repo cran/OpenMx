@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -80,14 +80,67 @@ enum ColumnDataType {
 	COLUMNDATA_NUMERIC
 };
 
+union dataPtr {
+	double *realData;
+	int *intData;
+	dataPtr(double *_p) : realData(_p) {};
+	dataPtr(int *_p) : intData(_p) {};
+	void clear() { realData=0; intData=0; };
+};
+
 struct ColumnData {
 	const char *name;
 	ColumnDataType type;
-	// exactly one of these is non-null
-	double *realData;
-	int    *intData;
+	dataPtr ptr;
 	std::vector<std::string> levels;       // factors only
+
+	const char *typeName();
 };
+
+typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnIndexVector;
+
+struct WLSVarData {
+	int naCount;
+	Eigen::ArrayXd theta;
+	// OLS
+	Eigen::ArrayXd resid;
+};
+
+class obsSummaryStats {
+ public:
+	//std::vector<bool> subset;
+	bool output;
+	double totalWeight;
+	int numOrdinal;  // == thresholdMat->cols or 0 if null
+	omxMatrix* covMat;
+	omxMatrix *slopeMat; // manifest by exo predictor matrix
+	omxMatrix* meansMat;
+	omxMatrix* acovMat;			// The asymptotic covariance
+	omxMatrix *fullWeight;
+	omxMatrix* thresholdMat;
+	std::vector< omxThresholdColumn > thresholdCols; // size() == covMat.cols()
+
+	// prep
+	std::vector< WLSVarData > perVar;
+	Eigen::ArrayXXd SC_VAR;
+	Eigen::ArrayXXd SC_SL;
+	Eigen::ArrayXXd SC_TH;
+	Eigen::ArrayXXd SC_COR;
+
+	obsSummaryStats() : output(false), totalWeight(0), numOrdinal(0), covMat(0), slopeMat(0), meansMat(0),
+		acovMat(0), fullWeight(0), thresholdMat(0) {};
+	~obsSummaryStats();
+	void setDimnames(omxData *data, const std::vector<const char *> &dc, std::vector<int> &exoPred);
+	void permute(omxData *data, const std::vector<const char *> &dc);
+	void log();
+};
+
+struct cstrCmp {
+	bool operator() (const char *s1, const char *s2) const
+	{ return strcmp(s1,s2) < 0; }
+};
+
+typedef std::map< const char *, int, cstrCmp > ColMapType;
 
 class omxData {
  private:
@@ -97,9 +150,18 @@ class omxData {
 	double *currentWeightColumn;
 	int freqCol;
 	int *currentFreqColumn;
-	bool permuted;
+	obsSummaryStats *oss;
 
- public: // move everything to private TODO
+	void _prepObsStats(omxState *state, const std::vector<const char *> &dc,
+			   std::vector<int> &exoPred, const char *type,
+			  const char *continuousType, bool fullWeight);
+	bool regenObsStats(const std::vector<const char *> &dc, const char *wlsType);
+	void wlsAllContinuousCumulants(omxState *state, const char *wlsType,
+				       const std::vector<const char *> &dc,
+				       const Eigen::Ref<const Eigen::ArrayXd> rowMult,
+				       std::vector<int> &index);
+
+ public:
 	bool hasPrimaryKey() const { return primaryKey >= 0; };
 	bool hasWeight() const { return weightCol >= 0; };
 	bool hasFreq() const { return freqCol >= 0 || currentFreqColumn; };
@@ -109,22 +171,17 @@ class omxData {
 	void omxPrintData(const char *header, int maxRows);
 	void omxPrintData(const char *header);
 	void assertColumnIsData(int col);
-	typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnType;
-	void permute(const Eigen::Ref<const DataColumnType> &dc);
 
 	const char *name;
 	SEXP dataObject;                                // only used for dynamic data
 	omxMatrix* dataMat;                             // do not use directly
 	omxMatrix* meansMat;				// The means, as an omxMatrixObject
-	omxMatrix* acovMat;					// The asymptotic covariance, as an omxMatrixObject, added for ordinal WLS
-	omxMatrix *fullWeight;					// Full weight matrix for WLS SEs
-	omxMatrix* obsThresholdsMat;		// The observed thresholds, added for ordinal WLS
-	std::vector< omxThresholdColumn > thresholdCols;
 	double numObs;						// Number of observations (sum of rowWeight)
 	const char *_type;
 	const char *getType() const { return _type; };
 
 	// type=="raw"
+	ColMapType rawColMap;
 	std::vector<ColumnData> rawCols;
 	int numFactor, numNumeric;			// Number of ordinal and continuous columns
 	bool needSort;
@@ -139,7 +196,6 @@ class omxData {
 
 	void loadFakeData(omxState *state, double fake);
 	bool hasDefinitionVariables() { return defVars.size() != 0; };
-	bool CompareDefVarInMatrix(int lrow, int rrow, omxMatrix *mat, bool &mismatch);
 	bool loadDefVars(omxState *state, int row); // prefer omxExpectation member fn
 
 	// Used when the expectation provides the observed data (DataDynamic)
@@ -147,6 +203,8 @@ class omxData {
 	int version;
 
 	omxData();
+	~omxData();
+	void reportResults(MxRList &out);
 	void newDataStatic(omxState *, SEXP dataObject);
 	void connectDynamicData(omxState *currentState);
 	void recompute();
@@ -165,10 +223,35 @@ class omxData {
 		return getFreqColumn()[row];
 	}
 	int numRawRows();
-	void prohibitNAs(int col);
-	void reloadFromFile(const std::string &path);
+	bool containsNAs(int col);
+	void prohibitFactor(int col);
+	void prohibitNAdefVar(int col);
 	void freeInternal();
 	bool isDynamic() { return expectation.size() != 0; };
+	template <typename T> void visitObsStats(T visitor) {
+		visitor(*oss);
+	}
+	obsSummaryStats &getSingleObsSummaryStats() {
+		if (!oss) Rf_error("No observed summary stats");
+		return *oss;
+	};
+	const char *columnName(int col);
+	bool columnIsFactor(int col);
+	bool hasSummaryStats() { return dataMat != 0 || oss; }
+	void prepObsStats(omxState *state, const std::vector<const char *> &dc,
+			  std::vector<int> &exoPred, const char *type,
+			  const char *continuousType, bool fullWeight);
+	template <typename T1>
+	void recalcRowWeights(Eigen::ArrayBase<T1> &rowMult, std::vector<int> &index);
+	void invalidateCache();
+
+	// util member functions for observed statistics
+	template <typename T1, typename T2>
+	void copyScores(Eigen::ArrayBase<T1> &dest, int destCol,
+				const Eigen::ArrayBase<T2> &src, int srcCol, int numCols=1);
+	template <typename T1, typename T2>
+	double scoreDotProd(const Eigen::ArrayBase<T1> &a1,
+				    const Eigen::ArrayBase<T2> &a2);
 };
 
 omxData* omxNewDataFromMxData(SEXP dataObject, const char *name);
@@ -211,15 +294,11 @@ bool omxDataElementMissing(omxData *od, int row, int col);
 inline int omxKeyDataElement(omxData *od, int row, int col)
 {
 	ColumnData &cd = od->rawCols[col];
-	return cd.intData[row];
+	return cd.ptr.intData[row];
 }
 
-inline bool omxDataHasMatrix(omxData *od) { return od->dataMat != 0; }
 omxMatrix* omxDataCovariance(omxData *od);
 omxMatrix* omxDataMeans(omxData *od);
-omxMatrix* omxDataAcov(omxData *od);
-
-std::vector<omxThresholdColumn> &omxDataThresholds(omxData *od);
 
 void omxDataRow(omxData *od, int row, omxMatrix* colList, omxMatrix* om);// Populates a matrix with a single data row
 
@@ -248,16 +327,15 @@ void omxContiguousDataRow(omxData *od, int row, int start, int length, omxMatrix
 static OMXINLINE int
 omxIntDataElementUnsafe(omxData *od, int row, int col)
 {
-	return od->rawCols[col].intData[row];
+	return od->rawCols[col].ptr.intData[row];
 }
 
 static OMXINLINE int *omxIntDataColumnUnsafe(omxData *od, int col)
 {
-	return od->rawCols[col].intData;
+	return od->rawCols[col].ptr.intData;
 }
 
 double omxDataNumObs(omxData *od);											// Returns number of obs in the dataset
-bool omxDataColumnIsFactor(omxData *od, int col);
 bool omxDataColumnIsKey(omxData *od, int col);
 const char *omxDataColumnName(omxData *od, int col);
 const char *omxDataType(omxData *od);			      // TODO: convert to ENUM
@@ -268,5 +346,26 @@ int omxDataNumFactor(omxData *od);                    // Number of factor column
 /* Function wrappers that switch based on inclusion of algebras */
 
 double omxDataDF(omxData *od);
+
+inline bool omxDataColumnIsFactor(omxData *od, int col) { return od->columnIsFactor(col); }
+
+// Should not be stored long-term because freq are updated by bootstrap
+template <typename T1>
+void omxData::recalcRowWeights(Eigen::ArrayBase<T1> &rowMult, std::vector<int> &index)
+{
+	index.clear();
+	index.reserve(rows);
+	rowMult.derived().resize(rows);
+	double *rowWeight = getWeightColumn();
+	int *rowFreq = getFreqColumn();
+	for (int rx=0; rx < rows; ++rx) {
+		double ww = 1.0;
+		if (rowWeight) ww *= rowWeight[rx];
+		if (rowFreq) ww *= rowFreq[rx];
+		rowMult[rx] = ww;
+		if (ww == 0.0) continue;
+		index.push_back(rx);
+	}
+}
 
 #endif /* _OMXDATA_H_ */

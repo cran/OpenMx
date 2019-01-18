@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -40,9 +40,6 @@ definitionStartingValue <- function(defName, matrixName, flatModel, defvar.row =
 			omxQuotes(simplifyName(matrixName, flatModel@name)),
 			"\nOne possibility is you didn't add this variable to the data for this group?"
 		), call. = FALSE)
-	}
-	if (dataSet@.isSorted) {
-		defvar.row <- match(defvar.row - 1L, dataSet$indexVector)
 	}
 	return(dataSet@observed[defvar.row, components[[3]]])
 }

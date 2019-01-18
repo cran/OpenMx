@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -68,9 +68,6 @@ mxFactorScores <- function(model, type=c('ML', 'WeightedML', 'Regression'), minM
 		factorScoreHelperFUN <- ramFactorScoreHelper
 	}
 	nrows <- nrow(model$data$observed)
-	if(length(model$data$indexVector) == nrows){ #put data back in unsorted order
-		model@data@observed <- model$data$observed[order(model$data$indexVector), ]
-	}
 	res <- array(NA, c(nrows, nksi, 2))
 	if(any(type %in% c('ML', 'WeightedML'))){
 		model <- omxSetParameters(model, labels=names(omxGetParameters(model)), free=FALSE)

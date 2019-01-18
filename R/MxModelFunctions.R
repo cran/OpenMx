@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -305,8 +305,7 @@ updateModelEntitiesTargetModel <- function(model, entNames, values, modelNameMap
 			name <- selectEnt[[i]]
 			candidate <- model[[name]]
 			value <- selectVal[[i]]
-			if (!is.null(candidate) && (length(value) > 0)
-				&& !is.nan(value)) {
+			if (!is.null(candidate) && length(value)) {
 				if (is(candidate, "MxAlgebra")) {
 					cdim <- sapply(dimnames(candidate), length)
 					mask <- cdim != 0
@@ -345,8 +344,11 @@ updateModelEntitiesTargetModel <- function(model, entNames, values, modelNameMap
 					for (sl in names(attributes(value))) {
 						slot(candidate, sl) <- attr(value, sl)
 					}
+				} else if (is(candidate, "MxDataStatic")) {
+					value$numObs <- NULL
+					if (length(value)) candidate@observedStats <- value
 				} else if (is(candidate, "MxDataDynamic")) {
-					candidate@numObs <- value
+					candidate@numObs <- value$numObs
 				}
 				model[[name]] <- candidate
 			}

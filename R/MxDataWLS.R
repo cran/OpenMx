@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,12 +16,78 @@
 
 #------------------------------------------------------------------------------
 
+setClass(Class = "MxDataLegacyWLS",
+	 contains = "MxDataStatic",
+	 representation = representation(
+		acov   = "matrix",
+		fullWeight = "matrix",
+		thresholds = "matrix"))
+
+setMethod("initialize", "MxDataLegacyWLS",
+	  function(.Object, observed, means, type, numObs, acov, fullWeight, thresholds) {
+		.Object@observed <- observed
+		.Object@means <- means
+		.Object@type <- type
+		.Object@numObs <- numObs
+		.Object@acov <- acov
+		.Object@fullWeight <- fullWeight
+		.Object@thresholds <- thresholds
+		.Object@name <- "data"
+		.Object@.needSort <- FALSE
+		.Object@.isSorted <- FALSE
+		.Object@primaryKey <- as.character(NA)
+		.Object@weight <- as.character(NA)
+		.Object@frequency <- as.character(NA)
+		return(.Object)
+	}
+)
+
+legacyMxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=NA, thresholds=NA) {
+	if (length(means) == 1 && is.na(means)) means <- as.numeric(NA)
+	if (length(acov) == 1 && is.na(acov)) acov <- matrix(as.numeric(NA))
+	if (length(fullWeight) == 1 && is.na(fullWeight)) fullWeight <- matrix(as.numeric(NA))
+	if (length(thresholds) == 1 && is.na(thresholds)) thresholds <- matrix(as.numeric(NA))
+	if (missing(observed) || !is(observed, "MxDataFrameOrMatrix")) {
+		stop("Observed argument is neither a data frame nor a matrix")
+	}
+	dups <- duplicated(colnames(observed))
+	if (any(dups)) {
+		stop(paste("Column names must be unique. Duplicated:",
+			   omxQuotes(colnames(observed)[dups])))
+	}
+	if ((!is.vector(means) && !(prod(dim(means)) == length(means))) || !is.numeric(means)) {
+		stop("Means argument must be of numeric vector type")
+	}
+	if (type != "raw" && is.na(numObs)) {
+		stop("Number of observations must be specified for non-raw data, i.e., add numObs=XXX to mxData()")
+	}
+	if (type == "acov") {
+		verifyCovarianceMatrix(observed)
+		verifyCovarianceMatrix(acov, nameMatrix="asymptotic")
+		if(!single.na(fullWeight)){
+			verifyCovarianceMatrix(fullWeight, nameMatrix="asymptotic")
+		}
+		if ( !single.na(thresholds) ) {
+			verifyThresholdNames(thresholds, observed)
+		}
+	}
+
+	lapply(dimnames(observed)[[2]], imxVerifyName, -1)
+	if(is.matrix(means)){meanNames <- colnames(means)} else {meanNames <- names(means)}
+	means <- as.matrix(means)
+	dim(means) <- c(1, length(means))
+	colnames(means) <- meanNames
+
+	return(new("MxDataLegacyWLS", observed, means, type, as.numeric(numObs), acov, fullWeight,
+		   thresholds))
+}
 
 #------------------------------------------------------------------------------
 # Mike Hunter's wls compute function for continuous only variables
 
 # x is the raw data
 wlsContinuousOnlyHelper <- function(x, type="WLS"){
+	mnames <- colnames(x)
 	numRows <- nrow(x)
 	numCols <- ncol(x)
 	numColsStar <- numCols*(numCols+1)/2
@@ -65,6 +131,15 @@ wlsContinuousOnlyHelper <- function(x, type="WLS"){
 	if(type=="WLS"){
 		useWeight <- fullWeight
 	}
+
+	nv <- ncol(x)
+	covNames <- outer(mnames[1:nv], mnames[1:nv], FUN=paste, sep='_')
+	diag(covNames) <- paste0("var_", mnames[1:nv])
+	vechs(covNames) <- paste0("poly_", vechs(covNames))
+	n1 <- vech(covNames)
+	dimnames(useWeight) <- list(n1,n1)
+	dimnames(fullWeight) <- list(n1,n1)
+
 	return(list(use=useWeight*numRows, full=fullWeight*numRows))
 }
 
@@ -294,9 +369,9 @@ indexCov4to2 <- function(i, j, k, l, nvar){
 }
 
 indexCov2to1 <- function(i, j, nvar){
-	if(i > j) {stop("Element should be in upper triangle: column j >= row i")}
-	a <- j
-	b <- i
+	if(i < j) {stop("Element should be in lower triangle: column j <= row i")}
+	a <- i
+	b <- j
 	return( a + nvar*(b-1) - sum((b-1):0) )
 }
 
@@ -401,13 +476,12 @@ univariateMeanVarianceStatisticsHelper <- function(ntvar, n, ords, data, useMinu
 	return(list(meanEst, varEst, meanHess, varHess, meanJac, varJac))
 }
 
+# useMinusTwo is deprecated
 mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, fullWeight=TRUE,
-		      suppressWarnings = TRUE, allContinuousMethod="cumulants", ..., silent=!interactive()) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxDataWLS does not accept values for the '...' argument")
-	}
-	debug <- FALSE
+		      suppressWarnings = TRUE, allContinuousMethod=c("cumulants", "marginals"),
+		      silent=!interactive())
+{
+	allContinuousMethod <- match.arg(allContinuousMethod)
 	# version 0.2
 	#
 	#available types
@@ -426,12 +500,16 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 				"', or '", wlsTypes[length(wlsTypes)], "'.", sep="")
 			)
 	}
-	if (!(tolower(allContinuousMethod) %in% c('cumulant', 'cumulants', 'marginal', 'marginals'))){
+	allContinuousMethod <- tolower(allContinuousMethod)
+	if (!(allContinuousMethod %in% c('cumulant', 'cumulants', 'marginal', 'marginals'))){
 		stop(
 			paste("'allContinuousMethod' must be one of ",
 				"'cumulants' or 'marginals'.\nBoth plural and singular forms are allowed.", sep="")
 			)
 	}
+	# standardize spelling
+	if (allContinuousMethod == 'cumulant') allContinuousMethod <- 'cumulants'
+	if (allContinuousMethod == 'marginal') allContinuousMethod <- 'marginals'
 		
 	# select ordinal variables
 	ords <- unlist(lapply(data, is.ordered))
@@ -453,7 +531,7 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 	if (!silent) imxReportProgress(msg, 0)
 	
 	# if no ordinal variables, use continuous-only helper
-	if(nvar == 0 && tolower(allContinuousMethod) %in% c("cumulant", "cumulants")){
+	if(nvar == 0 && allContinuousMethod %in% c("cumulant", "cumulants")){
 		if (!silent) imxReportProgress("", msgLen)
 		if (any(is.na(data))) {
 			stop(paste("All continuous data with missingness cannot be",
@@ -462,7 +540,8 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 				   "or use maximum likelihood instead"))
 		}
 		wls <- wlsContinuousOnlyHelper(data, type)
-		return(mxData(cov(data), type="acov", acov=wls$use, fullWeight=wls$full, numObs=n))
+		retVal <- legacyMxData(cov(data), type="acov", acov=wls$use, fullWeight=wls$full, numObs=n)
+		return(wls.permute(retVal))
 	}
 	
 	# separate ordinal and continuous variables (temporary)
@@ -500,8 +579,8 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 	#   - diagonal elements are 1/(1-r^2)
 	#   - off-diagonal elements are -r/(1-r^2)
 	# you don't need any of this information now, but may later
-	for (i in 1:ntvar){
-		for (j in i:ntvar){
+	for (j in 1:ntvar){
+		for (i in j:ntvar){
 			pcData <- data[,c(i,j)]
 			ordPair <- (ords[i] + ords[j])
 			if( ordPair == 0 ) { # Continuous variables
@@ -611,12 +690,6 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 	# put names on the hessian
 	names(hessHold) <- parName
 	
-	# put it all together
-	if(nvar == 0 && debug){ #jumps to continuousonly ADF code.
-		w3 <- diag(hessHold) %*% solve(t(pcJac)%*%pcJac) %*% diag(hessHold)
-		w2 <- covHess %*% solve(t(pcJac)%*%pcJac) %*% covHess
-		w <- wlsContinuousOnlyHelper(cd)
-	}
 	# Now doing something about the means!
 	# To replicate old behavior set,
 	# The following two lines should be deleted.
@@ -659,38 +732,23 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 		warning(paste("Encountered warnings during optimization of",
 			      omxQuotes(fullWarn[fullWarn > 0])))
 	}
+
 	dls <- diag(diag(wls))
+	dimnames(dls) <- dimnames(wls)
 	uls <- (dls>0)*1
-	
+	dimnames(uls) <- dimnames(wls)
+
 	# try the weird non-hao version
 	xls <- quad
+	dimnames(xls) <- dimnames(wls)
 	
-	if(debug){
-		custom.compute <- mxComputeSequence(list(mxComputeNumericDeriv(checkGradient=FALSE), mxComputeReportDeriv()))
-		satModel <- mxModel('SatModel4Hess',
-			mxMatrix('Symm', nrow(pcMatrix), ncol(pcMatrix), values=pcMatrix, free=TRUE, name='theCov'),
-			mxMatrix('Full', 1, length(meanEst), values=meanEst, free=TRUE, name='theMeans'),
-			mxMatrix('Full', nrow(thresh), ncol(thresh), values=thresh, free=TRUE, name='theThresh'),
-			mxExpectationNormal(covariance='theCov', means='theMeans', thresholds='theThresh', dimnames=names(data)),
-			mxFitFunctionML(),
-			mxData(data, 'raw'),
-			custom.compute)
-		
-		run <- mxRun(satModel)
-		mlHess <- run$output$hessian
-		meanID <- grep('.theMeans', rownames(mlHess))
-		
-		retVal2 <- mxData(pcMatrix, type="acov", numObs=n, 
-			acov=diag(1), fullWeight=NA, thresholds=thresh)
-		retVal2@acov <- satModel$output$hessian
-	}
 	dummy <- diag(1, nrow=nrow(pcMatrix))
 	dimnames(dummy) <- dimnames(pcMatrix)
 	if(nvar > 0){
-		retVal <- mxData(dummy, type="acov", numObs=n, 
+		retVal <- legacyMxData(dummy, type="acov", numObs=n, 
 			acov=diag(1), fullWeight=NA, thresholds=thresh)
 	} else {
-		retVal <- mxData(dummy, type="acov", numObs=n, 
+		retVal <- legacyMxData(dummy, type="acov", numObs=n, 
 			acov=diag(1), fullWeight=NA, thresholds=NA)
 	}
 	retVal@observed <- pcMatrix
@@ -711,9 +769,143 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 	if (type=="XLS"){
 		retVal@acov <- xls
 		}
-	if (debug){return(list(fullJac, fullHess))}
 	if (!silent) imxReportProgress("", msgLen)
-	return(retVal)
+	return(wls.permute(retVal))
+}
+
+wls.permute <- function(mxd) {
+	acov <- mxd@acov
+	perm <- match(names(.mxDataAsVector(mxd)), colnames(acov))
+	mxd@acov <- acov[perm,perm]
+	fw <- mxd@fullWeight
+	if (!is.null(fw)) {
+		mxd@fullWeight <- fw[perm,perm]
+	}
+	mxd
+}
+
+.mxDataAsVector <- function(mxd) {
+	mnames <- colnames(mxd@observed)
+	ordInd <- c()
+	if (!is.null(mxd@thresholds)) {
+		ordInd <- match(colnames(mxd@thresholds), mnames)
+		dth <- !is.na(mxd@thresholds)
+	}
+	v <- c()
+	vn <- c()
+	for (vx in 1:length(mnames)) {
+		tcol <- which(vx == ordInd)
+		if (length(tcol) == 0) {
+			if (!single.na(mxd@means)) {
+				v <- c(v, mxd@means[vx])
+				vn <- c(vn, mnames[vx])
+			}
+		} else {
+			tcount <- sum(dth[,tcol])
+			v <- c(v, mxd@thresholds[1:tcount,tcol])
+			vn <- c(vn, paste0(mnames[vx], 't', 1:tcount))
+		}
+	}
+	for (vx in 1:length(mnames)) {
+		if (any(vx == ordInd)) next
+		v <- c(v, mxd@observed[vx,vx])
+		vn <- c(vn, paste0('var_', mnames[vx]))
+	}
+	v <- c(v, vechs(mxd@observed))
+	nv <- length(mnames)
+	vn <- c(vn, paste0('poly_', vechs(outer(mnames[1:nv], mnames[1:nv], FUN=paste, sep='_'))))
+	names(v) <- vn
+	v
+}
+
+
+##' Estimate summary statistics used by the WLS fit function
+##'
+##' The summary statistics are returned in the observedStats slot of
+##' the MxData object.
+##'
+##' @param mxd an MxData object containing raw data
+##' @param type the type of WLS weight matrix
+##' @param allContinuousMethod which method to use when all indicators are continuous
+##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param exogenous names variables to be modelled as exogenous
+##' @param fullWeight whether to produce a fullWeight matrix
+##' @param returnModel whether to return the whole mxModel (TRUE) or just the mxData (FALSE)
+##' @seealso
+##' \link{mxFitFunctionWLS}
+##' @examples
+##' omxAugmentDataWithWLSSummary(mxData(Bollen[,1:8], 'raw'))
+
+omxAugmentDataWithWLSSummary <- function(mxd, type=c('WLS','DWLS','ULS'),
+			      allContinuousMethod=c("cumulants", "marginals"),
+			      ..., exogenous=c(), fullWeight=TRUE, returnModel=FALSE)
+{
+	type <- match.arg(type)
+	allContinuousMethod <- match.arg(allContinuousMethod)
+	garbageArguments <- list(...)
+	if (length(garbageArguments) > 0) {
+		stop("omxAugmentDataWithWLSSummary does not accept values for the '...' argument")
+	}
+	if (mxd@type != 'raw') stop("Data must contain a raw data frame")
+	data <- mxd@observed
+	notFound <- is.na(match(exogenous, colnames(data)))
+	if (any(notFound)) {
+		stop(paste("Cannot find exogenous", omxQuotes(exogenous), "in data"))
+	}
+	nc <- ncol(data)
+	names <- setdiff(colnames(data), exogenous)
+	weight <- mxd@weight
+	if (!is.na(weight)) {
+		nc <- nc - 1
+		names <- names[-match(weight, colnames(data))]
+	}
+	frequency <- mxd@frequency
+	if (!is.na(frequency)) {
+		nc <- nc - 1
+		names <- names[-match(frequency, colnames(data))]
+	}
+	numManifests <- nc - length(exogenous)
+	fake <- mxModel("fake",
+		mxd,
+		mxMatrix("Full", nc, nc, dimnames=list(c(names,exogenous),
+			c(names,exogenous)), name="S"),
+		mxMatrix("Full", nc, nc, name="A"),
+		mxMatrix("Full", numManifests, nc,
+			dimnames=list(names,c(names,exogenous)), name="F"),
+		mxExpectationRAM(),
+		mxFitFunctionWLS(type, allContinuousMethod, fullWeight),
+		mxComputeOnce('fitfunction', 'fit'))
+
+	if (length(exogenous)) fake$A$values[1:numManifests,(numManifests+1):nc] <- 1
+	fake$S$values[1:numManifests,1:numManifests] <- diag(numManifests)
+	fake$F$values[1:numManifests,1:numManifests] <- diag(numManifests)
+
+	ords <- unlist(lapply(data, is.ordered)) & colnames(data) %in% names
+
+	if (any(ords) || allContinuousMethod != 'cumulants') {
+		fake <- mxModel(fake,
+			mxMatrix(values=0, nrow=1, ncol=nc,
+				dimnames=list(c(), c(names,exogenous)), name="M"))
+		if (length(exogenous)) {
+			fake$M$labels[1,(numManifests+1):ncol(fake$M)] <-
+				paste0('data.',exogenous)
+		}
+		fake$expectation$M <- "M"
 	}
 
+	if (any(ords)) {
+		nthr <- sapply(data[,ords], nlevels) - 1L
+		tmpThr <- matrix(NA, ncol=sum(ords), nrow=max(nthr))
+		colnames(tmpThr) <- colnames(data)[ords]
+		for (cx in 1:ncol(tmpThr)) {
+			tmpThr[1:nthr[cx],cx] <- seq(-1,1,length.out=nthr[cx])
+		}
+		fake <- mxModel(fake, mxMatrix(values=tmpThr, name="thresh"))
+		fake$expectation$thresholds <- "thresh"
+	}
+	fake <- mxRun(fake, silent=TRUE)
+	if (returnModel) return(fake)
+	fake$data
+}
 
+dataIsRawish <- function(mxd) mxd@type == 'raw' || mxd@type == 'acov'

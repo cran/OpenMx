@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 \description{
    This function returns a string with the current version number of OpenMx.
    Optionally (with verbose = TRUE (the default)), it prints a message containing
-   the version of R, the platform, and the optimiser.
+   the version of R, the platform, and the optimizer.
 }
 
 \usage{

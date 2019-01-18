@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ void FreeVarGroup::cacheDependencies(omxState *os)
 
 	for(size_t i = 0; i < numMats; i++) {
 		if (!locations[i]) continue;
-		os->matrixList[i]->unshareMemroyWithR();
+		os->matrixList[i]->unshareMemoryWithR();
 	}
 
 	// Everything is set up. This is a good place to log.
@@ -428,12 +428,16 @@ void omxState::initialRecalc(FitContext *fc)
 
 void omxState::invalidateCache()
 {
-	for(size_t ex = 0; ex < expectationList.size(); ex++) {
-		expectationList[ex]->invalidateCache();
+	for (int ax=0; ax < int(dataList.size()); ++ax) {
+		auto d1 = dataList[ax];
+		d1->invalidateCache();
 	}
 	for (int ax=0; ax < (int) matrixList.size(); ++ax) {
 		omxMatrix *matrix = matrixList[ax];
 		omxMarkDirty(matrix);
+	}
+	for(size_t ex = 0; ex < expectationList.size(); ex++) {
+		expectationList[ex]->invalidateCache();
 	}
 	for (int ax=0; ax < (int) algebraList.size(); ++ax) {
 		omxMatrix *matrix = algebraList[ax];
@@ -962,4 +966,11 @@ void omxFreeVar::copyToState(omxState *os, double val)
 			      name, matrix->name(), row, col, val);
 		}
 	}
+}
+
+double omxFreeVar::getCurValue(omxState *os)
+{
+	omxFreeVarLocation &loc = locations[0];
+	EigenMatrixAdaptor Emat(os->matrixList[loc.matrix]);
+	return Emat(loc.row, loc.col);
 }

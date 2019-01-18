@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@
 class omxExpectation {					// An Expectation
 	typedef omxExpectation base;
 	int *dataColumnsPtr;
-	std::vector< omxThresholdColumn > thresholds;
+	std::vector<const char *> dataColumnNames;
+	std::vector< omxThresholdColumn > thresholds;  // size() == numDataColumns
 
  public:
 	int numDataColumns;
@@ -94,8 +95,10 @@ class omxExpectation {					// An Expectation
 		dataColumnsPtr = INTEGER(vec);
 	}
 
-	typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnType;
-	virtual const Eigen::Map<DataColumnType> getDataColumns();
+	typedef Eigen::Matrix<int, Eigen::Dynamic, 1> DataColumnIndexVector;
+	virtual const Eigen::Map<DataColumnIndexVector> getDataColumns();
+	virtual const std::vector<const char *> &getDataColumnNames() const;
+	virtual void getExogenousPredictors(std::vector<int> &out) {};
 	virtual std::vector< omxThresholdColumn > &getThresholdInfo();
 
 	void loadThresholds();
@@ -137,7 +140,7 @@ omxExpectation *InitMixtureExpectation();
 
 void complainAboutMissingMeans(omxExpectation *off);
 
-void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *thr,
+void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *slope, omxMatrix *thr,
 		       int numOrdinal, std::vector< omxThresholdColumn > &ti,
 		       Eigen::Ref<Eigen::VectorXd> out);
 

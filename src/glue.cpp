@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,6 +40,20 @@
 #include <RcppEigen.h>
 #include "EnableWarnings.h"
 #include "omxSadmvnWrapper.h"
+
+void loadCharVecFromR(const char *context, SEXP names, std::vector<const char *> &dest)
+{
+	if (!Rf_isNull(names) && !Rf_isString(names)) {
+		Rf_warning("%s: found type '%s' instead of a character vector (ignored)",
+			   context, Rf_type2char(TYPEOF(names)));
+	} else {
+		int nlen = Rf_length(names);
+		dest.resize(nlen);
+		for (int nx=0; nx < nlen; ++nx) {
+			dest[nx] = CHAR(STRING_ELT(names, nx));
+		}
+	}
+}
 
 void markAsDataFrame(SEXP list, int rows)
 {
@@ -141,8 +155,7 @@ SEXP dtmvnorm_marginal2(SEXP Rxq, SEXP Rxr, SEXP Rq, SEXP Rr,
 	VectorXd density(4);
 
 	omxState *globalState = new omxState;
-	std::vector<double> startingValues;
-	FitContext *fc = new FitContext(globalState, startingValues);
+	FitContext *fc = new FitContext(globalState);
 	_dtmvnorm_marginal2(fc, NA_REAL, xq, xr, qq, rr, sigma, lower, upper, density);
 	delete fc;
 	delete globalState;
@@ -164,8 +177,7 @@ SEXP dtmvnorm_marginal(SEXP Rxn, SEXP Rn, SEXP Rsigma, SEXP Rlower, SEXP Rupper)
 	VectorXd density(2);
 
 	omxState *globalState = new omxState;
-	std::vector<double> startingValues;
-	FitContext *fc = new FitContext(globalState, startingValues);
+	FitContext *fc = new FitContext(globalState);
 	_dtmvnorm_marginal(fc, NA_REAL, xn, nn, sigma, lower, upper, density);
 	delete fc;
 	delete globalState;
@@ -186,8 +198,7 @@ SEXP mtmvnorm(SEXP Rsigma, SEXP Rlower, SEXP Rupper)
 	VectorXd tmean;
 	MatrixXd tcov;
 	omxState *globalState = new omxState;
-	std::vector<double> startingValues;
-	FitContext *fc = new FitContext(globalState, startingValues);
+	FitContext *fc = new FitContext(globalState);
 	_mtmvnorm(fc, NA_REAL, sigma, fullLower, fullUpper, tmean, tcov);
 	delete fc;
 	delete globalState;
@@ -539,9 +550,8 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	globalState->omxProcessMxMatrixEntities(matList);
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	std::vector<double> startingValues;
-	globalState->omxProcessFreeVarList(varList, &startingValues);
-	FitContext *fc = new FitContext(globalState, startingValues);
+	globalState->omxProcessFreeVarList(varList);
+	FitContext *fc = new FitContext(globalState);
 	Global->topFc = fc;
 	fc->copyParamToModelClean();
 
@@ -691,12 +701,6 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 				}
 				result.add("bounds", bret.asR());
 			}
-			if (fc->stderrs) {
-				SEXP stdErrors;
-				Rf_protect(stdErrors = Rf_allocMatrix(REALSXP, numFree, 1));
-				memcpy(REAL(stdErrors), fc->stderrs, sizeof(double) * numFree);
-				result.add("standardErrors", stdErrors);
-			}
 			if (fc->wanted & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN)) {
 				result.add("infoDefinite", Rf_ScalarLogical(fc->infoDefinite));
 				result.add("conditionNumber", Rf_ScalarReal(fc->infoCondNum));
@@ -762,6 +766,8 @@ static SEXP testEigenDebug()
 	return Rf_ScalarLogical(false);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
 static R_CallMethodDef callMethods[] = {
 	{"backend", (DL_FUNC) omxBackend, 12},
 	{"callAlgebra", (DL_FUNC) omxCallAlgebra, 3},
@@ -781,6 +787,7 @@ static R_CallMethodDef callMethods[] = {
 	{".enableMxLog", (DL_FUNC) &enableMxLog, 0},
 	{NULL, NULL, 0}
 };
+#pragma GCC diagnostic pop
 
 #ifdef  __cplusplus
 extern "C" {

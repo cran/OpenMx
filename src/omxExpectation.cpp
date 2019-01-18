@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 **********************************************************/
 
 #include "omxExpectation.h"
+#include "glue.h"
 #include "EnableWarnings.h"
 
 typedef struct omxExpectationTableEntry omxExpectationTableEntry;
@@ -109,7 +110,7 @@ void omxExpectation::loadThresholds()
 		omxThresholdColumn col;
 		col.dColumn = index;
 
-		const char *colname = omxDataColumnName(data, index);
+		const char *colname = data->columnName(index);
 		int tc = thresholdsMat->lookupColumnByName(colname);
 
 		if (tc < 0 || (data->rawCols.size() && !omxDataColumnIsFactor(data, index))) {	// Continuous variable
@@ -158,7 +159,10 @@ void omxExpectation::loadFromR()
 
 	int numCols=0;
 	bool isRaw = strEQ(omxDataType(data), "raw");
-	if (isRaw || omxDataHasMatrix(data)) {
+	if (isRaw || data->hasSummaryStats()) {
+		ProtectedSEXP Rdcn(R_do_slot(rObj, Rf_install("dataColumnNames")));
+		loadCharVecFromR(name, Rdcn, dataColumnNames);
+
 		ProtectedSEXP Rdc(R_do_slot(rObj, Rf_install("dataColumns")));
 		numCols = Rf_length(Rdc);
 		ox->saveDataColumnsInfo(Rdc);
@@ -245,9 +249,12 @@ void omxCompleteExpectation(omxExpectation *ox) {
 	}
 }
 
-const Eigen::Map<omxExpectation::DataColumnType> omxExpectation::getDataColumns()
+const std::vector<const char *> &omxExpectation::getDataColumnNames() const
+{ return dataColumnNames; }
+
+const Eigen::Map<omxExpectation::DataColumnIndexVector> omxExpectation::getDataColumns()
 {
-	return Eigen::Map<DataColumnType>(dataColumnsPtr, numDataColumns);
+	return Eigen::Map<DataColumnIndexVector>(dataColumnsPtr, numDataColumns);
 }
 
 std::vector< omxThresholdColumn > &omxExpectation::getThresholdInfo()
@@ -317,32 +324,64 @@ int omxExpectation::numSummaryStats()
 	if (!cov) {
 		Rf_error("%s::numSummaryStats is not implemented (for object '%s')", expType, name);
 	}
-	int count = triangleLoc1(cov->rows);
+
 	omxMatrix *mean = getComponent("means");
-	if (mean) count += cov->rows;
-	
-	for (auto &th : getThresholdInfo()) {
-		count += th.numThresholds;
+
+	int count = 0;
+
+	omxMatrix *slope = getComponent("slope");
+	if (slope) count += slope->rows * slope->cols;
+
+	auto &ti = getThresholdInfo();
+	if (ti.size() == 0) {
+		// all continuous
+		count += triangleLoc1(cov->rows);
+		if (mean) count += cov->rows;
+		return count;
 	}
+
+	count += triangleLoc1(cov->rows - 1);  // covariances
+	for (auto &th : ti) {
+		// mean + variance
+		count += th.numThresholds? th.numThresholds : 2;
+	}
+
 	return count;
 }
 
-void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *thr,
+void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *slope, omxMatrix *thr,
 		       int numOrdinal, std::vector< omxThresholdColumn > &ti,
 		       Eigen::Ref<Eigen::VectorXd> out)
 {
+	// order of elements: (c.f. lav_model_wls, lavaan 0.6-2)
+	// 1. thresholds + means (interleaved)
+	// 2. slopes (if any, columnwise per exo)
+	// 3. variances (continuous indicators only)
+	// 4. covariances; not correlations (lower triangle)
+
 	EigenMatrixAdaptor Ecov(cov);
 	if (numOrdinal == 0) {
 		int dx = 0;
-		for (int cx=0; cx < cov->cols; ++cx) {
-			for (int rx=cx; rx < cov->rows; ++rx) {
-				out[dx++] = Ecov(rx,cx);
-			}
-		}
 		if (mean) {
 			EigenVectorAdaptor Emean(mean);
 			for (int rx=0; rx < cov->cols; ++rx) {
 				out[dx++] = Emean(rx);
+			}
+		}
+		if (slope) {
+			EigenMatrixAdaptor Eslope(slope);
+			for (int cx=0; cx < Eslope.cols(); ++cx) {
+				for (int rx=0; rx < Eslope.rows(); ++rx) {
+					out[dx++] = Eslope(rx,cx);
+				}
+			}
+		}
+		for (int cx=0; cx < cov->cols; ++cx) {
+			out[dx++] = Ecov(cx,cx);
+		}
+		for (int cx=0; cx < cov->cols-1; ++cx) {
+			for (int rx=cx+1; rx < cov->rows; ++rx) {
+				out[dx++] = Ecov(rx,cx);
 			}
 		}
 		return;
@@ -350,34 +389,44 @@ void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *thr,
 	if (!mean) Rf_error("ordinal indicators and no mean vector");
 
 	EigenVectorAdaptor Emean(mean);
-	Eigen::VectorXd stdMean = Emean;
 	EigenMatrixAdaptor Eth(thr);
 	Eigen::VectorXd sdTmp(1.0/Ecov.diagonal().array().sqrt());
 	Eigen::DiagonalMatrix<double, Eigen::Dynamic> sd(Emean.size());
 	sd.setIdentity();
 	
-	{
-		int tx = triangleLoc1(cov->rows) + cov->rows;
-		for (auto &th : ti) {
-			for (int t1=0; t1 < th.numThresholds; ++t1) {
-				double sd1 = sdTmp[th.dColumn];
-				out[tx + t1] = (Eth(t1, th.column) - Emean[th.dColumn]) * sd1;
-				sd.diagonal()[th.dColumn] = sd1;
-			}
-			if (th.numThresholds) stdMean(th.dColumn) = 0.0;
-			tx += th.numThresholds;
+	int dx = 0;
+	for (auto &th : ti) {
+		for (int t1=0; t1 < th.numThresholds; ++t1) {
+			double sd1 = sdTmp[th.dColumn];
+			out[dx++] = (Eth(t1, th.column) - Emean[th.dColumn]) * sd1;
+			sd.diagonal()[th.dColumn] = sd1;
+		}
+		if (!th.numThresholds) {
+			out[dx++] = Emean[th.dColumn];
 		}
 	}
 	
+	if (slope) {
+		EigenMatrixAdaptor Eslope(slope);
+		for (int cx=0; cx < Eslope.cols(); ++cx) {
+			for (int rx=0; rx < Eslope.rows(); ++rx) {
+				out[dx++] = Eslope(rx,cx);
+			}
+		}
+	}
+
 	Eigen::MatrixXd stdCov(sd * Ecov * sd);
 
-	int dx = 0;
 	for (int cx=0; cx < cov->cols; ++cx) {
-		for (int rx=cx; rx < cov->rows; ++rx) {
+		if (ti[cx].numThresholds) continue;
+		out[dx++] = stdCov(cx,cx);
+	}
+
+	for (int cx=0; cx < cov->cols-1; ++cx) {
+		for (int rx=cx+1; rx < cov->rows; ++rx) {
 			out[dx++] = stdCov(rx,cx);
 		}
 	}
-	out.segment(dx, cov->cols) = stdMean;
 }
 
 void omxExpectation::asVector1(FitContext *fc, int row, Eigen::Ref<Eigen::VectorXd> out)
@@ -390,6 +439,6 @@ void omxExpectation::asVector1(FitContext *fc, int row, Eigen::Ref<Eigen::Vector
 		Rf_error("%s::asVector is not implemented (for object '%s')", expType, name);
 	}
 
-	normalToStdVector(cov, getComponent("means"), thresholdsMat,
+	normalToStdVector(cov, getComponent("means"), getComponent("slope"), thresholdsMat,
 			  numOrdinal, getThresholdInfo(), out);
 }

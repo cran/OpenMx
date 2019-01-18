@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -35,10 +35,8 @@
 require(OpenMx)
 data(Bollen)
 
-Bollen1 <- Bollen
-Bollen1[1,'y1'] <- NA
-omxCheckError(mxDataWLS(Bollen1[, 1:8]),
-              "All continuous data with missingness cannot be handled in the WLS framework. Use na.omit(yourDataFrame) to remove rows with missing values or use maximum likelihood instead")
+got <- mxGenerateData(Bollen[, 1:8], nrows=10)
+omxCheckEquals(nrow(got), 10)
 
 #--------------------------------------
 # Set up  model matrices
@@ -106,14 +104,27 @@ wlsMod <- mxModel("Test case for WLS Objective function from Bollen 1989",
 	lx, ph, td,
 	mxExpectationLISREL(LX=lx$name, PH=ph$name, TD=td$name),
 	mxFitFunctionWLS(),
-	mxDataWLS(Bollen[, 1:8])
+	mxData(Bollen[, 1:8], 'raw')
 )
+
+dwlsMod <- mxModel(wlsMod, mxFitFunctionWLS("DWLS"))
+
+ulsMod <- mxModel(wlsMod, mxFitFunctionWLS("ULS"))
 
 
 # Run WLS model
 wlsRun <- mxRun(wlsMod)
 summary(wlsRun)
 omxCheckTrue(is.null(wlsRun$output$calculatedHessian))
+
+dwlsRun <- mxRun(dwlsMod)
+
+ulsRun <- mxRun(ulsMod)
+
+print(cbind(coef(wlsRun), coef(dwlsRun), coef(ulsRun)))
+
+omxCheckCloseEnough(vechs(cor(cbind(coef(wlsRun), coef(dwlsRun), coef(ulsRun)))),
+                    c(.931, .922, .996), 1e-3)
 
 #TODO Fix summary for WLS data/fitfunctions
 # Standard errors correct?
@@ -131,6 +142,18 @@ fitParam <- c(mxEval(Lam, wlsRun)[1:4,1], diag(mxEval(Theta, wlsRun)))
 
 omxCheckCloseEnough(bollenParam, fitParam, epsilon=0.01)
 
+#--------------------------------------
+# Marginals should be fairly close to cumulants
+
+wlsMO <- omxAugmentDataWithWLSSummary(mxData(Bollen[,1:8], 'raw'), allContinuousMethod = "marginals")
+dwlsMO <- omxAugmentDataWithWLSSummary(mxData(Bollen[,1:8], 'raw'), "DWLS", allContinuousMethod = "marginals")
+
+omxCheckCloseEnough(cor(vech(wlsMO$observedStats$cov),
+                        vech(wlsRun$data$observedStats$cov)), 1, 5e-3)
+omxCheckCloseEnough(cor(vech(wlsMO$observedStats$acov[-1:-8,-1:-8]),
+                        vech(wlsRun$data$observedStats$acov)), 1, .15)
+omxCheckCloseEnough(cor(diag(dwlsMO$observedStats$acov)[-1:-8],
+                        diag(dwlsRun$data$observedStats$acov)), 1, .21)
 
 #--------------------------------------
 # Re-run with ML

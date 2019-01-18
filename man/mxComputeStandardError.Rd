@@ -5,7 +5,8 @@
 \alias{MxComputeStandardError-class}
 \title{Compute standard errors}
 \usage{
-mxComputeStandardError(freeSet = NA_character_, fitfunction = "fitfunction")
+mxComputeStandardError(freeSet = NA_character_,
+  fitfunction = "fitfunction")
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}

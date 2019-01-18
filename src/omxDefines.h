@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -302,6 +302,76 @@ void subsetVector(const Eigen::MatrixBase<T1> &gmean, T2 includeTest,
 	}
 }
 
+template <typename T1, typename T2, typename T3>
+void subsetVector(const Eigen::MatrixBase<T1> &in, T2 filter, Eigen::MatrixBase<T3> &out)
+{
+	int ox = 0;
+	for (int ix=0; ix < in.size(); ++ix) {
+		if (!filter(ix)) continue;
+		out[ox++] = in[ix];
+	}
+}
+
+template <typename T1, typename T2, typename T3>
+void subsetVector(const Eigen::ArrayBase<T1> &in, T2 filter, Eigen::ArrayBase<T3> &out)
+{
+	int ox = 0;
+	for (int ix=0; ix < in.size(); ++ix) {
+		if (!filter(ix)) continue;
+		out[ox++] = in[ix];
+	}
+}
+
+template <typename T1, typename T3>
+void subsetVector(const Eigen::ArrayBase<T1> &in, const std::vector<int> &ind, Eigen::ArrayBase<T3> &out)
+{
+	for (int ix=0; ix < int(ind.size()); ++ix) {
+		out[ix] = in[ ind[ix] ];
+	}
+}
+
+template <typename T1, typename T3>
+void subsetVector(const Eigen::MatrixBase<T1> &in, const std::vector<int> &ind, Eigen::MatrixBase<T3> &out)
+{
+	for (int ix=0; ix < int(ind.size()); ++ix) {
+		out[ix] = in[ ind[ix] ];
+	}
+}
+
+template <typename T1, typename T3>
+void subsetMatrix(const Eigen::ArrayBase<T1> &in, const std::vector<int> &ind, Eigen::ArrayBase<T3> &out)
+{
+	for (int ix=0; ix < int(ind.size()); ++ix) {
+		out.row(ix) = in.row(ind[ix]);
+	}
+}
+
+template <typename T1, typename T3>
+void subsetMatrix(const Eigen::MatrixBase<T1> &in, const std::vector<int> &ind, Eigen::MatrixBase<T3> &out)
+{
+	for (int ix=0; ix < int(ind.size()); ++ix) {
+		out.row(ix) = in.row(ind[ix]);
+	}
+}
+
+template <typename T1, typename T2>
+void subsetVectorStore(Eigen::MatrixBase<T1> &in, T2 filter, double val)
+{
+	for (int ix=0; ix < in.size(); ++ix) {
+		if (!filter(ix)) continue;
+		in[ix] = val;
+	}
+}
+
+template <typename T1, typename T2>
+void subsetVectorStore(Eigen::ArrayBase<T1> &in, T2 filter, double val)
+{
+	for (int ix=0; ix < in.size(); ++ix) {
+		if (!filter(ix)) continue;
+		in[ix] = val;
+	}
+}
+
 template <typename T2, typename T4, typename T5>
 void subsetCovarianceStore(Eigen::MatrixBase<T2> &gcov,
 		      T5 includeTest, const Eigen::MatrixBase<T4> &cov)
@@ -431,6 +501,27 @@ class ProtectAutoBalanceDoodad {
 	}
 	~ProtectAutoBalanceDoodad() {
 		Rf_unprotect(getDepth());
+	}
+};
+
+class AssertProtectStackBalanced {
+	ProtectAutoBalanceDoodad &myDoodad;
+	const char *context;
+	int preDepth;
+	
+ public:
+ 	AssertProtectStackBalanced(const char *_context,
+			    ProtectAutoBalanceDoodad &_myDoodad) :
+	myDoodad(_myDoodad), context(_context) {
+		preDepth = myDoodad.getDepth();
+	};
+	~AssertProtectStackBalanced() {
+		int postDepth = myDoodad.getDepth();
+		if (preDepth != postDepth) {
+			Rf_warning("%s: "
+				   "protect stack usage %d > 0, PLEASE REPORT TO OPENMX DEVELOPERS",
+				   context, postDepth - preDepth);
+		}
 	}
 };
 

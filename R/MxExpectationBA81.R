@@ -1,5 +1,5 @@
 #
-#   Copyright 2012-2018 by the individuals mentioned in the source code history
+#   Copyright 2012-2019 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -149,7 +149,7 @@ setMethod("genericExpRename", signature("MxExpectationBA81"),
 
 ##' Create a Bock & Aitkin (1981) expectation
 ##'
-##' Used in conjuction with \link{mxFitFunctionML}, this expectation
+##' Used in conjunction with \link{mxFitFunctionML}, this expectation
 ##' models ordinal data with a modest number of latent dimensions.
 ##' Currently, only a multivariate Normal latent distribution is
 ##' supported.  An equal-interval quadrature is used to integrate over
@@ -164,9 +164,10 @@ setMethod("genericExpRename", signature("MxExpectationBA81"),
 ##' \deqn{L(x_i|\xi,\theta_i) = \prod_j \mathrm{Pr}(\mathrm{pick}=x_{ij} | \xi_j,\theta_i).}{%
 ##' L(x[i]|\xi,\theta[i]) = \prod_j Pr(pick=x[i,j] | \xi[j],\theta[i]).}
 ##'
-##' Items are assumed conditionally independent.
-##' That is, the outcome of one item is assumpted to not influence
+##' Items are assumed to be conditionally independent.
+##' That is, the outcome of one item is assumed to not influence
 ##' another item after controlling for \eqn{\xi} and \eqn{\theta_i}{\theta[i]}.
+##' 
 ##' The unconditional likelihood is obtained by integrating over
 ##' the latent distribution \eqn{\theta_i}{\theta[i]},
 ##'
@@ -216,7 +217,7 @@ setMethod("genericExpRename", signature("MxExpectationBA81"),
 ##' When a two-tier covariance matrix is recognized, this expectation
 ##' automatically enables analytic dimension reduction (Cai, 2010).
 ##' 
-##' The optional `weightColumn' is superceded by the weight
+##' The optional `weightColumn' is superseded by the weight
 ##' argument in \link{mxData}. For data with many repeated
 ##' response patterns, model evaluation time can be
 ##' reduced. An easy way to transform your data into this form is to

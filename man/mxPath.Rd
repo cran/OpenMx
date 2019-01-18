@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ The previous implementation of \sQuote{all} had unsafe features. Its use is now 
 }
 
 \details{
-The mxPath function creates \link[=MxPath-class]{MxPath} objects. These consist of a list of paths describing the relationships between variables in a model using the RAM modeling approach (McArdle and MacDonald, 1984). Variables are referenced by name, and these names must appear in the \sQuote{manifestVar} and \sQuote{latentVar} arguments of the \link{mxModel} function.
+The mxPath function creates \link[=MxPath-class]{MxPath} objects. These consist of a list of paths describing the relationships between variables in a model using the RAM modeling approach (McArdle and MacDonald, 1984). Variables are referenced by name, and these names must appear in the \sQuote{manifestVars} and \sQuote{latentVars} arguments of the \link{mxModel} function.
 
 Paths are specified as going "from" one variable (or set of variables) "to" another variable or set of variables using the \sQuote{from} and \sQuote{to} arguments, respectively. If \sQuote{to} is left empty, it will be set to the value of \sQuote{from}.
 

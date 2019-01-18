@@ -1,5 +1,5 @@
 %
-%   Copyright 2007-2018 by the individuals mentioned in the source code history
+%   Copyright 2007-2019 by the individuals mentioned in the source code history
 %
 %   Licensed under the Apache License, Version 2.0 (the "License");
 %   you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 
 \usage{
-mxRefModels(x, run=FALSE, ..., distribution="default")
+mxRefModels(x, run=FALSE, ..., distribution="default", equateThresholds = TRUE)
 }
 
 \arguments{
@@ -34,6 +34,8 @@ mxRefModels(x, run=FALSE, ..., distribution="default")
      otherwise returns built models without running.}
    \item{...}{Not used.  Forces remaining arguments to be specified by name.}
    \item{distribution}{character. Which distribution to assume.}
+   \item{equateThresholds}{logical. Whether ordinal thresholds should be
+   constrained equal across groups.}
 }
 
 \details{

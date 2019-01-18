@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -672,7 +672,7 @@ void omxKalmanBucyPredict(omxStateSpaceExpectation* ose) {
 	if(OMX_DEBUG_ALGEBRA) {std::cout << "... State Space deltaT:\n" << deltaT << std::endl; }
 	
 	//EigenMatrixAdaptor eigenA(A);
-	// intializes eigenA as an instance of EigenMatrixAdaptor class, initialized to omxMatrix A
+	// initializes eigenA as an instance of EigenMatrixAdaptor class, initialized to omxMatrix A
 	// EigenVectorAdaptor
 	// eigenB = eigenA.exp(); // matrix exponential
 	// for scalar multiplication

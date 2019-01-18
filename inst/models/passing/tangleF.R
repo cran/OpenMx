@@ -95,60 +95,10 @@ jointData <- read.table("data/jointdata.txt", header=TRUE)
 jointData[,c(2,4,5)] <- mxFactor(jointData[,c(2,4,5)], 
 				 levels=list(c(0,1), c(0, 1, 2, 3), c(0, 1, 2)))
 
-acovPerm <- function(wd, perm) {
-  sz <- length(perm)
-  tcount <- colSums(!is.na(wd$thresholds))
-  names(tcount) <- NULL
-  tstart <- cumsum(c(0,tcount))
-  
-  tperm <- rep(NA, sum(tcount))
-  to <- 1
-  thresholdColumns <- match(colnames(wd$thresholds), colnames(wd$means)) #oldCol
-  newOrder <- order(perm[thresholdColumns]) # newOrder
-  
-  for (t1 in 1:length(newOrder)) {
-    oldIndex <- newOrder[t1]
-    for (cx in 1:tcount[oldIndex]) {
-      tperm[to] <- tstart[oldIndex] + cx
-      to <- to + 1
-    }
-  }
-#  print(tperm)
-
-  iperm <- rep(NA,length(perm))
-  for (xx in 1:length(iperm)) iperm[perm[xx]] = xx
-  
-  part1 <- (sz * (sz+1))/2
-  
-  mm <- matrix(NA,5,5)
-  mm[lower.tri(mm, diag = TRUE)] <- 1:part1
-  mm[upper.tri(mm)] <- t(mm)[upper.tri(mm)]
-  #  print(mm[perm,perm]-1)
-  
-  aperm <- 1:nrow(wd$acov)
-  aperm[1:part1] <- vech(mm[iperm,iperm])
-  aperm[(part1 + 1):(part1 + sz)] <-
-    aperm[(part1 + 1):(part1 + sz)][iperm]
-  aperm[(part1 + sz + 1):(part1 + sz + sum(tcount))] <-
-    aperm[(part1 + sz + 1):(part1 + sz + sum(tcount))][tperm]
-  aperm
-}
-
-if (1) {  # demonstrate the effect of data column permutation
-  wlsData <- mxDataWLS(jointData, type='WLS')
-  perm <- sample.int(5,5)
-  wlsData2 <- mxDataWLS(jointData[,perm], type='WLS')
-
-  aperm <- acovPerm(wlsData2, perm)
-
-  omxCheckCloseEnough(max(abs(diag(wlsData2$acov)[aperm] - diag(wlsData$acov))), 0, 1e-6)
-  omxCheckCloseEnough(max(abs(wlsData2$acov[aperm,aperm] - wlsData$acov)), 0, 1e-6)
-}
-
 mkModel <- function(shuffle, wls) {
+  set.seed(shuffle)
 	myData <- jointData
 	if (shuffle) {
-#	  dperm <- c( 4,   0,   2,   3,   1) + 1
 	  dperm <- sample.int(ncol(myData), ncol(myData))
 		myData <- myData[, dperm]
 	}
@@ -184,12 +134,13 @@ mkModel <- function(shuffle, wls) {
 
 	ta1 <- mxModel(
 		model="tangle", thresh,
+		mxData(myData, 'raw'),
 		mxMatrix("Full", length(manifestVars), length(allVars),
 			 values=Fval,
 			 dimnames=list(manifestVars, allVars), name="F"),
 		mxMatrix("Symm", length(allVars), length(allVars),
 			 values=diag(length(allVars)),
-			 free=diag(length(allVars)) == 1,
+			 free=diag(length(allVars)) == 1, lbound=0, ubound=5,
 			 dimnames=list(allVars, allVars), name="S"),
 		mxMatrix("Full", length(allVars), length(allVars),
 			 values=0,
@@ -210,20 +161,31 @@ mkModel <- function(shuffle, wls) {
 	ta1$M$values[1,'z1'] <- c(.1)
 
 	if (wls) {
-	  md <- suppressWarnings(mxDataWLS(myData, type='WLS'))
-		ta1 <- mxModel(ta1, md, mxFitFunctionWLS())
+		ta1 <- mxModel(ta1, mxFitFunctionWLS('WLS'))
 	} else {
-		ta1 <- mxModel(ta1, mxData(myData, type="raw"), mxFitFunctionML(jointConditionOn = "continuous"))
+		ta1 <- mxModel(ta1, mxFitFunctionML(jointConditionOn = "continuous"))
 	}
 
 	ta1
 }
 
-for (wls in c(FALSE,TRUE)) {
-	fit1 <- mxRun(mkModel(FALSE, wls))  # MLE=2683.071 when wls=false
-	fit2 <- mxRun(mkModel(TRUE, wls))
-	fit3 <- mxRun(mkModel(TRUE, wls))
-
+for (wls in c(FALSE)) {
+	fit1 <- mxRun(mkModel(0, wls))  # MLE=2683.071 when wls=false
+	fit2 <- mxRun(mkModel(1, wls))
 	omxCheckCloseEnough(fit1$output$fit - fit2$output$fit, 0, 1e-6)
+	fit3 <- mxRun(mkModel(2, wls))
 	omxCheckCloseEnough(fit1$output$fit - fit3$output$fit, 0, 1e-6)
+}
+
+for (sx in 1:4) {
+  for (wls in c(TRUE)) {
+    fit1 <- mxRun(mkModel(0, wls))  # MLE=2683.071 when wls=false
+    fit2 <- mxRun(mxModel(mkModel(sx, wls), fit1$data))
+    fit3 <- mxRun(mkModel(sx, wls))
+    fit4 <- mxRun(mxModel(mkModel(0, wls), fit3$data))
+#    print(c(fit1$output$fit, fit2$output$fit, fit3$output$fit, fit4$output$fit))
+    omxCheckCloseEnough(fit1$output$fit - fit2$output$fit, 0, 1e-6)
+    omxCheckCloseEnough(fit1$output$fit - fit3$output$fit, 0, 1e-6)
+    omxCheckCloseEnough(fit1$output$fit - fit4$output$fit, 0, 1e-6)
+  }
 }

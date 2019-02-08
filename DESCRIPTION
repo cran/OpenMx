@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2019-01-16
+Date: 2019-02-08
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -89,10 +89,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'MxMMI.R'
         'zzz.R'
 Biarch: true
-Version: 2.12.1
+Version: 2.12.2
 RoxygenNote: 6.1.1
 NeedsCompilation: yes
-Packaged: 2019-01-16 17:03:01 UTC; joshua
+Packaged: 2019-02-08 14:27:24 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -127,4 +127,4 @@ Author: Steven M. Boker [aut],
   Wong Shao Voon [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2019-01-18 15:00:15 UTC
+Date/Publication: 2019-02-08 16:13:51 UTC

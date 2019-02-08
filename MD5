@@ -1,5 +1,5 @@
 c2ef3dc7d3a0f743eb1f260ea47ae824 *CHANGES
-8a2a1282f00b7e9a9d2907b4a67ee150 *DESCRIPTION
+e5f566187359a656a310a045386fda8f *DESCRIPTION
 d3cd193b72a9cc01c3c6b7ac182f7b07 *NAMESPACE
 b743198ef3357857c0161c5b92704d7b *NEWS
 ed0a4707fb9f79f55c9bb7e0706682b8 *NEWS.md
@@ -98,7 +98,7 @@ cc5d9804f0e40cc57be2bb302fa4ba48 *R/MxTryHard.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 0161d2da682bd1b3c0ff0808fbd8b235 *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-b43b800df053a8b8012ed5d092a8ca86 *R/MxVersion.R
+21ac3997c85366b2c0d453ee9b49f3e0 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 efb5443716e21122f8ec2a75bd60eed7 *R/OriginalMx.R
 9a96eb6827dc9d723426280c1bcb0981 *R/SdiagMatrix.R
@@ -219,7 +219,7 @@ f4ad6b741d9d8bd3b1f4845b2a05dc7e *demo/UnivariateTwinAnalysis_MatrixRaw.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 52168875a6d4e1e645611a544c656244 *demo/omxConstrainMLThresholds.R
-5e03cbb8c3d6a83e69dbabb9f0240658 *inst/CITATION
+313702f7a09d5b1f02dc30106ddeeacf *inst/CITATION
 c9b8c08f65e3a8311c2c7fd2df4be6f7 *inst/WORDLIST
 d7e72555dccd3c447b07e8d78638b25b *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 1781b0c3bd0079587032343a58b7a738 *inst/models/codeRed/umxACE_codeRed.R
@@ -1009,7 +1009,7 @@ b408121b4109befc74e3a30ba5b73abc *src/asa.c
 8d518712281638356e30bcaf24e9ff2b *src/fitMultigroup.cpp
 fb018273fd6d6006c034ed046d3d0f8d *src/fitMultigroup.h
 7790845d51f3c908b28602e2d236e627 *src/general.c
-69f08a85a5a41b11d8032e3e09805861 *src/glue.cpp
+61e876198c7d996444f781df0e5a6945 *src/glue.cpp
 a4f561042720e49883cd67e42823c6c9 *src/glue.h
 119374db8ec106ba6fca75976ef2b85f *src/matrix.cpp
 b454130cfede7240080b8cdc2bba6abe *src/matrix.h
@@ -1039,7 +1039,7 @@ cd51e8929f046d89195160acaa902a18 *src/omxData.h
 95402e7ec43e0952dac7c42fb94ff0b1 *src/omxDefines.h
 95d19ef1af6588cf5967dc568ecbdd64 *src/omxExpectation.cpp
 b7ec276b770c525aed857bf1c063b37e *src/omxExpectation.h
-cc60f9065c33bb659ec4afb07bfa46a0 *src/omxExpectationBA81.cpp
+c6482497820790092136d5ac79b86805 *src/omxExpectationBA81.cpp
 466da1e9e6d9df46fd484b6c410b94c4 *src/omxExpectationBA81.h
 58859cf83105bb426fe4961b6a80e81f *src/omxExportBackendState.cpp
 65dadf9fa3922cdb87a82a58f9e4bf22 *src/omxExportBackendState.h

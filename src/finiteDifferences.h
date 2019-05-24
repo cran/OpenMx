@@ -101,8 +101,14 @@ class GradientWithRef {
 			int thrId = omp_get_thread_num();
 			int thrSelect = curNumThreads==1? -1 : thrId;
 			double offset = std::max(fabs(point[px] * eps), eps);
-			dfn[thrId](ff, refFit, thrSelect, &thrPoint.coeffRef(0, thrId), offset, px,
-				   numIter, &grid.coeffRef(0,px), verbose);
+			try {
+				dfn[thrId](ff, refFit, thrSelect, &thrPoint.coeffRef(0, thrId), offset, px,
+					   numIter, &grid.coeffRef(0,px), verbose);
+			} catch (const std::exception& e) {
+				omxRaiseErrorf("%s", e.what());
+			} catch (...) {
+				omxRaiseErrorf("%s line %d: unknown exception", __FILE__, __LINE__);
+			}
 			// push down into per-thread code TODO
 			for(int m = 1; m < numIter; m++) {	// Richardson Step
 				for(int k = 0; k < (numIter - m); k++) {
@@ -134,7 +140,7 @@ class GradientWithRef {
 	void operator()(T1 ff, double refFit,
 			Eigen::MatrixBase<T2> &point, Eigen::MatrixBase<T3> &gradOut)
 	{
-		if (point.size() != numFree) Rf_error("%s line %d: expecting %d parameters, got %d",
+		if (point.size() != numFree) mxThrow("%s line %d: expecting %d parameters, got %d",
 						      __FILE__, __LINE__, numFree, point.size());
 
 		nanotime_t startTime = get_nanotime();
@@ -153,7 +159,7 @@ class GradientWithRef {
 			std::vector<central_difference_grad> dfn(curNumThreads);
 			gradientImpl(ff, refFit, point, dfn, gradOut);
 			break;}
-		default: Rf_error("Unknown gradient algorithm %d", algo);
+		default: mxThrow("Unknown gradient algorithm %d", algo);
 		}
 
 		double el1 = get_nanotime() - startTime;
@@ -264,7 +270,7 @@ void fd_jacobian(GradientAlgorithm algo, int numIter, double eps, T1 ff, Eigen::
 		central_difference_jacobi dfn;
 		jacobianImpl<initialized>(ff, ref, point, numIter, eps, dfn, jacobiOut);
 		break;}
-	default: Rf_error("Unknown gradient algorithm %d", algo);
+	default: mxThrow("Unknown gradient algorithm %d", algo);
 	}
 }
 

@@ -9,11 +9,14 @@ mxMakeNames(names, unique = FALSE)
 \arguments{
 \item{names}{a character vector}
 
-\item{unique}{whether the pass the result through \link[base]{make.unique}}
+\item{unique}{whether to pass the result through \link[base]{make.unique}}
 }
 \description{
-Adjust a character vector so that it can be used as MxMatrix column
-or row names. OpenMx is (much) more restrictive than base R's make.names.
+Adjust a character vector so that it is valid when used as MxMatrix column
+or row names.
+}
+\details{
+\emph{note}: OpenMx is (much) more restrictive than base R's make.names.
 }
 \examples{
 demo <- c("", "103", "data", "foo.bar[3,2]", "+!", "!+")

@@ -1,3 +1,45 @@
+# Where to find news
+
+OpenMx developers, being lazy and incorrigible, often forget to update the NEWS file. To learn about new and exciting features, please visit https://openmx.ssri.psu.edu/
+
+# OpenMx 2.13.0 FUTURE 2019 (R 3.6.0))
+* NEW!: SEs for models with constraints! (used not to be calculated. Big win for twin models)
+* IMPROVED: `omxSetParameters` warns if you don't ask to do anything.
+* IMPROVED: `mxCheckIdentification` works with models containing constraints
+* IMPROVED: `mxPath` more helpful messages for errors
+* IMPROVED: `mxModel` error when path added to model without type = "RAM"
+* IMPROVED: `summary` better at not counting redundant constraints.
+* IMPROVED: progress reporting, inc. for mxTryHard.
+* IMPROVED: github and CRAN README.md
+* CHANGED: CXX14 (not CXX11)
+
+
+# OpenMx 2.12.2 Feb 2019 (R 3.5.2))
+* IMPROVED: parallel processing improved by addition of ConcurrentQueue.
+* IMPROVED: WLS moved to the backend: 10x faster!
+* NEW:  A new optimizer, which uses generalized simulated annealing, has been implemented.
+* NEW:  `omxAkaikeWeights` and `mxModelAverage`, for information-theoretic model-averaging and multimodel inference.
+* NEW:  `mxPearsonSelCov` and `mxPearsonSelMean` implement the Pearson-Aitken selection formulae. Both functions are usable in MxAlgebras.
+* NEW:  `mxComputeLoadMatrix`: placed into a custom compute plan will load a CSV file directly into the backend.
+* NEW:  `mxFitFunctionWLS` WLSM and WLSMV fit statistics.
+* IMPROVED:  "CI details" table (in verbose summary() output) reordered, to make the table more readable.
+* IMPROVED:  `mxStandardizeRAMpaths` now reports elements of the 'M' matrix, re-scaled to standard-deviation units.
+* IMPROVED:  `mxAutoStart` can now be used with diagonally weighted least squares.
+* IMPROVED:  `mxGenerateData` now compatible with models that depend on objects in other models.
+* IMPROVED:  `mxOption`  "Max minutes" sets a maximum allowed backend time (default = 0, meaning no limit, i.e. Inf).
+* IMPROVED:  `mxMatrix` now partially matches the value of its type argument. For instance, type="Ze" is now equivalent to type="Zero".
+* IMPROVED:  `omxManifestModelByParameterJacobian` Jacobian  has dimnames, which make it easier to read.
+* IMPROVED:  `SLSQP` uses multiple threads
+* IMPROVED:  custom compute plan support checkpointing steps.
+* IMPROVED:  Eigen linear-algebra library now multi-threaded.
+* IMPROVED:  `mxExpectationHiddenMarkov` and `mxExpectationMixture` allow scaling of zero.
+* IMPROVED:  `mxConstraints` that depend upon definition variables now throw a warning at runtime.
+* IMPROVED:  `mxPower` more detailed output.
+* IMPROVED:  `mxFitFunctionML`with rowDiagnostics=TRUE includes per-row squared Mahalanobis distance.
+
+# OpenMx 2.12.1 (Jan 20 2019 (R 3.5.2))
+* Bug fix to definition variable handling in multilevel models (v2.11.5-2-g7ef03e3fe)
+
 # OpenMx 2.11.4 (September 24 2018 (R 3.5.1))
 * PARTYTIME:  Appears to be passing compiling for MacOS on CRAN !! 
 * NEW: `mxModelAverage` function do compute parameter estimates that reflect the values found in a range of models that contain the parameter.
@@ -6,7 +48,7 @@
 * IMPROVED: CIs on the RMSEA statistic for models that fit *very* badly.
 * IMPROVED: Mahalanobis distance to ML models (Resolves #92)
 * IMPROVED: `logLik.MxModel` can take a list of models.
-* IMPROVED: `omxGetParameters` handles labels of the form model.mat[row,col]
+* IMPROVED: `omxGetParameters` handles labels of the form model.mat[row, col]
 * IMPROVED: Fit value is smart enough to not report logLik() for WLS (only reports AIC & BIC with -2lnL fit units)
 * MODIFIED: `mxBrownie` now supports vegans.
 * PREVIEW: `mxCompareMatrix` (note: this doesn't compare matrices, it compares models, and outputs a matrix of comparisons). Comments welcome!
@@ -45,7 +87,7 @@ Some other functions and changes that might interest you
 * IMPROVED: `mxEval` can use scalar multiplication, division, and powering of matrices.
 * IMPROVED: Ordinal data fit should often be better, and fewer status Reds.
 * FIXED: mxBootstrap bug where replications reported incorrect optimizer status codes
-* IMPROVED: Parametric bootstrapping compatible with multigroup models.
+* IMPROVED: Parametric bootstrapping compatible with multi-group models.
 * IMPROVED: error checking in `mxCompare`, `mxCompareMatrix`, `confint`, `vcov`
 	* Catch case where MxModel hasn't been run or has been modified since it was run.
 * IMPROVED: `omxParallelCI` and `omxRunCI` accept new 'optimizer' argument for calculating CIs
@@ -74,8 +116,8 @@ Some other functions and changes that might interest you
 # OpenMx 2.7.9 (March 22, 2017)
 * NEW: mxAutoStart Get automatic starting values.
 * NEW: "Auto" mxOption values.
-* NEW: omxNudgeZeroStarts helper function
-* NEW: Hidden Markov models with mxExpectationHiddenMarkov
+* NEW: `omxNudgeZeroStarts` helper function
+* NEW: Hidden Markov models with `mxExpectationHiddenMarkov`
 * NEW: "Internal" warm starts for NPSOL
 * NEW: Correct documentation of how NPSOL uses feasibility tolerance
 * NEW: Nelder-Mead
@@ -93,7 +135,7 @@ Some other functions and changes that might interest you
 * NEW: mxRun Now gives feedback about optimization progress.
 * NEW: Analytic constraint Jacobians can now be provided to MxConstraints (presently with NPSOL only).
 * NEW: Constraint diagnostics exported to frontend (NPSOL and SLSQP).
-* NEW: omxDefaultComputePlan()
+* NEW: `omxDefaultComputePlan`
 * CHANGE: CSOLNP is now the default optimizer.
 	* Change this with mxOption(NULL, "Default optimizer", "CSOLNP|NPSOL|SLSQP")
 	* NPSOL is available from the custom build at http://openmx.ssri.psu.edu/installing-openmx 

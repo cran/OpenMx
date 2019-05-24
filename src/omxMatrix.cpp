@@ -27,7 +27,6 @@
 **********************************************************/
 #include "omxMatrix.h"
 #include "matrix.h"
-#include "unsupported/Eigen/MatrixFunctions"
 #include "omxState.h"
 #include <limits>
 #include <Eigen/SVD>
@@ -38,22 +37,8 @@
 // forward declarations
 static const char *omxMatrixMajorityList[] = {"T", "n"};		// BLAS Column Majority.
 
-// For background, see
-// http://epubs.siam.org/doi/abs/10.1137/090768539
-
-void logm_eigen(int n, double *rz, double *out)
-{
-    Eigen::Map< Eigen::MatrixXd > inMat(rz, n, n);
-    Eigen::Map< Eigen::MatrixXd > outMat(out, n, n);
-    outMat = inMat.log();
-}
-
-void expm_eigen(int n, double *rz, double *out)
-{
-    Eigen::Map< Eigen::MatrixXd > inMat(rz, n, n);
-    Eigen::Map< Eigen::MatrixXd > outMat(out, n, n);
-    outMat = inMat.exp();
-}
+void logm_eigen(int n, double *rz, double *out);
+void expm_eigen(int n, double *rz, double *out);
 
 std::string stringifyDimnames(omxMatrix *source)
 {
@@ -101,7 +86,7 @@ void omxPrintMatrix(omxMatrix *source, const char* header) // make static TODO
 
 omxMatrix* omxInitMatrix(int nrows, int ncols, unsigned short isColMajor, omxState* os) {
 
-	if (!isColMajor) Rf_error("All matrices are created column major");
+	if (!isColMajor) mxThrow("All matrices are created column major");
 
 	omxMatrix* om = new omxMatrix;
 
@@ -170,7 +155,7 @@ void omxCopyMatrix(omxMatrix *dest, omxMatrix *orig) {
 			omxFreeInternalMatrixData(dest);											// Free and regenerate memory
 			dest->data = (double*) Calloc(dest->rows * dest->cols, double);
 		}
-		if (dest->data != orig->data) {  // if equal then programmer Rf_error? TODO
+		if (dest->data != orig->data) {  // if equal then programmer mxThrow? TODO
 			memcpy(dest->data, orig->data, dest->rows * dest->cols * sizeof(double));
 		}
 	}
@@ -333,21 +318,17 @@ double* omxLocationOfMatrixElement(omxMatrix *om, int row, int col) {
 }
 
 void vectorElementError(int index, int numrow, int numcol) {
-	char *errstr = (char*) calloc(250, sizeof(char));
 	if ((numrow > 1) && (numcol > 1)) {
-		sprintf(errstr, "Requested improper index (%d) from a malformed vector of dimensions (%d, %d).", 
+		mxThrow("Requested improper index (%d) from a malformed vector of dimensions (%d, %d)", 
 			index, numrow, numcol);
 	} else {
 		int Rf_length = (numrow > 1) ? numrow : numcol;
-		sprintf(errstr, "Requested improper index (%d) from vector of Rf_length (%d).", 
+		mxThrow("Requested improper index (%d) from vector of Rf_length (%d)", 
 			index, Rf_length);
 	}
-	Rf_error(errstr);
-	free(errstr);  // TODO not reached
 }
 
 void setMatrixError(omxMatrix *om, int row, int col, int numrow, int numcol) {
-	char *errstr = (char*) calloc(250, sizeof(char));
 	static const char *matrixString = "matrix";
 	static const char *algebraString = "algebra";
 	static const char *fitString = "fit function";
@@ -359,29 +340,24 @@ void setMatrixError(omxMatrix *om, int row, int col, int numrow, int numcol) {
 	} else {
 		typeString = matrixString;
 	}
-	sprintf(errstr, "Attempted to set row and column (%d, %d) in %s \"%s\" with dimensions %d x %d.", 
+	mxThrow("Attempted to set row and column (%d, %d) in %s \"%s\" with dimensions %d x %d.", 
 		row, col, typeString, om->name(), numrow, numcol);
-	Rf_error(errstr);
-	free(errstr);  // TODO not reached
 }
 
 void matrixElementError(int row, int col, omxMatrix *om) {
-	Rf_error("Requested improper value (%d, %d) from (%d, %d) matrix '%s'",
+	mxThrow("Requested improper value (%d, %d) from (%d, %d) matrix '%s'",
 		 row, col, om->rows, om->cols, om->name());
 }
 
 void setVectorError(int index, int numrow, int numcol) {
-	char *errstr = (char*) calloc(250, sizeof(char));
 	if ((numrow > 1) && (numcol > 1)) {
-		sprintf(errstr, "Attempting to set improper index (%d) from a malformed vector of dimensions (%d, %d).", 
+		mxThrow("Attempting to set improper index (%d) from a malformed vector of dimensions (%d, %d)", 
 			index, numrow, numcol);
 	} else {
 		int Rf_length = (numrow > 1) ? numrow : numcol;
-		sprintf(errstr, "Setting improper index (%d) from vector of Rf_length %d.", 
+		mxThrow("Setting improper index (%d) from vector of Rf_length %d", 
 			index, Rf_length);
 	}
-	Rf_error(errstr);
-	free(errstr);  // TODO not reached
 }
 
 void omxMarkDirty(omxMatrix *om) {
@@ -421,7 +397,7 @@ omxMatrix* omxNewMatrixFromRPrimitive(SEXP rObject, omxState* state,
 omxMatrix* omxFillMatrixFromRPrimitive(omxMatrix* om, SEXP rObject, omxState* state,
 	unsigned short hasMatrixNumber, int matrixNumber)
 {
-	if (!om) Rf_error("fillMatrixHelperFunction: matrix must be allocated already");
+	if (!om) mxThrow("fillMatrixHelperFunction: matrix must be allocated already");
 
 	if (rObject) {
 		if(Rf_isMatrix(rObject)) {
@@ -435,11 +411,11 @@ omxMatrix* omxFillMatrixFromRPrimitive(omxMatrix* om, SEXP rObject, omxState* st
 			om->rows = 1;
 			om->cols = Rf_length(rObject);
 		} else {
-			Rf_error("Recieved unknown matrix type in omxFillMatrixFromRPrimitive.");
+			mxThrow("Recieved unknown matrix type in omxFillMatrixFromRPrimitive.");
 		}
 		if(OMX_DEBUG) { mxLog("Matrix connected to (%d, %d) matrix or MxMatrix.", om->rows, om->cols); }
 
-		if (TYPEOF(rObject) != REALSXP) Rf_error("matrix is of type '%s'; only type double is accepted",
+		if (TYPEOF(rObject) != REALSXP) mxThrow("matrix is of type '%s'; only type double is accepted",
 							Rf_type2char(TYPEOF(rObject)));
 
 		om->owner = rObject;
@@ -469,7 +445,7 @@ void omxMatrix::loadDimnames(SEXP dimnames)
 	if (!dimnames || Rf_isNull(dimnames)) return;
 
 	if (rownames.size() || colnames.size()) {
-		Rf_error("Attempt to load dimnames more than once for %s", name());
+		mxThrow("Attempt to load dimnames more than once for %s", name());
 	}
 
 	if (Rf_length(dimnames) >= 1) {
@@ -529,7 +505,7 @@ void omxMatrix::omxProcessMatrixPopulationList(SEXP matStruct)
 
 void omxMatrix::addPopulate(omxMatrix *from, int srcRow, int srcCol, int destRow, int destCol)
 {
-	if (!from->hasMatrixNumber) Rf_error("omxMatrix::addPopulate %s must have matrix number",
+	if (!from->hasMatrixNumber) mxThrow("omxMatrix::addPopulate %s must have matrix number",
 					     from->name());
 	populate.emplace_back(from->matrixNumber, srcRow, srcCol, destRow, destCol);
 }
@@ -618,14 +594,14 @@ void omxRemoveRowsAndColumns(omxMatrix *om, int rowsRemoved[], int colsRemoved[]
 	int newRows = origRows;
 	for(int j = 0; j < om->rows; j++) {
 #if OMX_DEBUG
-		if (rowsRemoved[j] != (rowsRemoved[j] & 1)) Rf_error("Removed flag can only be 0 or 1");
+		if (rowsRemoved[j] != (rowsRemoved[j] & 1)) mxThrow("Removed flag can only be 0 or 1");
 #endif
 		newRows -= rowsRemoved[j];
 	}
 	int newCols = origCols;
 	for(int j = 0; j < om->cols; j++) {
 #if OMX_DEBUG
-		if (colsRemoved[j] != (colsRemoved[j] & 1)) Rf_error("Removed flag can only be 0 or 1");
+		if (colsRemoved[j] != (colsRemoved[j] & 1)) mxThrow("Removed flag can only be 0 or 1");
 #endif
 		newCols -= colsRemoved[j];
 	}
@@ -668,7 +644,6 @@ void omxRemoveRowsAndColumns(omxMatrix *om, int rowsRemoved[], int colsRemoved[]
 void omxPrint(omxMatrix *source, const char* d) { 					// Pretty-print a (small) matrix
     if(source == NULL) mxLog("%s is NULL.", d);
 	else if(source->algebra != NULL) omxAlgebraPrint(source->algebra, d);
-	else if(source->fitFunction != NULL) omxFitFunctionPrint(source->fitFunction, d);
 	else omxPrintMatrix(source, d);
 }
 
@@ -857,7 +832,7 @@ void omxShallowInverse(FitContext *fc, int numIters, omxMatrix* A, omxMatrix* Z,
 
 double omxMaxAbsDiff(omxMatrix *m1, omxMatrix *m2)
 {
-	if (m1->rows != m2->rows || m1->cols != m2->cols) Rf_error("Matrices are not the same size");
+	if (m1->rows != m2->rows || m1->cols != m2->cols) mxThrow("Matrices are not the same size");
 
 	double mad = 0;
 	int size = m1->rows * m1->cols;
@@ -872,7 +847,7 @@ bool thresholdsIncreasing(omxMatrix* om, int column, int count, FitContext *fc)
 {
 	int threshCrossCount = 0;
 	if(count > om->rows) {
-		Rf_error("Too many thresholds (%d) requested from %dx%d thresholds matrix (in column %d)",
+		mxThrow("Too many thresholds (%d) requested from %dx%d thresholds matrix (in column %d)",
 			 count, om->rows, om->cols, column);
 	}
 	for(int j = 1; j < count; j++ ) {
@@ -1018,75 +993,30 @@ void omxMatrixTrace(omxMatrix** matList, int numArgs, omxMatrix* result)
     }
 }
 
-void omxMatrix::loadFromStream(mini::csv::ifstream &st)
+int omxMatrix::numNonConstElements() const
 {
-	EigenMatrixAdaptor v(this);
-
 	switch(shape) {
-	case 0:
-		Rf_error("loadFromStream: matrix '%s' has unknown shape", name());
-		break;
 	case 1: //Diag
-		for (int rx=0; rx < rows; ++rx) {
-			st >> v(rx, rx);
-		}
-		break;
+		return rows;
 
 	case 2: //Full
-		for (int cx=0; cx < cols; ++cx) {
-			for (int rx=0; rx < rows; ++rx) {
-				st >> v(rx,cx);
-			}
-		}
-		break;
+		return rows * cols;
 		
 	case 4: //Lower
-		for (int cx=0; cx < cols; ++cx) {
-			for (int rx=cx; rx < rows; ++rx) {
-				st >> v(rx,cx);
-			}
-		}
-		break;
+	case 7: //Symm
+		return triangleLoc1(rows);
 
 	case 5: //Sdiag
-		for (int cx=0; cx < cols-1; ++cx) {
-			for (int rx=cx+1; rx < rows; ++rx) {
-				st >> v(rx,cx);
-			}
-		}
-		break;
-
 	case 6: //Stand
-		for (int cx=0; cx < cols-1; ++cx) {
-			for (int rx=cx+1; rx < rows; ++rx) {
-				double tmp;
-				st >> tmp;
-				v(rx,cx) = tmp;
-				v(cx,rx) = tmp;
-			}
-		}
-		break;
-
-	case 7: //Symm
-		for (int cx=0; cx < cols; ++cx) {
-			for (int rx=cx; rx < rows; ++rx) {
-				double tmp;
-				st >> tmp;
-				v(rx,cx) = tmp;
-				v(cx,rx) = tmp;
-			}
-		}
-		break;
+		return triangleLoc1(rows - 1);
 
 	case 8: //Unit
 	case 9: //Zero
 	case 3: //Iden
-		Rf_error("loadFromStream: matrix '%s' is constant (type %d);"
-			 " use a Full matrix if you wish to update it", name(), shape);
-		break;
+		return 0;
 
 	default:
-		Rf_error("loadFromStream: matrix '%s' with shape %d is unimplemented",
+		mxThrow("loadFromStream: matrix '%s' with shape %d is unimplemented",
 			 name(), shape);
 		break;
 	}
@@ -1102,6 +1032,7 @@ void MoorePenroseInverse(Eigen::Ref<Eigen::MatrixXd> mat)
 	}
 	mat.derived() = svd.matrixV() * sv.asDiagonal() * svd.matrixU().transpose();
 }
+
 
 SEXP omxMatrix::asR()
 {

@@ -73,7 +73,7 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 	matrixList.clear();
 	ProtectedSEXP matListNames(Rf_getAttrib(matList, R_NamesSymbol));
 
-	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
+	AssertProtectStackBalanced apsb(__FUNCTION__);
 
 	for(int index = 0; index < Rf_length(matList); index++) {
 		ProtectedSEXP nextLoc(VECTOR_ELT(matList, index));		// This is the matrix + populations
@@ -91,7 +91,7 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 {
 	ProtectedSEXP algListNames(Rf_getAttrib(algList, R_NamesSymbol));
-	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
+	AssertProtectStackBalanced apsb(__FUNCTION__);
 
 	if(OMX_DEBUG) { mxLog("Processing %d algebras.", Rf_length(algList)); }
 
@@ -105,19 +105,31 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 			omxMatrix *fm = algebraList[index];
 			omxFillMatrixFromMxFitFunction(fm, index, nextAlgTuple);
 			fm->nameStr = CHAR(STRING_ELT(algListNames, index));
-		} else {								// This is an algebra spec.
+		} else {
+			int tx=0;
 			omxMatrix *amat = algebraList[index];
-			ProtectedSEXP dimnames(VECTOR_ELT(nextAlgTuple, 0));
-			int verbose;
-			{
-				ProtectedSEXP Rverbose(VECTOR_ELT(nextAlgTuple, 1));
-				verbose = Rf_asInteger(Rverbose);
-			}
+			ProtectedSEXP dimnames(VECTOR_ELT(nextAlgTuple, tx++));
+			ProtectedSEXP Rverbose(VECTOR_ELT(nextAlgTuple, tx++));
+			int verbose = Rf_asInteger(Rverbose);
+			ProtectedSEXP Rfixed(VECTOR_ELT(nextAlgTuple, tx++));
+			bool fixed = Rf_asLogical(Rfixed);
+			ProtectedSEXP Rinitial(VECTOR_ELT(nextAlgTuple, tx++));
+			omxMatrix *initial = omxNewMatrixFromRPrimitive0(Rinitial, this, 0, 0);
 			omxFillMatrixFromRPrimitive(amat, NULL, this, 1, index);
-			amat->setJoinInfo(VECTOR_ELT(nextAlgTuple, 2), VECTOR_ELT(nextAlgTuple, 3));
-			ProtectedSEXP formula(VECTOR_ELT(nextAlgTuple, 4));
+			amat->setJoinInfo(VECTOR_ELT(nextAlgTuple, tx),
+					  VECTOR_ELT(nextAlgTuple, tx+1));
+			tx += 2;
+			ProtectedSEXP formula(VECTOR_ELT(nextAlgTuple, tx++));
 			std::string name = CHAR(STRING_ELT(algListNames, index));
-			omxFillMatrixFromMxAlgebra(amat, formula, name, dimnames, verbose);
+			if (initial) {
+				if (OMX_DEBUG) {
+					omxPrint(initial, name.c_str());
+				}
+				amat->take(initial);
+				omxFreeMatrix(initial);
+			}
+			omxFillMatrixFromMxAlgebra(amat, formula, name, dimnames,
+						   verbose, fixed);
 		}
 		if (isErrorRaised()) return;
 	}
@@ -177,7 +189,9 @@ void omxGlobal::omxProcessMxComputeEntities(SEXP rObj, omxState *currentState)
 	computeList.push_back(compute);
 
 	if (Global->computeLoopContext.size())
-		Rf_error("computeLoopContext imbalance in initFromFrontend");
+		mxThrow("computeLoopContext imbalance in initFromFrontend");
+
+	Global->checkpointValues.resize(Global->checkpointColnames.size());
 }
 
 // This is called at initialization and when we copy
@@ -210,25 +224,22 @@ void omxState::omxInitialMatrixAlgebraCompute(FitContext *fc)
 		}
 	}
 
-	// We use FF_COMPUTE_INITIAL_FIT because an expectation
-	// could depend on the value of an algebra. However, we
-	// don't mark anything clean because an algebra could
-	// depend on an expectation (via a fit function).
-
 	size_t numMats = matrixList.size();
 	int numAlgs = algebraList.size();
 
 	if(OMX_DEBUG) mxLog("omxInitialMatrixAlgebraCompute(state[%d], ...)", getId());
 
-	setWantStage(FF_COMPUTE_INITIAL_FIT);
-
-	// Need something finite for definition variables to avoid exceptions
-
 	for (int ex = 0; ex < (int) dataList.size(); ++ex) {
+		auto *d1 = dataList[ex];
+
+		if (fc->childList.size()==0) {
+			d1->evalAlgebras(fc);
+		}
+
 		// It is necessary to load some number (like 1) instead
 		// of NAs because algebra can use definition variables
 		// for indexing. We will load real data later.
-		dataList[ex]->loadFakeData(this, 1);
+		d1->loadFakeData(this, 1);
 	}
 
 	for(size_t index = 0; index < numMats; index++) {
@@ -274,13 +285,13 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 			if(OMX_DEBUG) { mxLog("Opening File: %s", fullname); }
 			oC->file = fopen(fullname, "w");
 			if(!oC->file) {
-				Rf_error("Unable to open file %s for checkpoint storage: %s",
+				mxThrow("Unable to open file %s for checkpoint storage: %s",
 					 fullname, strerror(errno));
 			}
 			break;}
 
 		case OMX_CONNECTION_CHECKPOINT:{
-			Rf_error("Warning NYI: Socket checkpoints Not Yet Implemented.\n");
+			mxThrow("Warning NYI: Socket checkpoints Not Yet Implemented.\n");
 			break;}
 		}
 
@@ -293,7 +304,7 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 		} else if (strEQ(units, "evaluations")) {
 			oC->evalsPerCheckpoint = Rf_asInteger(VECTOR_ELT(nextLoc, next++));
 		} else {
-			Rf_error("In 'Checkpoint Units' model option, '%s' not recognized", units);
+			mxThrow("In 'Checkpoint Units' model option, '%s' not recognized", units);
 		}
 		Global->checkpointList.push_back(oC);
 	}
@@ -301,7 +312,7 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 
 void omxState::omxProcessFreeVarList(SEXP varList)
 {
-	AssertProtectStackBalanced apsb(__FUNCTION__, *Global->mpi);
+	AssertProtectStackBalanced apsb(__FUNCTION__);
 	if(OMX_DEBUG) { mxLog("Processing Free Parameters."); }
 
 	int numVars = Rf_length(varList);
@@ -436,9 +447,7 @@ void omxState::omxProcessConstraints(SEXP constraints, FitContext *fc)
 		constr->prep(fc);
 		conListX.push_back(constr);
 	}
-	if(OMX_DEBUG) {
-		int equality, inequality;
-		countNonlinearConstraints(equality, inequality, false);
-		mxLog("Found %d equality and %d inequality constraints", equality, inequality);
-	}
+	usingAnalyticJacobian = false;
+	countNonlinearConstraints(numEqC, numIneqC, false);
+	if(OMX_DEBUG){mxLog("Found %d equality and %d inequality constraints", numEqC, numIneqC);}
 }

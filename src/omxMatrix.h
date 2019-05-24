@@ -36,6 +36,7 @@
 
 #include "omxDefines.h"
 #include <Eigen/Core>
+#include <Eigen/Dense>
 
 struct populateLocation {
 	int from;
@@ -126,7 +127,8 @@ class omxMatrix {
 	}
 	void copyAttr(omxMatrix *src);
 	bool isSimple() { return !algebra && !fitFunction && populate.size()==0; };
-	void loadFromStream(mini::csv::ifstream &st);
+	int numNonConstElements() const;
+	template <typename T> void loadFromStream(T &st);
 	int size() const { return rows * cols; }
 	SEXP asR();
 	bool isValidElem(int row, int col)
@@ -146,6 +148,13 @@ inline double *omxMatrixDataColumnMajor(omxMatrix *mat)
 struct EigenMatrixAdaptor : Eigen::Map< Eigen::MatrixXd > {
 	EigenMatrixAdaptor(omxMatrix *mat) :
 	  Eigen::Map< Eigen::MatrixXd >(omxMatrixDataColumnMajor(mat), mat->rows, mat->cols) {}
+};
+
+struct EigenMatrixAdaptor0 : Eigen::Map< Eigen::MatrixXd > {
+	EigenMatrixAdaptor0(omxMatrix *mat) :
+	Eigen::Map< Eigen::MatrixXd >(mat? omxMatrixDataColumnMajor(mat) : 0,
+				      mat? mat->rows : 0,
+				      mat? mat->cols : 0) {}
 };
 
 struct EigenArrayAdaptor : Eigen::Map< Eigen::ArrayXXd > {
@@ -277,8 +286,8 @@ static OMXINLINE double omxMatrixElement(omxMatrix *om, int row, int col) {
 }
 
 static OMXINLINE double *omxMatrixColumn(omxMatrix *om, int col) {
-  if (!om->colMajor) Rf_error("omxMatrixColumn requires colMajor order");
-  if (col < 0 || col >= om->cols) Rf_error(0, col, om->rows, om->cols);
+  if (!om->colMajor) mxThrow("omxMatrixColumn requires colMajor order");
+  if (col < 0 || col >= om->cols) mxThrow("omxMatrixColumn(%d) but only %d columns", col, om->cols);
   return om->data + col * om->rows;
 }
 
@@ -407,7 +416,7 @@ static OMXINLINE void omxDSYMV(double alpha, omxMatrix* mat,            // resul
 		// mxLog("DSYMV: %c, %d, %f, 0x%x, %d, 0x%x, %d, %f, 0x%x, %d\n", u, (mat->cols),alpha, mat->data, (mat->leading), 
 	                    // vec->data, onei, beta, result->data, onei); //:::DEBUG:::
 		if(mat->cols != nVecEl) {
-			Rf_error("Mismatch in symmetric vector/matrix multiply: %s (%d x %d) * (%d x 1).\n", "symmetric", mat->rows, mat->cols, nVecEl); // :::DEBUG:::
+			mxThrow("Mismatch in symmetric vector/matrix multiply: %s (%d x %d) * (%d x 1).\n", "symmetric", mat->rows, mat->cols, nVecEl); // :::DEBUG:::
 		}
 	}
 
@@ -448,13 +457,13 @@ static OMXINLINE double omxDDOT(omxMatrix* lhs, omxMatrix* rhs) {              /
 }
 
 static OMXINLINE void omxDPOTRF(omxMatrix* mat, int* info) {										// Cholesky decomposition of mat
-	// TODO: Add Rf_error checking, and/or adjustments for row vs. column majority.
+	// TODO: Add mxThrow checking, and/or adjustments for row vs. column majority.
 	// N.B. Not fully tested.
 	char u = 'U'; //l = 'L'; //U for storing upper triangle
 	F77_CALL(dpotrf)(&u, &(mat->rows), mat->data, &(mat->cols), info);
 }
 static OMXINLINE void omxDPOTRI(omxMatrix* mat, int* info) {										// Invert mat from Cholesky
-	// TODO: Add Rf_error checking, and/or adjustments for row vs. column majority.
+	// TODO: Add mxThrow checking, and/or adjustments for row vs. column majority.
 	// N.B. Not fully tested.
 	char u = 'U'; //l = 'L'; // U for storing upper triangle
 	F77_CALL(dpotri)(&u, &(mat->rows), mat->data, &(mat->cols), info);
@@ -572,5 +581,95 @@ double trace_prod(const Eigen::MatrixBase<T1> &t1, const Eigen::MatrixBase<T2> &
 }
 
 void MoorePenroseInverse(Eigen::Ref<Eigen::MatrixXd> mat);
+
+// https://forum.kde.org/viewtopic.php?f=74&t=96706
+// https://forum.kde.org/viewtopic.php?f=74&t=124421
+// https://forum.kde.org/viewtopic.php?f=74&t=91271
+template <typename T1>
+void filterJacobianRows(Eigen::MatrixBase<T1>& A, int& rankA){
+	//TODO: check for conformability
+	Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qra(A.transpose());
+	rankA = qra.rank();
+	Eigen::MatrixXd Q(A.cols(), A.rows());
+	Q.setIdentity(A.cols(), A.rows());
+	qra.householderQ().applyThisOnTheLeft(Q);
+	Eigen::MatrixXd R = qra.matrixR().triangularView<Eigen::Upper>();
+	R.conservativeResize(A.rows(), rankA);
+	//mxLog("rank: %d",rankA[0]);
+	//mxPrintMat("Q ",Q);
+	//mxPrintMat("R ",R);
+	A = (Q * R).transpose();
+}
+
+template <typename T> void omxMatrix::loadFromStream(T &st)
+{
+	EigenMatrixAdaptor v(this);
+
+	switch(shape) {
+	case 1: //Diag
+		for (int rx=0; rx < rows; ++rx) {
+			st >> v(rx, rx);
+		}
+		break;
+
+	case 2: //Full
+		for (int cx=0; cx < cols; ++cx) {
+			for (int rx=0; rx < rows; ++rx) {
+				st >> v(rx,cx);
+			}
+		}
+		break;
+		
+	case 4: //Lower
+		for (int cx=0; cx < cols; ++cx) {
+			for (int rx=cx; rx < rows; ++rx) {
+				st >> v(rx,cx);
+			}
+		}
+		break;
+
+	case 5: //Sdiag
+		for (int cx=0; cx < cols-1; ++cx) {
+			for (int rx=cx+1; rx < rows; ++rx) {
+				st >> v(rx,cx);
+			}
+		}
+		break;
+
+	case 6: //Stand
+		for (int cx=0; cx < cols-1; ++cx) {
+			for (int rx=cx+1; rx < rows; ++rx) {
+				double tmp;
+				st >> tmp;
+				v(rx,cx) = tmp;
+				v(cx,rx) = tmp;
+			}
+		}
+		break;
+
+	case 7: //Symm
+		for (int cx=0; cx < cols; ++cx) {
+			for (int rx=cx; rx < rows; ++rx) {
+				double tmp;
+				st >> tmp;
+				v(rx,cx) = tmp;
+				v(cx,rx) = tmp;
+			}
+		}
+		break;
+
+	case 8: //Unit
+	case 9: //Zero
+	case 3: //Iden
+		mxThrow("loadFromStream: matrix '%s' is constant (type %d);"
+			 " use a Full matrix if you wish to update it", name(), shape);
+		break;
+
+	default:
+		mxThrow("loadFromStream: matrix '%s' with shape %d is unimplemented",
+			 name(), shape);
+		break;
+	}
+}
 
 #endif /* _OMXMATRIX_H_ */

@@ -13,10 +13,11 @@ omxCheckWarning(expression, message)
 }
 \description{
 This function tests whether the correct warning message is thrown.
-}
-\details{
 Arguments \sQuote{expression} and \sQuote{message} give the expression
 that generates the warning and the message that is supposed to be generated, respectively.
+}
+\details{
+\emph{note}: to test for no warning, set \code{message = NA}.
 }
 \examples{
 msg <- paste("Objective functions like mxFIMLObjective()",
@@ -25,6 +26,10 @@ msg <- paste("Objective functions like mxFIMLObjective()",
 	"and add a call to mxFitFunctionML().",
 	"See examples at help(mxExpectationNormal)")
 foo <- omxCheckWarning(mxFIMLObjective('cov', 'mean'), msg)
+
+# Test for no warning
+omxCheckWarning(2+2, message = NA)
+
 }
 \references{
 The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.

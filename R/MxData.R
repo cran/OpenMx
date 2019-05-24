@@ -28,7 +28,8 @@ setClassUnion("MxDataFrameOrMatrix", c("data.frame", "matrix"))
 
 setClass(Class = "NonNullData",
 	representation = representation(
-		verbose = "integer"))
+		verbose = "integer"),
+	contains = "MxBaseNamed")
 
 ##' @name MxDataStatic-class
 ##' @rdname MxDataStatic-class
@@ -53,24 +54,27 @@ setClass(Class = "MxDataStatic",
 		observedStats = "list",
 		.isSorted = "logical",  # remove slot TODO
 		.needSort = "logical",
+		.parallel = "logical",
+		.noExoOptimize = "logical",
 	     primaryKey = "MxCharOrNumber",
 	     weight = "MxCharOrNumber",
 	     frequency = "MxCharOrNumber",
-		name   = "character"))
+	     minVariance = "numeric",
+	     algebra = "MxOptionalCharOrNumber"))
 
 setClass(Class = "MxDataDynamic",
 	 contains = "NonNullData",
 	 representation = representation(
 	     type        = "character",
 	     expectation = "MxCharOrNumber",
-	     numObs = "numeric",             # output
-	     name        = "character"))
+	     numObs = "numeric"))             # output
 
 setClassUnion("MxData", c("NULL", "MxDataStatic", "MxDataDynamic"))
 
 setMethod("initialize", "MxDataStatic",
 	  function(.Object, observed, means, type, numObs, observedStats,
-		   sort, primaryKey, weight, frequency, verbose) {
+		   sort, primaryKey, weight, frequency, verbose, .parallel, .noExoOptimize,
+		   minVariance, algebra) {
 		.Object@observed <- observed
 		.Object@means <- means
 		.Object@type <- type
@@ -89,10 +93,14 @@ setMethod("initialize", "MxDataStatic",
 		}
 		.Object@.isSorted <- FALSE
 		.Object@.needSort <- sort
+		.Object@.parallel <- .parallel
+		.Object@.noExoOptimize <- .noExoOptimize
 		.Object@primaryKey <- primaryKey
 		.Object@weight <- weight
 		.Object@frequency <- frequency
 		.Object@verbose <- verbose
+		.Object@minVariance <- minVariance
+		.Object@algebra <- algebra
 		return(.Object)
 	}
 )
@@ -118,7 +126,7 @@ setReplaceMethod("$", "MxData",
 setMethod("names", "MxData", slotNames)
 
 ##' Valid types of data that can be contained by MxData
-imxDataTypes <- c("raw", "cov", "cor", "sscp")
+imxDataTypes <- c("raw", "cov", "cor", "sscp", "acov")
 
 ##' Create dynamic data
 ##'
@@ -143,25 +151,13 @@ mxDataDynamic <- function(type, ..., expectation, verbose=0L) {
 mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=NA,
 		   thresholds=NA, ...,
 		   observedStats=NA, sort=NA, primaryKey = as.character(NA), weight = as.character(NA),
-		   frequency = as.character(NA), verbose=0L) {
+		   frequency = as.character(NA), verbose=0L, .parallel=TRUE, .noExoOptimize=TRUE,
+		   minVariance=sqrt(.Machine$double.eps), algebra=c()) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxData does not accept values for the '...' argument")
 	}
 	if (length(means) == 1 && is.na(means)) means <- as.numeric(NA)
-	if (missing(observedStats)) {
-		observedStats <- list()
-		if (!missing(acov)) observedStats <- c(observedStats, acov=acov)
-		if (!missing(fullWeight)) observedStats <- c(observedStats, fullWeight=fullWeight)
-		if (!missing(thresholds)) observedStats <- c(observedStats, thresholds=thresholds)
-	} else {
-		if (!missing(acov) || !missing(fullWeight) || !missing(thresholds)) {
-			stop("acov, fullWeight, and thresholds must be passed in the observedStats list")
-		}
-	}
-	rm(acov)
-	rm(fullWeight)
-	rm(thresholds)
 	if (missing(observed) || !is(observed, "MxDataFrameOrMatrix")) {
 		stop("Observed argument is neither a data frame nor a matrix")
 	}
@@ -177,6 +173,23 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 			paste(imxDataTypes[1:(numTypes-1)], collapse="' '"),
 			"' or '", imxDataTypes[numTypes], "'", sep=""))
 	}
+	if (type == "acov") {
+		return(legacyMxData(observed, type="acov", means=means, numObs=numObs, 
+			acov=acov, fullWeight=fullWeight, thresholds=thresholds))
+	}
+	if (missing(observedStats)) {
+		observedStats <- list()
+		if (!missing(acov)) observedStats <- c(observedStats, acov=acov)
+		if (!missing(fullWeight)) observedStats <- c(observedStats, fullWeight=fullWeight)
+		if (!missing(thresholds)) observedStats <- c(observedStats, thresholds=thresholds)
+	} else {
+		if (!missing(acov) || !missing(fullWeight) || !missing(thresholds)) {
+			stop("acov, fullWeight, and thresholds must be passed in via the observedStats list")
+		}
+	}
+	rm(acov)
+	rm(fullWeight)
+	rm(thresholds)
 	if (type == "sscp") {
 		stop(paste("'sscp' is not yet implemented."))
 	}
@@ -185,6 +198,9 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 	}
 	if (type != "raw" && is.na(numObs)) {
 		stop("Number of observations must be specified for non-raw data, i.e., add numObs=XXX to mxData()")
+	}
+	if (length(algebra) && type != 'raw') {
+		stop("algebra only permitted for type='raw' data")
 	}
 	if (type == "cov") {
 		verifyCovarianceMatrix(observed)
@@ -266,7 +282,9 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 	}
 
 	return(new("MxDataStatic", observed, means, type, as.numeric(numObs),
-		observedStats, sort, primaryKey, weight, frequency, as.integer(verbose)))
+		observedStats, sort, primaryKey, weight, frequency, as.integer(verbose),
+		as.logical(.parallel), as.logical(.noExoOptimize), minVariance,
+		as.character(algebra)))
 }
 
 setGeneric("preprocessDataForBackend", # DEPRECATED
@@ -289,6 +307,21 @@ setMethod("preprocessDataForBackend", signature("NonNullData"),
 
 setMethod("convertDataForBackend", signature("NonNullData"),
 	  function(data, model, flatModel) { data })
+
+setMethod("qualifyNames", signature("NonNullData"),
+	function(.Object, modelname, namespace) {
+		.Object@name <- imxIdentifier(modelname, .Object@name)
+		.Object
+	})
+
+setMethod("qualifyNames", signature("MxDataStatic"),
+	function(.Object, modelname, namespace) {
+		.Object@name <- imxIdentifier(modelname, .Object@name)
+		  if (.hasSlot(.Object, 'algebra')) {
+			  .Object@algebra <- imxConvertIdentifier(.Object@algebra, modelname, namespace, TRUE)
+		  }
+		.Object
+	})
 
 setMethod("convertDataForBackend", signature("MxDataStatic"),
 	  function(data, model, flatModel) {
@@ -345,6 +378,18 @@ setMethod("convertDataForBackend", signature("MxDataStatic"),
 					  stop(msg, call.=FALSE)
 				  }
 				  data@frequency <- wc
+			  }
+		  }
+		  if (.hasSlot(data, 'algebra')) {
+			  if (length(data@algebra)) {
+				  aNames <- names(flatModel@algebras)
+				  nums <- match(data@algebra, aNames)
+				  if (any(is.na(nums))) {
+					  msg <- paste("Algebra", omxQuotes(data@algebra[is.na(nums)]),
+						  "do not refer to an algebra")
+					  stop(msg, call.=FALSE)
+				  }
+				  data@algebra <- nums - 1L
 			  }
 		  }
 
@@ -438,7 +483,29 @@ getDataThresholdNames <- function(data) {
 	return(c())
 }
 
-verifyCovarianceMatrix <- function(covMatrix, nameMatrix="observed") {
+verifySymmetric <- function(covMatrix, nameMatrix="observed") {
+	if (nrow(covMatrix) == 1) return()
+	mask <- lower.tri(covMatrix)
+	maxDiff <- max(abs(covMatrix[mask] - t(covMatrix)[mask]))
+	if (maxDiff <= 1e-9) return()
+	if (1e-2 > maxDiff && maxDiff > 1e-9) {
+		msg <- paste("The", nameMatrix, "matrix",
+			"is not a symmetric matrix,",
+			"possibly due to rounding errors.\n",
+			"Something like this would be appropriate:\n",
+			"m <- (m + t(m)) / 2\n",
+			"Where m is the name of your observed data.",
+			"Another option is \n m <- round(m, 3)")
+	} else {
+		msg <- paste("The", nameMatrix, "matrix",
+			"is not symmetric.",
+			"Check what you are providing to mxData",
+			"and perhaps try round(yourData, x) for x digits of precision.")
+	}
+	stop(msg, call. = FALSE)
+}
+
+verifyCovarianceMatrix <- function(covMatrix, nameMatrix="observed", strictPD=TRUE) {
 	if (is.null(covMatrix)) stop(paste("Covariance matrix",omxQuotes(nameMatrix),
 		"is missing in action"))
 	if(nrow(covMatrix) != ncol(covMatrix)) {
@@ -451,37 +518,41 @@ verifyCovarianceMatrix <- function(covMatrix, nameMatrix="observed") {
 			"contains NA values. Perhaps ensure you are excluding NAs in your cov() statement?")
 		stop(msg, call. = FALSE)	
 	}
-	if (max(abs(covMatrix - t(covMatrix))) > 1e-9) {
-		if(all.equal(covMatrix, t(covMatrix))){
-			msg <- paste("The", nameMatrix, "covariance matrix",
-				"is not a symmetric matrix,",
-				" possibly due to rounding errors.\n",
-				"Something like this would be appropriate:\n",
-				"covMatrix[lower.tri(covMatrix)] = t(covMatrix)[lower.tri(t(covMatrix))]\n",
-				"Where covMatrix is the name of your covariance data.",
-				"Another option is \n round(covMatrix, 6)\n.")
-		} else {
-			msg <- paste("The", nameMatrix, "covariance matrix",
-				"is not a symmetric matrix.\n",
-				"Check what you are providing to mxData",
-				"and perhaps try round(yourData, x) for x digits of precision.")
-		}		
-		stop(msg, call. = FALSE)
+	verifySymmetric(covMatrix, nameMatrix)
+	if (is.data.frame(covMatrix)) covMatrix <- as.matrix(covMatrix)
+	if(nameMatrix=="observed" && strictPD){
+		evalCov <- eigen(covMatrix,T,T)$values
+		if(any(evalCov <= 0)){
+			msg <- paste(
+				"The", nameMatrix, "covariance matrix",
+				"is not a positive-definite matrix:\n",
+				"1 or more elements of eigen(covMatrix)$values ",
+				"<= 0")
+			stop(msg, call. = FALSE)
+		}
 	}
-	evalCov <- eigen(covMatrix)$values
-	if (nameMatrix=="observed" & any( evalCov <= 0)) {
-		msg <- paste("The", nameMatrix, "covariance matrix",
-			"is not a positive-definite matrix:\n",
-			"1 or more elements of eigen(covMatrix)$values ",
-			"<= 0")
-		stop(msg, call. = FALSE)
-	}
-	if (nameMatrix=="asymptotic" & any( evalCov < -1e-4)) {
-		msg <- paste("The", nameMatrix, "covariance matrix",
-			"is not a positive-semi-definite matrix:\n",
-			"1 or more elements of eigen(covMatrix)$values ",
-			"< 0")
-		stop(msg, call. = FALSE)
+	if(nameMatrix=="asymptotic"){
+		if(strictPD){
+			evalCov <- eigen(covMatrix,T,T)$values
+			if(any(evalCov < -1e-4)){
+				msg <- paste(
+					"The", nameMatrix, "covariance matrix",
+					"is not a positive-semi-definite matrix:\n",
+					"1 or more elements of eigen(covMatrix)$values ",
+					"< 0")
+				stop(msg, call. = FALSE)
+			}
+		}
+		else{
+			tryToInv <- try(solve(covMatrix),silent=TRUE)
+			if(is(tryToInv,"try-error")){
+				msg <- paste(
+					"The", nameMatrix, "covariance matrix",
+					"is a singular matrix\n",
+					"(at least computationally if not exactly)")
+				stop(msg, call. = FALSE)
+			}
+		}
 	}
 }
 
@@ -496,13 +567,8 @@ verifyCorrelationMatrix <- function(corMatrix) {
 			"contains NA values")
 		stop(msg, call. = FALSE)	
 	}
-	if (!all(corMatrix == t(corMatrix))) {
-		msg <- paste("The observed correlation matrix",
-			"is not a symmetric matrix.",
-			"Check what you are providing to mxData, and perhaps try using",
-			"round(yourData, x) for x digits of precision.")
-		stop(msg, call. = FALSE)
-	}
+	verifySymmetric(corMatrix)
+	if (is.data.frame(corMatrix)) corMatrix <- as.matrix(corMatrix)
 	if (any(eigen(corMatrix)$values <= 0)) {
 		msg <- paste("The observed correlation matrix",
 			"is not a positive-definite matrix")

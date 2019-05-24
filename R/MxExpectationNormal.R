@@ -328,12 +328,24 @@ mxCheckIdentification <- function(model, details=TRUE){
 		msg <- paste("Identification check is not possible for models with", omxQuotes(notAllowedFits), 'fit functions.\n', "If you have a multigroup model, use mxFitFunctionMultigroup.")
 		stop(msg, call.=FALSE)
 	}
-	if(imxHasConstraint(model)){
-		stop("Whoa Nelly.  I found an MxConstraint in your model.  I just cannot work under these conditions. I will be in my trailer until you reparameterize your model without using mxConstraint().")
+	if(imxHasDefinitionVariable(model)){
+		stop("Beep beep ribby ribby.  I found definition variables in your model.\nI might not give you the identification answer you're looking for in this case.  See ?mxCheckIdentification.")
 	}
 	eps <- 1e-17
 	theParams <- omxGetParameters(model)
 	jac <- omxManifestModelByParameterJacobian(model)
+	if(imxHasConstraint(model)){
+		tmpModel <- mxModel(model, mxComputeSequence(list(mxComputeNumericDeriv(hessian=FALSE), mxComputeReportDeriv())))
+		tmpModel <- mxRun(tmpModel, silent=TRUE)
+		cjac <- tmpModel$output$constraintJacobian
+		# drop model name from constraint name
+		rownames(cjac) <- sapply(strsplit(rownames(cjac), fixed=TRUE, split=imxSeparatorChar), '[', 2)
+	} else {
+		cjac <- matrix(, nrow=0, ncol=length(theParams))
+		colnames(cjac) <- names(theParams)
+	}
+	# Concatenate via rows the model and constraint Jacobians
+	jac <- rbind(jac, cjac)
 	# Check that rank of jac == length(theParams)
 	rank <- qr(jac)$rank
 	if(rank == length(theParams)){
@@ -803,9 +815,9 @@ generateDataColumns <- function(flatModel, covNames, dataName) {
 	if (any(is.na(retval))) {
 		msg <- paste("The column name(s)", omxQuotes(covNames[is.na(retval)]),
 			     "in the expected covariance matrix",
-			     "of the expectation function in model",
-			     omxQuotes(flatModel@name),
-			     "cannot be found in the column names of the data.")
+			     "of the expectation function",
+			     "cannot be found in the column names of",
+			     omxQuotes(dataName))
 		stop(msg, call. = FALSE)
 	}
 	return(retval - 1L)

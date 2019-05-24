@@ -159,10 +159,7 @@ void omxExpectation::loadFromR()
 
 	int numCols=0;
 	bool isRaw = strEQ(omxDataType(data), "raw");
-	if (isRaw || data->hasSummaryStats()) {
-		ProtectedSEXP Rdcn(R_do_slot(rObj, Rf_install("dataColumnNames")));
-		loadCharVecFromR(name, Rdcn, dataColumnNames);
-
+	{
 		ProtectedSEXP Rdc(R_do_slot(rObj, Rf_install("dataColumns")));
 		numCols = Rf_length(Rdc);
 		ox->saveDataColumnsInfo(Rdc);
@@ -172,6 +169,18 @@ void omxExpectation::loadFromR()
 			for (int cx=0; cx < numCols; ++cx) {
 				int var = dc[cx];
 				data->assertColumnIsData(var);
+			}
+		}
+		if (R_has_slot(rObj, Rf_install("dataColumnNames"))) {
+			ProtectedSEXP Rdcn(R_do_slot(rObj, Rf_install("dataColumnNames")));
+			loadCharVecFromR(name, Rdcn, dataColumnNames);
+		}
+		if (numCols && !dataColumnNames.size()) {
+			// eventually deprecate slot 'dataColumns'
+			Rf_warning("Slot MxData@dataColumnNames is not set up; OpenMx bug? Improvising...");
+			auto dc = base::getDataColumns();
+			for (int cx=0; cx < int(dc.size()); ++cx) {
+				dataColumnNames.push_back(data->columnName(dc[cx]));
 			}
 		}
 	}
@@ -196,7 +205,7 @@ void omxExpectation::loadFromR()
 
 void omxExpectation::generateData(FitContext *, MxRList &out)
 {
-	Rf_error("%s: generateData not implemented for '%s'", name, expType);
+	mxThrow("%s: generateData not implemented for '%s'", name, expType);
 }
 
 omxExpectation* omxNewIncompleteExpectation(SEXP rObj, int expNum, omxState* os) {
@@ -277,7 +286,7 @@ omxNewInternalExpectation(const char *expType, omxState* os)
 		}
 	}
 
-	if (!expect) Rf_error("expectation '%s' not recognized", expType);
+	if (!expect) mxThrow("expectation '%s' not recognized", expType);
 
 	expect->currentState = os;
 	expect->canDuplicate = true;
@@ -305,24 +314,15 @@ void complainAboutMissingMeans(omxExpectation *off)
 
 bool omxExpectation::loadDefVars(int row)
 {
-	bool changed = false;
-	for (int k=0; k < int(data->defVars.size()); ++k) {
-		omxDefinitionVar &dv = data->defVars[k];
-		double newDefVar = omxDoubleDataElement(data, row, dv.column);
-		if(ISNA(newDefVar)) {
-			Rf_error("Error: NA value for a definition variable is Not Yet Implemented.");
-		}
-		changed |= dv.loadData(currentState, newDefVar);
-	}
-	if (changed && OMX_DEBUG_ROWS(row)) { mxLog("%s: loading definition vars for row %d", name, row); }
-	return changed;
+	if (!data) return false;
+	return data->loadDefVars(currentState, row);
 }
 
 int omxExpectation::numSummaryStats()
 {
 	omxMatrix *cov = getComponent("cov");
 	if (!cov) {
-		Rf_error("%s::numSummaryStats is not implemented (for object '%s')", expType, name);
+		mxThrow("%s::numSummaryStats is not implemented (for object '%s')", expType, name);
 	}
 
 	omxMatrix *mean = getComponent("means");
@@ -386,7 +386,7 @@ void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *slope, omxMat
 		}
 		return;
 	}
-	if (!mean) Rf_error("ordinal indicators and no mean vector");
+	if (!mean) mxThrow("ordinal indicators and no mean vector");
 
 	EigenVectorAdaptor Emean(mean);
 	EigenMatrixAdaptor Eth(thr);
@@ -436,7 +436,7 @@ void omxExpectation::asVector1(FitContext *fc, int row, Eigen::Ref<Eigen::Vector
 
 	omxMatrix *cov = getComponent("cov");
 	if (!cov) {
-		Rf_error("%s::asVector is not implemented (for object '%s')", expType, name);
+		mxThrow("%s::asVector is not implemented (for object '%s')", expType, name);
 	}
 
 	normalToStdVector(cov, getComponent("means"), getComponent("slope"), thresholdsMat,

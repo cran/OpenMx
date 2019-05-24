@@ -224,7 +224,7 @@ fitStatistics <- function(model, useSubmodels, retval) {
 	} else {chiDoF <- model@output$chiDoF}
 	retval[['ChiDoF']] <- chiDoF
 	retval[['Chi']] <- chi
-	retval[['p']] <- suppressWarnings(pchisq(chi, chiDoF, lower.tail = FALSE))
+	retval[['p']] <- suppressWarnings(ifelse(chiDoF==0,1.0,pchisq(chi, chiDoF, lower.tail = FALSE)))
 	retval[['AIC.Mx']] <- Fvalue - 2 * DoF
 	retval[['BIC.Mx']] <- (Fvalue - DoF * log(retval[['numObs']])) 
 	AIC.p <- Fvalue + 2 * nParam
@@ -307,11 +307,10 @@ parameterListHelper <- function(model, withModelName) {
 	ptable <- data.frame()
 	if(length(model@output) == 0) { return(ptable) }
 	estimates <- model@output$estimate
-    if (!is.null(model@output$standardErrors) && 
- 		length(model@output$standardErrors) == length(estimates)) { 
- 		errorEstimates <- model@output$standardErrors 
-	} else { 
-		errorEstimates <- rep.int(as.numeric(NA), length(estimates)) 
+	errorEstimates <- rep.int(as.numeric(NA), length(estimates)) 
+    if (!is.null(model@output$standardErrors)) {
+	    se <- model@output$standardErrors 
+	    errorEstimates[match(rownames(se), names(estimates))] <- se
 	}
 	matrices <- model@runstate$matrices
 	parameters <- model@runstate$parameters
@@ -508,10 +507,12 @@ print.summary.mxmodel <- function(x,...) {
 			seCol <- match('Std.Error', colnames(params))
 			before <- params[1:seCol]
 			stars <- mapply(highlightProblem, rep('',length(x[['seSuspect']])), x[['seSuspect']])
+			fullStars <- rep('', nrow(params))
+			fullStars[match(names(x[['seSuspect']]), params$name)] <- stars
 			if (length(params) > seCol) {
-				params <- cbind(before, 'A'=stars, params[(seCol+1):length(params)])
+				params <- cbind(before, 'A'=fullStars, params[(seCol+1):length(params)])
 			} else {
-				params <- cbind(before, 'A'=stars)
+				params <- cbind(before, 'A'=fullStars)
 			}
 		}
 		if (!is.null(x$bootstrapQuantile) && nrow(x$bootstrapQuantile) == nrow(params)) {
@@ -563,6 +564,7 @@ print.summary.mxmodel <- function(x,...) {
 			else plural <- 's'
 			cat("Constraint", omxQuotes(simplifyName(name, x$modelName)), "contributes",
 				constraints[[i]], paste("observed statistic", plural, '.', sep=''), "\n")
+			if(i==length(constraints)){cat("\n")}
 		}
 	}
 	if (!is.null(x$infoDefinite) && !is.na(x$infoDefinite)) {
@@ -875,7 +877,9 @@ summary.MxModel <- function(object, ..., verbose=FALSE) {
 	retval$parameters <- parameterList(model, useSubmodels)
 	if (!is.null(model@compute$steps[['ND']]) && model@compute$steps[['ND']]$checkGradient &&
 	    !is.null(model@compute$steps[['ND']]$output$gradient)) {
-		retval$seSuspect <- !model@compute$steps[['ND']]$output$gradient[,'symmetric']
+		gdetail <- model@compute$steps[['ND']]$output$gradient
+		retval$seSuspect <- !gdetail[,'symmetric']
+		names(retval$seSuspect) <- rownames(gdetail)
 	}
 	if (is(model@compute, "MxComputeBootstrap")) {
 		bq <- c(.25,.75)
@@ -1154,7 +1158,7 @@ logLik.MxModel <- function(object, ...) {
   			paste(paramnames[!(paramnames %in% rownames(ParamsCov))],collapse=", "),sep=""))
   	}
     #From Mike Hunter's delta method example:
-    covParam <- ParamsCov[paramnames,paramnames]#<--submodel will usually not contain all free param.s
+    covParam <- ParamsCov[paramnames,paramnames,drop=FALSE]#<--submodel will usually not contain all free param.s
     jacStand <- numDeriv::jacobian(func=.standardizeParams, x=freeparams, model=model, Apos=Apos, Spos=Spos, Mpos=Mpos)
     covSparam <- jacStand %*% covParam %*% t(jacStand)
     dimnames(covSparam) <- list(names(zout),names(zout))
@@ -1170,8 +1174,19 @@ logLik.MxModel <- function(object, ...) {
     for(i in 1:numelem){
       if( (out$name[i] %in% paramnames) | 
             (out$label[i] %in% paramnames) ){
-        out$Raw.SE[i] <- sqrt(covParam[ifelse(is.na(out$label[i]),out$name[i],out$label[i]),
-                                       ifelse(is.na(out$label[i]),out$name[i],out$label[i])])
+        tdiags <- covParam[ifelse(is.na(out$label[i]),out$name[i],out$label[i]),
+                                       ifelse(is.na(out$label[i]),out$name[i],out$label[i])]
+	if (length(tdiags) == 1) {
+		# For diag, R will return a square identity matrix of size given by the scalar
+		if(tdiags < 0 || is.na(tdiags)) {
+			warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
+		}
+	} else {
+		if(any(diag(tdiags) < 0) || any(is.na(tdiags))){
+			warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
+		}
+	}
+        out$Raw.SE[i] <- suppressWarnings(sqrt(tdiags))
   }}}
   else{out$Raw.SE <- "not_requested"}
   return(out)
@@ -1207,19 +1222,19 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
   if(SE){
   	#If user requests SEs and provided no covariance matrix, check to be sure SEs can and should be computed:
   	if(!length(cov)){
-  		if(length(model@constraints)>0){
-  			msg <- paste("standard errors will not be computed because model '",model@name,"' contains at least one mxConstraint",sep="")
-  			warning(msg)
-  			SE <- FALSE
-  		}
-  		if(SE & length(model@output$hessian)==0){
+  		# if(length(model@constraints)>0){
+  		# 	msg <- paste("standard errors will not be computed because model '",model@name,"' contains at least one mxConstraint",sep="")
+  		# 	warning(msg)
+  		# 	SE <- FALSE
+  		# }
+  		if(SE & length(model@output$vcov)==0){
   			if(!model@.wasRun){
   				msg <- paste("standard errors will not be computed because model '",model@name,"' has not yet been run, and no matrix was provided for argument 'cov'",sep="")
   				warning(msg)
   				SE <- FALSE
   			}
   			else{
-  				warning("argument 'SE=TRUE' requires model to have a nonempty 'hessian' output slot, or a non-NULL value for argument 'cov'; continuing with 'SE' coerced to 'FALSE'")
+  				warning("argument 'SE=TRUE' requires model to have a nonempty 'vcov' output slot, or a non-NULL value for argument 'cov'; continuing with 'SE' coerced to 'FALSE'")
   				SE <- FALSE
   			}}
   		libraries <- rownames(installed.packages())
@@ -1229,22 +1244,15 @@ mxStandardizeRAMpaths <- function(model, SE=FALSE, cov=NULL){
   			SE <- FALSE
   		}
   		if(SE){
-  			if(!is.na(model@output$infoDefinite) && model@output$infoDefinite){
-  				#solve() will fail if Hessian is computationally singular;
-  				#chol2inv() will still fail if Hessian is exactly singular.
-  				covParam <- 2*chol2inv(chol(model@output$hessian))
-  				dimnames(covParam) <- dimnames(model@output$hessian)
-  			}
-  			#An indefinite Hessian usually means some SEs will be NaN:
-  			else{covParam <- 2*solve(model@output$hessian)}
+  			covParam <- vcov(model)
   		}
   	}
   	#If user requests SEs and provided a covariance matrix:
   	else{
   		#Conceivably, the user could provide a sampling covariance matrix that IS valid in the presence of MxConstraints...
   		if(length(model@constraints)>0){
-  			msg <- paste("standard errors may be invalid because model '",model@name,"' contains at least one mxConstraint",sep="")
-  			warning(msg)
+  			#msg <- paste("standard errors may be invalid because model '",model@name,"' contains at least one mxConstraint",sep="")
+  			#warning(msg)
   		}
   		#Sanity checks on the value of argument 'cov':
   		if(!is.matrix(cov)){ #<--Is it a matrix?

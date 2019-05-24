@@ -208,12 +208,12 @@ class omxGlobal {
 	bool unpackedConfidenceIntervals;
 	std::vector< FreeVarGroup* > freeGroup;
 	time_t lastProgressReport;
-	int previousReportLength;
+	std::string previousReport;
 	int previousComputeCount;
-	double previousReportFit;
-	void reportProgressStr(const char *msg);
+	void reportProgressStr(std::string &str);
 
  public:
+	bool RNGCheckedOut;
 	ProtectAutoBalanceDoodad *mpi;
 	bool silent;
 	bool ComputePersist;
@@ -243,8 +243,11 @@ class omxGlobal {
 	int calcNumIntegrationPoints(int numVars) {
 		int pts = (maxptsa + maxptsb * numVars + maxptsc * numVars * numVars +
 			   exp(maxptsd + maxptse * numVars * log(relEps)));
-		if (pts < 0) Rf_error("%f + %f * %d + %f * %d * %d + exp(%f + %f * %d * log(%f)) is too large (or non-positive)",
-				      maxptsa, maxptsb, numVars, maxptsc, numVars, numVars, relEps);
+		if (pts < 0) mxThrow("calcNumIntegrationPoints "
+				     "%f + %f * %d + %f * %d * %d + "
+				     "exp(%f + %f * %d * log(%f)) is too large (or non-positive)",
+				      maxptsa, maxptsb, numVars, maxptsc, numVars, numVars,
+				     maxptsd, maxptse, numVars, log(relEps));
 		return pts;
 	};
 	double relEps;
@@ -268,7 +271,10 @@ class omxGlobal {
 
 	std::vector<const char *> computeLoopContext;
 	std::vector<int> computeLoopIndex;
+	std::vector< std::string > checkpointColnames;
+	std::vector< std::string > checkpointValues;
 	std::vector< std::string > bads;
+	bool userInterrupted;
 
 	// Will need revision if multiple optimizers are running in parallel
 	std::vector< omxCheckpoint* > checkpointList;
@@ -292,10 +298,15 @@ class omxGlobal {
 
 	~omxGlobal();
 	void reportProgress(const char *context, FitContext *fc);
+	bool interrupted();
+	void reportProgress1(const char *context, std::string detail);
+	void throwOnUserInterrupted() { if (interrupted()) mxThrow("User interrupt"); };
 };
 
 // Use a pointer to ensure correct initialization and destruction
 extern class omxGlobal *Global;
+
+
 
 // omxState is for stuff that must be duplicated for thread safety.
 class omxState {
@@ -317,7 +328,7 @@ class omxState {
 	std::vector< omxData* > dataList;
 	std::vector< omxConstraint* > conListX;
 
- 	omxState() : clone(false) { init(); };
+	omxState() : wantStage(0), clone(false) { init(); };
 	omxState(omxState *src);
 	void initialRecalc(FitContext *fc);
 	void omxProcessMxMatrixEntities(SEXP matList);
@@ -340,6 +351,9 @@ class omxState {
 	omxMatrix *getMatrixFromIndex(int matnum) const; // matrix (2s complement) or algebra
 	omxMatrix *getMatrixFromIndex(omxMatrix *mat) const { return lookupDuplicate(mat); };
 	const char *matrixToName(int matnum) const { return getMatrixFromIndex(matnum)->name(); };
+	
+	int numEqC, numIneqC;
+	bool usingAnalyticJacobian;
 
 	void countNonlinearConstraints(int &equality, int &inequality, bool distinguishLinear)
 	{
@@ -352,6 +366,9 @@ class omxState {
 				equality += cs->size;
 			} else {
 				inequality += cs->size;
+			}
+			if(!usingAnalyticJacobian && cs->jacobian){
+				usingAnalyticJacobian = true;
 			}
 		}
 	};
@@ -367,18 +384,39 @@ class omxState {
 			} else {
 				l_inequality += cs->size;
 			}
+			if(!usingAnalyticJacobian && cs->jacobian){
+				usingAnalyticJacobian = true;
+			}
 		}
 	};
 };
 
-inline bool isErrorRaised() { return Global->bads.size() != 0; }
-void omxRaiseError(const char* Rf_errorMsg); // DEPRECATED
-void omxRaiseErrorf(const char* Rf_errorMsg, ...) __attribute__((format (printf, 1, 2)));
+inline bool isErrorRaised() { return Global->bads.size() != 0 || Global->userInterrupted || Global->timedOut; }
+inline bool isErrorRaisedIgnTime() { return Global->bads.size() != 0 || Global->userInterrupted; }
+
+void omxRaiseError(const char* mxThrowMsg); // DEPRECATED
+void omxRaiseErrorf(const char* mxThrowMsg, ...) __attribute__((format (printf, 1, 2)));
 
 void string_vsnprintf(const char *fmt, va_list orig_ap, std::string &dest);
 
 void diagParallel(int verbose, const char* msg, ...) __attribute__((format (printf, 2, 3)));
 SEXP enableMxLog();
+
+struct StateInvalidator {
+	omxState &st;
+	StateInvalidator(omxState &_st) : st(_st) {};
+	virtual void doData();
+	virtual void doMatrix();
+	virtual void doExpectation();
+	virtual void doAlgebra();
+	void operator()()
+	{
+		doData();
+		doMatrix();
+		doExpectation();
+		doAlgebra();
+	}
+};
 
 #endif /* _OMXSTATE_H_ */
 

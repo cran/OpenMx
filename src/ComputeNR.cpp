@@ -243,7 +243,7 @@ struct ComputeNRO : public NewtonRaphsonObjective {
 	ComputeNRO(ComputeNR *_nr, FitContext *_fc) : nr(*_nr), fc(_fc) {};
 	virtual bool isConverged() {
 		nr.reportProgress(fc);
-		return converged || isErrorRaised() || Global->timedOut ||
+		return converged || isErrorRaised() ||
 			fc->getInform() != INFORM_UNINITIALIZED;
 	}
 	virtual double getFit() { return fc->fit; };
@@ -301,7 +301,7 @@ void ComputeNR::initFromFrontend(omxState *state, SEXP rObj)
 
 	if (!fitMatrix->fitFunction->hessianAvailable ||
 	    !fitMatrix->fitFunction->gradientAvailable) {
-		Rf_error("Newton-Raphson requires derivatives");
+		mxThrow("Newton-Raphson requires derivatives");
 	}
 
 	SEXP slotValue;
@@ -310,7 +310,7 @@ void ComputeNR::initFromFrontend(omxState *state, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("tolerance")));
 	tolerance = REAL(slotValue)[0];
-	if (tolerance <= 0) Rf_error("tolerance must be positive");
+	if (tolerance <= 0) mxThrow("tolerance must be positive");
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("verbose")));
 	verbose = Rf_asInteger(slotValue);

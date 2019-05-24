@@ -41,8 +41,8 @@ expressions, named entities, and algebras.
 }
 \details{
 x can be the name of an algebra, a bracket address, named entity
-or arbitrary expression. It is a frontend-only file that works
-much like mxEval. When the \code{details} argument is TRUE, the full
+or arbitrary expression.
+When the \code{details} argument is TRUE, the full
 sampling covariance matrix of \code{x} is also returned as part of a list.
 The square root of the diagonals of this sampling covariance matrix are
 the standard errors.
@@ -50,6 +50,19 @@ the standard errors.
 When supplying the \code{cov} argument, take care that the free parameter
 covariance matrix is given, not the information matrix.  These 
 two are inverses of one another.
+
+This function uses the delta method to compute the standard error of arbitrary
+and possibly nonlinear functions of the free parameters.  The delta method
+makes a first-order Taylor approximation of the nonlinear function.  The
+nonlinear function is a map from all the free parameters to some transformed
+subset of parameters: the linearization of this map is given by the Jacobian
+\eqn{J}.  In equation form, the delta method computes standard errors by the following:
+
+\deqn{J^T C J}
+
+where \eqn{J} is the Jacobian of the nonlinear parameter transformation
+and \eqn{C} is the covariance matrix of the free parameters (e.g., two
+times the inverse of the Hessian of the minus two log likelihood function).
 }
 \examples{
 library(OpenMx)

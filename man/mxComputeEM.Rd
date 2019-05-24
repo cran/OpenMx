@@ -50,7 +50,7 @@ The arguments to this function have evolved.  The old style
 \code{mxComputeEM(e,p,mstep=m)} is equivalent to the new style
 \code{mxComputeEM(estep=mxComputeOnce(e,p), mstep=m)}. This change
 allows the API to more closely match the literature on the E-M
-method.  You might use \code{mxAlgebra(..., fixed=TRUE)} to
+method.  You might use \code{mxAlgebra(..., recompute='onDemand')} to
 contain the results of the E-step and then cause this algebra to
 be recomputed using \code{mxComputeOnce}.
 
@@ -63,6 +63,40 @@ for standard errors. The Oakes (1999) direct method and S-EM, an
 implementation of Meng & Rubin (1991), are included.
 
 Ramsay (1975) was recommended in Bock, Gibbons, & Muraki (1988).
+}
+\examples{
+library(OpenMx)
+set.seed(190127)
+
+N <- 200
+x <- matrix(c(rnorm(N/2,0,1),
+              rnorm(N/2,3,1)),ncol=1,dimnames=list(NULL,"x"))
+data4mx <- mxData(observed=x,type="raw")
+
+class1 <- mxModel("Class1",
+	mxMatrix(type="Full",nrow=1,ncol=1,free=TRUE,values=0,name="Mu"),
+	mxMatrix(type="Full",nrow=1,ncol=1,free=TRUE,values=4,name="Sigma"),
+	mxExpectationNormal(covariance="Sigma",means="Mu",dimnames="x"),
+	mxFitFunctionML(vector=TRUE))
+
+class2 <- mxRename(class1, "Class2")
+
+mm <- mxModel(
+	"Mixture", data4mx, class1, class2,
+	mxAlgebra((1-Posteriors) * Class1.fitfunction, name="PL1"),
+	mxAlgebra(Posteriors * Class2.fitfunction, name="PL2"),
+	mxAlgebra(PL1 + PL2, name="PL"),
+	mxAlgebra(PL2 / PL,  recompute='onDemand',
+	          initial=matrix(runif(N,.4,.6), nrow=N, ncol = 1), name="Posteriors"),
+	mxAlgebra(-2*sum(log(PL)), name="FF"),
+	mxFitFunctionAlgebra(algebra="FF"),
+	mxComputeEM(
+	  estep=mxComputeOnce("Mixture.Posteriors"),
+	  mstep=mxComputeGradientDescent(fitfunction="Mixture.fitfunction")))
+
+mm <- mxOption(mm, "Max minutes", 1/20)  # remove this line to find optimum
+mmfit <- mxRun(mm)
+summary(mmfit)
 }
 \references{
 Bock, R. D., Gibbons, R., & Muraki, E. (1988). Full-information

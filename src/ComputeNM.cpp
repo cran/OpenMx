@@ -83,7 +83,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	
 	ScopedProtect p5(slotValue, R_do_slot(rObj, Rf_install("alpha")));
 	alpha = Rf_asReal(slotValue);
-	if(alpha<=0){Rf_error("reflection coefficient 'alpha' must be positive");}
+	if(alpha<=0){mxThrow("reflection coefficient 'alpha' must be positive");}
 	if(verbose){
 		mxLog("omxComputeNM member 'alpha' is %f", alpha);
 	}
@@ -100,13 +100,13 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 		mxLog("omxComputeNM member 'betai' is %f", betai);
 	}
 	if(betao<=0 || betao>=1 || betai<=0 || betai>=1){
-		Rf_error("contraction coefficients 'betao' and 'betai' must both be within unit interval (0,1)");
+		mxThrow("contraction coefficients 'betao' and 'betai' must both be within unit interval (0,1)");
 	}
 	
 	ScopedProtect p8(slotValue, R_do_slot(rObj, Rf_install("gamma")));
 	gamma = Rf_asReal(slotValue);
 	if(gamma>0 && gamma<=alpha){
-		Rf_error("if positive, expansion coefficient 'gamma' must be greater than reflection coefficient 'alpha'");
+		mxThrow("if positive, expansion coefficient 'gamma' must be greater than reflection coefficient 'alpha'");
 	}
 	if(verbose){
 		mxLog("omxComputeNM member 'gamma' is %f", gamma);
@@ -114,7 +114,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	
 	ScopedProtect p9(slotValue, R_do_slot(rObj, Rf_install("sigma")));
 	sigma = Rf_asReal(slotValue);
-	if(sigma>=1){Rf_error("shrink coefficient 'sigma' must be less than 1.0");}
+	if(sigma>=1){mxThrow("shrink coefficient 'sigma' must be less than 1.0");}
 	if(verbose){
 		mxLog("omxComputeNM member 'sigma' is %f", sigma);
 	}
@@ -130,7 +130,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"right")){iniSimplexType = 2;}
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"smartRight")){iniSimplexType = 3;}
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"random")){iniSimplexType = 4;}
-	else{Rf_error("unrecognized character string provided for Nelder-Mead 'iniSimplexType'");}
+	else{mxThrow("unrecognized character string provided for Nelder-Mead 'iniSimplexType'");}
 	if(verbose){
 		mxLog("omxComputeNM member 'iniSimplexType' is %d", iniSimplexType);
 	}
@@ -179,13 +179,13 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	
 	ScopedProtect p16(slotValue, R_do_slot(rObj, Rf_install("degenLimit")));
 	degenLimit = Rf_asReal(slotValue);
-	if(degenLimit<0 || degenLimit>myPI){Rf_error("'degenLimit' must ge within interval [0,pi]");}
+	if(degenLimit<0 || degenLimit>myPI){mxThrow("'degenLimit' must ge within interval [0,pi]");}
 	if(verbose){
 		mxLog("omxComputeNM member 'degenLimit' is %f", degenLimit);
 	}
 	
 	ScopedProtect p17(slotValue, R_do_slot(rObj, Rf_install("stagnCtrl")));
-	if(Rf_length(slotValue)!=2){Rf_error("'stagnCtrl' must be an integer vector of length 2");}
+	if(Rf_length(slotValue)!=2){mxThrow("'stagnCtrl' must be an integer vector of length 2");}
 	stagnCtrl[0] = INTEGER(slotValue)[0];
 	stagnCtrl[1] = INTEGER(slotValue)[1];
 	if(verbose){
@@ -225,7 +225,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	ScopedProtect p24(slotValue, R_do_slot(rObj, Rf_install("ineqConstraintMthd")));
 	if(strEQ(CHAR(Rf_asChar(slotValue)),"soft")){ineqConstraintMthd = 0;}
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"eqMthd")){ineqConstraintMthd = 1;}
-	else{Rf_error("unrecognized character string provided for Nelder-Mead 'ineqConstraintMthd'");}
+	else{mxThrow("unrecognized character string provided for Nelder-Mead 'ineqConstraintMthd'");}
 	if(verbose){
 		mxLog("omxComputeNM member 'ineqConstraintMthd' is %d", ineqConstraintMthd);
 	}
@@ -235,7 +235,7 @@ void omxComputeNM::initFromFrontend(omxState *globalState, SEXP rObj){
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"backtrack")){eqConstraintMthd = 2;}
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"GDsearch")){eqConstraintMthd = 3;}
 	else if(strEQ(CHAR(Rf_asChar(slotValue)),"l1p")){eqConstraintMthd = 4;}
-	else{Rf_error("unrecognized character string provided for Nelder-Mead 'eqConstraintMthd'");}
+	else{mxThrow("unrecognized character string provided for Nelder-Mead 'eqConstraintMthd'");}
 	if(verbose){
 		mxLog("omxComputeNM member 'eqConstraintMthd' is %d", eqConstraintMthd);
 	}
@@ -281,8 +281,10 @@ void omxComputeNM::computeImpl(FitContext *fc){
 	nmoc.fit2beat = R_PosInf;
 	nmoc.bignum = bignum;
 	nmoc.iniSimplexMat = iniSimplexMat;
+	nmoc.ineqConstraintMthd = ineqConstraintMthd;
+	nmoc.eqConstraintMthd = eqConstraintMthd;
 	nmoc.countConstraintsAndSetupBounds();
-	if(eqConstraintMthd==4 && (nmoc.numEqC || (ineqConstraintMthd && nmoc.numIneqC))){
+	if(nmoc.eqConstraintMthd==4 && (nmoc.numEqC || (nmoc.ineqConstraintMthd && nmoc.numIneqC))){
 		if(verbose){mxLog("starting l1-penalty algorithm");}
 		fc->iterations = 0; //<--Not sure about this
 		nmoc.maxIter = maxIter/10;
@@ -292,19 +294,23 @@ void omxComputeNM::computeImpl(FitContext *fc){
 			if(verbose){mxLog("l1p iteration %d",k);}
 			if(k>0){
 				if(nmoc.iniSimplexMat.rows() || nmoc.iniSimplexMat.cols()){nmoc.iniSimplexMat.resize(0,0);}
-				if(nmoc.statuscode==10 || Global->timedOut){break;}
+				if(nmoc.statuscode==10){break;}
 				if( !nmoc.estInfeas && nmoc.statuscode==0 ){
 					if(verbose){mxLog("l1p solution found");}
 					break;
 				}
 				if(nmoc.estInfeas){
-					nmoc.rho *= 10;
+					nmoc.rho *= 10.0;
 					if(verbose){mxLog("penalty factor rho = %f",nmoc.rho);}
 					nmoc.iniSimplexEdge = iniSimplexEdge;
 				}
-				else{ //It's making progress w/r/t the constraints, so re-initialize the simplex with a smaller edge:
+				else{ //It's making progress w/r/t the constraints, so re-initialize the simplex with a small edge:
 					nmoc.iniSimplexEdge = 
-						sqrt((nmoc.vertices[1] - nmoc.vertices[0]).dot(nmoc.vertices[1] - nmoc.vertices[0]));
+						sqrt((nmoc.vertices[nmoc.n] - nmoc.vertices[0]).dot(nmoc.vertices[nmoc.n] - nmoc.vertices[0]));
+					//It's a good idea to reduce the penalty coefficient if the algorithm is making progress.
+					//That helps prevent it from stopping at a non-optimal point:
+					nmoc.rho /= 5.0;
+					if(verbose){mxLog("penalty factor rho = %f",nmoc.rho);}
 				}
 				if(fc->iterations >= maxIter){
 					nmoc.statuscode = 4;
@@ -335,6 +341,8 @@ void omxComputeNM::computeImpl(FitContext *fc){
 		nmoc2.est = nmoc.est;
 		nmoc2.rho = nmoc.rho;
 		nmoc2.addPenalty = nmoc.addPenalty;
+		nmoc2.eqConstraintMthd = nmoc.eqConstraintMthd;
+		nmoc2.ineqConstraintMthd = nmoc.ineqConstraintMthd;
 		nmoc2.countConstraintsAndSetupBounds();
 		nmoc2.invokeNelderMead();
 		if(nmoc2.statuscode==10){
@@ -371,7 +379,7 @@ void omxComputeNM::computeImpl(FitContext *fc){
 	
 	switch(nmoc.statuscode){
 	case -1:
-		Rf_error("unknown Nelder-Mead optimizer error");
+		mxThrow("unknown Nelder-Mead optimizer error");
 		break;
 	case 0:
 		fc->setInform(INFORM_CONVERGED_OPTIMUM);
@@ -509,13 +517,14 @@ void omxComputeNM::reportResults(FitContext *fc, MxRList *slots, MxRList *out){
 
 NelderMeadOptimizerContext::NelderMeadOptimizerContext(FitContext* _fc, omxComputeNM* _nmo)
 	: fc(_fc), NMobj(_nmo), numFree(_fc->calcNumFree()),
-   subsidiarygoc(GradientOptimizerContext(_fc, 0L, GradientAlgorithm_Forward, 1L, 1e-5))
+	  subsidiarygoc(GradientOptimizerContext(_fc, 0L, GradientAlgorithm_Forward, 1L, 1e-5, _nmo))
 {
 	est.resize(numFree);
 	copyParamsFromFitContext(est.data());
 	statuscode = -1;
 	addPenalty = false;
 	rho = 1;
+	checkRedundantEqualities = true;
 }
 
 void NelderMeadOptimizerContext::copyBounds()
@@ -538,19 +547,43 @@ void NelderMeadOptimizerContext::countConstraintsAndSetupBounds()
 	//If there aren't any of one of the two constraint types, then the
 	//method for handling them shouldn't matter.  But, switching the
 	//method to the simplest setting helps simplify programming logic:
-	if(!numEqC && !NMobj->ineqConstraintMthd){NMobj->eqConstraintMthd = 1;}
-	if(!numIneqC){NMobj->ineqConstraintMthd = 0;}
+	if(!numEqC && !ineqConstraintMthd){eqConstraintMthd = 1;}
+	if(!numIneqC){ineqConstraintMthd = 0;}
 	equality.resize(numEqC);
 	inequality.resize(numIneqC);
 	
-	if(numEqC + numIneqC || NMobj->eqConstraintMthd==3){
-		subsidiarygoc.optName = "SLSQP";
+	fc->equality.resize(numEqC);
+	
+	//Check for redundant equality constraints, and warn if found:
+	if(numEqC > 1 && checkRedundantEqualities){
+		NldrMd_equality_functional eqf(this, fc);
+		Eigen::MatrixXd ej(numEqC, numFree);
+		ej.setConstant(NA_REAL);
+		eqf(est, equality);
+		fd_jacobian<true>(
+			GradientAlgorithm_Central, 4, 1.0e-7,
+			eqf, equality, est, ej);
+		Eigen::MatrixXd ejt = ej.transpose();
+		//mxPrintMat("ej: ",ej);
+		Eigen::FullPivHouseholderQR<Eigen::MatrixXd> qrj;
+		qrj.compute(ejt);
+		if(qrj.rank() < numEqC){
+			Rf_warning(
+				"counted %d equality constraints, but equality-constraint Jacobian is apparently rank %d at the start values; " 
+				"Nelder-Mead will not work correctly unless equality constraints are linearly independent "
+				"(this warning may be spurious if there are non-smooth equality constraints)", numEqC, qrj.rank()
+			);
+			checkRedundantEqualities = false;
+		}
+	}
+	
+	if(numEqC + numIneqC || eqConstraintMthd==3){
+		subsidiarygoc.setEngineName("SLSQP");
 		subsidiarygoc.ControlTolerance = 2 * Global->optimalityTolerance;
 		subsidiarygoc.useGradient = true;
 		subsidiarygoc.maxMajorIterations = Global->majorIterations;
 		subsidiarygoc.setupSimpleBounds();
-		subsidiarygoc.checkForAnalyticJacobians();
-		//Rf_error("so far, so good");
+		//mxThrow("so far, so good");
 	}
 }
 
@@ -560,10 +593,6 @@ void NelderMeadOptimizerContext::copyParamsFromFitContext(double *ocpars)
 	fc->copyEstToOptimizer(vec);
 }
 
-void NelderMeadOptimizerContext::copyParamsFromOptimizer(Eigen::VectorXd &x, FitContext* fc2)
-{
-	fc2->setEstFromOptimizer(x);
-}
 
 //----------------------------------------------------------------------
 
@@ -641,12 +670,12 @@ double NelderMeadOptimizerContext::evalFit(Eigen::VectorXd &x)
 	else{
 		if(fc->fit > bignum){bignum = 10 * fc->fit;}
 		double fv = fc->fit;
-		if(NMobj->eqConstraintMthd==4 && addPenalty){
+		if(eqConstraintMthd==4 && addPenalty){
 			int i;
 			for(i=0; i < equality.size(); i++){
 				fv += rho * fabs(equality[i]);
 			}
-			if(NMobj->ineqConstraintMthd){
+			if(ineqConstraintMthd){
 				for(i=0; i < inequality.size(); i++){
 					fv += rho * fabs(inequality[i]);
 				}
@@ -688,8 +717,6 @@ void NelderMeadOptimizerContext::checkNewPointInfeas(Eigen::VectorXd &x, Eigen::
 void NelderMeadOptimizerContext::evalFirstPoint(Eigen::VectorXd &x, double &fv, int &infeas)
 {
 	Eigen::Vector2i ifcr;
-	int ineqConstraintMthd = NMobj->ineqConstraintMthd;
-	int eqConstraintMthd = NMobj->eqConstraintMthd;
 	enforceBounds(x);
 	checkNewPointInfeas(x, ifcr);
 	if(!ifcr.sum()){
@@ -731,7 +758,7 @@ void NelderMeadOptimizerContext::evalFirstPoint(Eigen::VectorXd &x, double &fv, 
 				infeas = 1L;
 				return;
 			}
-			//Rf_error("'GDsearch' Not Yet Implemented");
+			//mxThrow("'GDsearch' Not Yet Implemented");
 		case 4:
 			fv = evalFit(x);
 			infeas = 1L;
@@ -749,8 +776,6 @@ void NelderMeadOptimizerContext::evalFirstPoint(Eigen::VectorXd &x, double &fv, 
 void NelderMeadOptimizerContext::evalNewPoint(Eigen::VectorXd &newpt, Eigen::VectorXd oldpt, double &fv, int &newInfeas, int oldInfeas)
 {
 	Eigen::Vector2i ifcr;
-	int ineqConstraintMthd = NMobj->ineqConstraintMthd;
-	int eqConstraintMthd = NMobj->eqConstraintMthd;
 	enforceBounds(newpt);
 	checkNewPointInfeas(newpt, ifcr);
 	if(!ifcr.sum()){
@@ -812,7 +837,7 @@ void NelderMeadOptimizerContext::evalNewPoint(Eigen::VectorXd &newpt, Eigen::Vec
 				newInfeas = 1L;
 				return;
 			}
-			//Rf_error("'GDsearch' Not Yet Implemented");
+			//mxThrow("'GDsearch' Not Yet Implemented");
 		case 4:
 			fv = evalFit(newpt);
 			newInfeas = 1L;
@@ -829,13 +854,12 @@ void NelderMeadOptimizerContext::evalNewPoint(Eigen::VectorXd &newpt, Eigen::Vec
 void NelderMeadOptimizerContext::jiggleCoord(Eigen::VectorXd &xin, Eigen::VectorXd &xout, double scal){
 	double a,b;
 	int i;
-	GetRNGstate();
+	BorrowRNGState grs;
 	for(i=0; i < xin.size(); i++){
 		b = Rf_runif(1.0-scal,1.0+scal);
 		a = Rf_runif(0.0-scal,0.0+scal);
 		xout[i] = b*xin[i] + a;
 	}
-	PutRNGstate();
 }
 
 //TODO: make the different parts of the printing subject to different verbose levels
@@ -866,10 +890,10 @@ void NelderMeadOptimizerContext::initializeSimplex(Eigen::VectorXd startpt, doub
 		Eigen::MatrixXd SiniSupp, iniSimplexMat2;
 		Eigen::VectorXi paramMap(numFree);
 		if(iniSimplexMat.cols() != numFree){
-			Rf_error("'iniSimplexMat' has %d columns, but %d columns expected",iniSimplexMat.cols(), numFree);
+			mxThrow("'iniSimplexMat' has %d columns, but %d columns expected",iniSimplexMat.cols(), numFree);
 		}
 		if( int(NMobj->iniSimplexColnames.size()) != numFree){
-			Rf_error("'iniSimplexMat' has %d column names, but %d column names expected", NMobj->iniSimplexColnames.size(), numFree);
+			mxThrow("'iniSimplexMat' has %d column names, but %d column names expected", int(NMobj->iniSimplexColnames.size()), numFree);
 		}
 		if(iniSimplexMat.rows()>n+1){
 			Rf_warning("'iniSimplexMat' has %d rows, but %d rows expected; extraneous rows will be ignored",iniSimplexMat.rows(), n+1);
@@ -889,7 +913,7 @@ void NelderMeadOptimizerContext::initializeSimplex(Eigen::VectorXd startpt, doub
 			}
 		}
 		if ( gx != int(NMobj->iniSimplexColnames.size()) ){
-			Rf_error("error in mapping column names of 'iniSimplexMat' to free-parameter labels");
+			mxThrow("error in mapping column names of 'iniSimplexMat' to free-parameter labels");
 		}
 		for(i=0; i < iniSimplexMat.cols(); i++){
 			iniSimplexMat2.col(paramMap[i]) = iniSimplexMat.col(i);
@@ -1219,12 +1243,9 @@ void NelderMeadOptimizerContext::simplexTransformation()
 				return;
 			}
 			else if(NMobj->sigma<=0){ //<--If fit at xoc is worse than fit at reflection point, and shrinks are turned off
-				//Accept reflection point:
-				fvals[n] = fr;
-				vertices[n] = xr;
-				vertexInfeas[n] = badr;
-				needFullSort=false;
-				if(verbose){mxLog("reflection point accepted");}
+				//This case is considered a failed contraction:
+				failedContraction = true;
+				if(verbose){mxLog("outside contraction failed and shrinks are switched off...");}
 				return;
 			}
 		}
@@ -1253,7 +1274,7 @@ void NelderMeadOptimizerContext::simplexTransformation()
 			}
 			else if(NMobj->sigma<=0){
 				failedContraction = true;
-				if(verbose){mxLog("contraction failed and shrinks are switched off...");}
+				if(verbose){mxLog("inside contraction failed and shrinks are switched off...");}
 				return;
 			}
 		}
@@ -1303,7 +1324,7 @@ bool NelderMeadOptimizerContext::checkConvergence(){
 			return(true);
 		}
 	}
-	if(itersElapsed >= maxIter || isErrorRaised() || Global->timedOut){
+	if(itersElapsed >= maxIter || isErrorRaised()){
 		statuscode = 4;
 		return(true);
 	}
@@ -1351,7 +1372,7 @@ void NelderMeadOptimizerContext::invokeNelderMead(){
 	subcentroid.resize(numFree);
 	eucentroidCurr.resize(numFree);
 	initializeSimplex(est, iniSimplexEdge, false);
-	if( (vertexInfeas.sum()==n+1 && NMobj->eqConstraintMthd != 4) || (fvals.array()==bignum).all()){
+	if( (vertexInfeas.sum()==n+1 && eqConstraintMthd != 4) || (fvals.array()==bignum).all()){
 		fc->recordIterationError("initial simplex is not feasible; specify it differently, try different start values, or use mxTryHard()");
 		statuscode = 10;
 		return;

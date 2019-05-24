@@ -18,3 +18,15 @@ When the fit is in -2 log likelihood units, the SEs are derived
 from the diagonal of the Hessian or inverse Hessian. The Hessian
 (in some form) must already be available.
 }
+\details{
+If there are active MxConstraints and the fit is in -2logL units,
+the SEs are derived from the Hessian and the Jacobian of the 
+constraint functions (see references).
+}
+\references{
+Moore T & Sadler B.  (2006).  \emph{Maximum-Likelihood Estimation and 
+     Scoring Under Parametric Constraints}.  Army Research Laboratory 
+     report ARL-TR-3805.
+Schoenberg R.  (1997).  Constrained maximum likelihood.
+     \emph{Computational Economics, 10}, p. 251-266.
+}

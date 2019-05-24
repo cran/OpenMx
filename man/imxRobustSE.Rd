@@ -7,9 +7,10 @@
 imxRobustSE(model, details = FALSE)
 }
 \arguments{
-\item{model}{An OpenMx model object that has been run}
+\item{model}{An OpenMx model object that has been run.}
 
-\item{details}{logical. whether to return the full parameter covariance matrix}
+\item{details}{Logical. whether to return the full parameter
+covariance matrix.}
 }
 \description{
 This is an internal function exported for those people who know

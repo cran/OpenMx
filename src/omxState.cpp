@@ -214,6 +214,7 @@ void FreeVarGroup::log(omxState *os)
 
 omxGlobal::omxGlobal()
 {
+	RNGCheckedOut = false;
 	mpi = 0;
 	silent = true;
 	ComputePersist = false;
@@ -221,9 +222,6 @@ omxGlobal::omxGlobal()
 	maxSeconds = 0;
 	timedOut = false;
 	lastProgressReport = startTime;
-	previousReportLength = 0;
-	previousReportFit = 0;
-	previousComputeCount = 0;
 	mxLogSetCurrentRow(-1);
 	numThreads = 1;
 	analyticGradients = 0;
@@ -237,6 +235,7 @@ omxGlobal::omxGlobal()
 	gradientTolerance = 1e-6;
 	boundsUpdated = false;
 	dataTypeWarningCount = 0;
+	userInterrupted = false;
 
 	RAMInverseOpt = true;
 	RAMMaxDepth = 30;
@@ -257,12 +256,13 @@ omxMatrix *omxState::getMatrixFromIndex(int matnum) const
 
 omxMatrix *omxState::lookupDuplicate(omxMatrix *element) const
 {
-	if (!element->hasMatrixNumber) Rf_error("lookupDuplicate without matrix number");
+	if (!element->hasMatrixNumber) mxThrow("lookupDuplicate without matrix number");
 	return getMatrixFromIndex(element->matrixNumber);
 }
 
 void omxState::setWantStage(int stage)
 {
+	if (wantStage == stage) mxThrow("omxState::setWantStage(%d) is redundent", stage);
 	wantStage = stage;
 	if (OMX_DEBUG) mxLog("wantStage set to 0x%x", stage);
 }
@@ -350,6 +350,11 @@ int omxState::nextId = 0;
 
 void omxState::init()
 {
+	// We use FF_COMPUTE_INITIAL_FIT because an expectation
+	// could depend on the value of an algebra. However, we
+	// don't mark anything clean because an algebra could
+	// depend on an expectation (via a fit function).
+
 	stateId = ++nextId;
 	setWantStage(FF_COMPUTE_INITIAL_FIT);
 }
@@ -370,7 +375,7 @@ void omxState::loadDefinitionVariables(bool start)
 	}
 }
 
-omxState::omxState(omxState *src) : clone(true)
+omxState::omxState(omxState *src) : wantStage(0), clone(true)
 {
 	init();
 
@@ -403,6 +408,8 @@ omxState::omxState(omxState *src) : clone(true)
 	for (size_t xx=0; xx < src->conListX.size(); ++xx) {
 		conListX.push_back(src->conListX[xx]->duplicate(this));
 	}
+	
+	usingAnalyticJacobian = src->usingAnalyticJacobian;
 }
 
 void omxState::initialRecalc(FitContext *fc)
@@ -424,29 +431,49 @@ void omxState::initialRecalc(FitContext *fc)
 	for (size_t xx=0; xx < conListX.size(); ++xx) {
 		conListX[xx]->prep(fc);
 	}
+
+	setWantStage(FF_COMPUTE_FIT);
 }
 
-void omxState::invalidateCache()
+void StateInvalidator::doData()
 {
-	for (int ax=0; ax < int(dataList.size()); ++ax) {
-		auto d1 = dataList[ax];
+	for (int ax=0; ax < int(st.dataList.size()); ++ax) {
+		auto d1 = st.dataList[ax];
 		d1->invalidateCache();
 	}
-	for (int ax=0; ax < (int) matrixList.size(); ++ax) {
-		omxMatrix *matrix = matrixList[ax];
+}
+
+void StateInvalidator::doMatrix()
+{
+	for (int ax=0; ax < (int) st.matrixList.size(); ++ax) {
+		omxMatrix *matrix = st.matrixList[ax];
 		omxMarkDirty(matrix);
 	}
-	for(size_t ex = 0; ex < expectationList.size(); ex++) {
-		expectationList[ex]->invalidateCache();
+}
+
+void StateInvalidator::doExpectation()
+{
+	for(size_t ex = 0; ex < st.expectationList.size(); ex++) {
+		st.expectationList[ex]->invalidateCache();
 	}
-	for (int ax=0; ax < (int) algebraList.size(); ++ax) {
-		omxMatrix *matrix = algebraList[ax];
+}
+
+void StateInvalidator::doAlgebra()
+{
+	for (int ax=0; ax < (int) st.algebraList.size(); ++ax) {
+		omxMatrix *matrix = st.algebraList[ax];
 		if (!matrix->fitFunction) {
 			omxMarkDirty(matrix);
 		} else {
 			matrix->fitFunction->invalidateCache();
 		}
 	}
+}
+
+void omxState::invalidateCache()
+{
+	StateInvalidator si(*this);
+	si();
 }
 
 omxState::~omxState()
@@ -480,7 +507,10 @@ omxState::~omxState()
 
 omxGlobal::~omxGlobal()
 {
-	if (previousReportLength) reportProgressStr("");
+	if (!previousReport.empty()) {
+		std::string empty;
+		reportProgressStr(empty);
+	}
 	if (topFc) {
 		omxState *state = topFc->state;
 		delete topFc;
@@ -578,7 +608,7 @@ static ssize_t mxLogWriteSynchronous(const char *outBuf, int len)
 void mxLogBig(const std::string &str)   // thread-safe
 {
 	ssize_t len = ssize_t(str.size());
-	if (len == 0) Rf_error("Attempt to log 0 characters with mxLogBig");
+	if (len == 0) mxThrow("Attempt to log 0 characters with mxLogBig");
 
 	std::string fullstr;
 	if (mxLogCurrentRow == -1) {
@@ -591,7 +621,7 @@ void mxLogBig(const std::string &str)   // thread-safe
 	
 	const char *outBuf = fullstr.c_str();
 	ssize_t wrote = mxLogWriteSynchronous(outBuf, len);
-	if (wrote != len) Rf_error("mxLogBig only wrote %d/%d, errno %d", wrote, len, errno);
+	if (wrote != len) mxThrow("mxLogBig only wrote %d/%d, errno %d", int(wrote), int(len), errno);
 }
 
 void mxLog(const char* msg, ...)   // thread-safe
@@ -613,28 +643,52 @@ void mxLog(const char* msg, ...)   // thread-safe
 	}
 
 	ssize_t wrote = mxLogWriteSynchronous(buf2, len);
-	if (wrote != len) Rf_error("mxLog only wrote %d/%d, errno=%d", wrote, len, errno);
+	if (wrote != len) mxThrow("mxLog only wrote %d/%d, errno=%d", int(wrote), len, errno);
 }
 
-void omxGlobal::reportProgressStr(const char *msg)
+void omxGlobal::reportProgressStr(std::string &str)
 {
 	ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 3));
 	SETCAR(theCall, Rf_install("imxReportProgress"));
 	ProtectedSEXP Rmsg(Rf_allocVector(STRSXP, 1));
-	SET_STRING_ELT(Rmsg, 0, Rf_mkChar(msg));
+	SET_STRING_ELT(Rmsg, 0, Rf_mkChar(str.c_str()));
 	SETCADR(theCall, Rmsg);
-	SETCADDR(theCall, Rf_ScalarInteger(previousReportLength));
+	SETCADDR(theCall, Rf_ScalarInteger(previousReport.length())); // not UTF8 safe TODO
 	Rf_eval(theCall, R_GlobalEnv);
+	previousReport = str;
 }
 
 void omxGlobal::reportProgress(const char *context, FitContext *fc)
 {
-	if (omx_absolute_thread_num() != 0) {
-		mxLog("omxGlobal::reportProgress called in a thread context (report this bug to developers)");
-		return;
+	reportProgress1(context, fc->asProgressReport());
+	interrupted();
+}
+
+bool omxGlobal::interrupted()
+{
+	if (omp_get_thread_num() != 0 && omp_get_num_threads() != 1) {
+		mxLog("omxGlobal::interrupted called from thread %d/%d (report this bug to developers)",
+		      omp_get_thread_num(), omp_get_num_threads());
+		return false;
 	}
 
-	R_CheckUserInterrupt();
+	// see Rcpp's checkUserInterrupt
+	auto checkInterruptFn = [](void *dummy){ R_CheckUserInterrupt(); };
+	bool got = R_ToplevelExec(checkInterruptFn, NULL) == FALSE;
+	if (got) {
+		omxRaiseErrorf("User interrupt");
+		userInterrupted = true;
+	}
+	return got;
+}
+
+void omxGlobal::reportProgress1(const char *context, std::string detail)
+{
+	if (omp_get_thread_num() != 0 && omp_get_num_threads() != 1) {
+		mxLog("omxGlobal::reportProgress(%s,%s) called from thread %d/%d (report this bug to developers)",
+		      context, detail.c_str(), omp_get_thread_num(), omp_get_num_threads());
+		return;
+	}
 
 	time_t now = time(0);
 	if (Global->maxSeconds > 0 && now > Global->startTime + Global->maxSeconds && !Global->timedOut) {
@@ -642,23 +696,26 @@ void omxGlobal::reportProgress(const char *context, FitContext *fc)
 		Rf_warning("Time limit of %d minutes %d seconds exceeded",
 			   Global->maxSeconds/60, Global->maxSeconds % 60);
 	}
-	if (silent || now - lastProgressReport < 1 || fc->getGlobalComputeCount() == previousComputeCount) return;
+	if (silent || now - lastProgressReport < 1) return;
 
 	lastProgressReport = now;
 
+	auto &cli = Global->computeLoopIndex;
 	std::string str;
-	if (previousReportFit == 0.0 || previousReportFit == fc->fit) {
-		str = string_snprintf("%s %d %.6g",
-				      context, fc->getGlobalComputeCount(), fc->fit);
-	} else {
-		str = string_snprintf("%s %d %.6g %.4g",
-				      context, fc->getGlobalComputeCount(), fc->fit, fc->fit - previousReportFit);
+	if (cli.size()) {
+		str += "[";
+		for (int x1=0; x1 < int(cli.size()); ++x1) {
+			std::ostringstream os_temp;
+			os_temp << cli[x1];
+			str += os_temp.str();
+			if (x1 < int(cli.size())-1) str += "/";
+		}
+		str += "] ";
 	}
-
-	reportProgressStr(str.c_str());
-	previousReportLength = str.size();
-	previousReportFit = fc->fit;
-	previousComputeCount = fc->getGlobalComputeCount();
+	str += context;
+	str += " ";
+	str += detail;
+	reportProgressStr(str);
 }
 
 void diagParallel(int verbose, const char* msg, ...)
@@ -717,6 +774,21 @@ void omxRaiseErrorf(const char* msg, ...)
         if (overflow) mxLog("Too many errors: %s", str.c_str());
 }
 
+void mxThrow(const char* msg, ...)
+{
+	std::string str;
+	va_list ap;
+	va_start(ap, msg);
+	string_vsnprintf(msg, ap, str);
+	va_end(ap);
+
+	if(OMX_DEBUG) {
+		mxLog("mxThrow: %s", str.c_str());
+	}
+
+	throw std::runtime_error(str);
+}
+
 const char *omxGlobal::getBads()
 {
 	if (bads.size() == 0) return NULL;
@@ -764,7 +836,6 @@ void omxGlobal::checkpointPostfit(const char *callerName, FitContext *fc, double
 
 void UserConstraint::prep(FitContext *fc)
 {
-	fc->state->setWantStage(FF_COMPUTE_INITIAL_FIT);
 	refresh(fc);
 	nrows = pad->rows;
 	ncols = pad->cols;

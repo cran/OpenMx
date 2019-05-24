@@ -332,6 +332,7 @@ typeArgument <- function(model, type) {
 				omxQuotes(names(imxModelTypes))), call. = FALSE)
 		}
 		typename <- imxModelTypes[[type]]
+		attr(typename,"package") <- "OpenMx"
 		class(model) <- typename
 		model <- imxInitModel(model)
 	}
@@ -628,10 +629,11 @@ modelModifyFilter <- function(model, entries, action) {
   thresholdFilter <- sapply(entries, is, "MxThreshold")
 	unknownFilter <- !(boundsFilter | namedEntityFilter | intervalFilter | characterFilter | thresholdFilter)
 	if (any(pathFilter)) {
-		stop(paste("The model",
+		stop(paste("The model of class",
 			omxQuotes(class(model)),
 			"named",
-			omxQuotes(model@name), "does not recognize paths."),
+			omxQuotes(model@name), "does not recognize paths.\n",
+			"Add one of", paste0("type='", paste0(setdiff(mxTypes(), 'default'), "'"), collapse=' or '), 'to your model.'),
 			call. = FALSE)
 	}
 	if (any(thresholdFilter)) {
@@ -700,11 +702,12 @@ vcov.MxModel <- function(object, ...) {
   fu <- object$output$fitUnits
   if (fu %in% c("-2lnL", "r'Wr")) {
 	  got <- NULL
-	  if (!is.null(object$output[['ihessian']])) {
-		  got <- 2 * object$output[['ihessian']]
-	  } else if (!is.null(object$output[['hessian']])) {
-		  got <- 2 * solve(object$output$hessian)
-	  }
+	  if(!is.null(object$output[["vcov"]])){got <- object$output[["vcov"]]}
+	#   if (!is.null(object$output[['ihessian']])) {
+	# 	  got <- 2 * object$output[['ihessian']]
+	#   } else if (!is.null(object$output[['hessian']])) {
+	# 	  got <- 2 * solve(object$output$hessian)
+	#   }
 	  if (is.null(got)) {
 		  stop(paste("Parameter variance covariance matrix is not available.",
 			     "Turn on with mxOption(model, 'Calculate Hessian', 'Yes')", sep="\n"))

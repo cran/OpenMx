@@ -59,18 +59,19 @@ summary(lmR)
 omxCheckCloseEnough(coef(lmS), c(0, .5), 0.01)
 omxCheckCloseEnough(coef(lmR), c(0, 1), 0.03)
 
-
-#Test warning about no SEs:
-#factorRun <- mxOption(factorRun,"Standard Errors","No")
-mxOption(NULL,"Standard Errors","No")
-omxCheckWarning(
-	mxFactorScores(factorRunL,"ML"),
-	"factor-score standard errors not available from MxModel 'OneFactor' because calculating SEs is turned off for that model (possibly due to one or more MxConstraints)")
-omxCheckWarning(
-	mxFactorScores(factorRunL,"WeightedML"),
-	"factor-score standard errors not available from MxModel 'OneFactor' because calculating SEs is turned off for that model (possibly due to one or more MxConstraints)")
-mxOption(NULL,"Standard Errors","Yes")
-
+if (mxOption(key="Default optimizer") != 'NPSOL') {
+  # NPSOL can add a warning about code green
+  #Test warning about no SEs:
+  #factorRun <- mxOption(factorRun,"Standard Errors","No")
+  mxOption(NULL,"Standard Errors","No")
+  omxCheckWarning(
+    mxFactorScores(factorRunL,"ML"),
+    "factor-score standard errors not available from MxModel 'OneFactor' because calculating SEs is turned off for that model (possibly due to one or more MxConstraints)")
+  omxCheckWarning(
+    mxFactorScores(factorRunL,"WeightedML"),
+    "factor-score standard errors not available from MxModel 'OneFactor' because calculating SEs is turned off for that model (possibly due to one or more MxConstraints)")
+  mxOption(NULL,"Standard Errors","Yes")
+}
 
 
 #TODO compare standard errors
@@ -276,7 +277,8 @@ ssModelLisrel <- mxModel(model="lisrel",
 	mxFitFunctionML()
 	)
 
-omxCheckWarning(mxGetExpected(ssModelLisrel, 'means'),
+omxCheckWarning(omxCheckError(mxGetExpected(ssModelLisrel, 'means'),
+	"Requested component(s) 'means' had dimension or length 0.\nRequested component not in model. All I have is yours, but I ain't got no 'means'"),
 	"Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or AL matrices to get real means.")
 
 # Add means and it works fine

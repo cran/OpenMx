@@ -29,11 +29,19 @@ class GradientOptimizerContext {
 	// some parameters might be profiled out and should
 	// not be subject to optimization.
 	FitContext *fc;
+	std::string optName;
+	const char *computeName;
 
  public:
 	const int verbose;
 	const int numFree;    // how many parameters are not profiled out
-	const char *optName;  // filled in by the optimizer
+	const char *getOptName() const { return optName.c_str(); };
+	void setEngineName(const char *engine) {
+		optName = computeName;
+		optName += "(";
+		optName += engine;
+		optName += ")";
+	}
 
 	// Maybe the optimizer should not have information about
 	// how the gradient is approximated?
@@ -58,8 +66,8 @@ class GradientOptimizerContext {
 	Eigen::VectorXd solUB;
 
 	// TODO remove, better to pass as a parameter so we can avoid copies
-	Eigen::VectorXd equality;
-	Eigen::VectorXd inequality;
+	Eigen::VectorXd& equality;
+	Eigen::VectorXd& inequality;
 	bool CSOLNP_HACK;
 
 	// NPSOL has bugs and can return the wrong fit & estimates
@@ -78,7 +86,8 @@ class GradientOptimizerContext {
 	GradientOptimizerContext(FitContext *fc, int verbose,
 				 enum GradientAlgorithm _gradientAlgo,
 				 int _gradientIterations,
-				 double _gradientStepSize);
+				 double _gradientStepSize,
+				 omxCompute *owner);
 	void reset();
 
 	void setupSimpleBounds();          // NLOPT style
@@ -99,10 +108,9 @@ class GradientOptimizerContext {
 			Eigen::MatrixBase<T1> &constraintOut, Eigen::MatrixBase<T2> &jacobianOut, Eigen::MatrixBase<T3> &needcIn, int mode);
 	template <typename T1> void checkActiveBoxConstraints(Eigen::MatrixBase<T1> &nextEst);
 	template <typename T1> void linearConstraintCoefficients(Eigen::MatrixBase<T1> &lcc);
-	bool usingAnalyticJacobian;
-	void checkForAnalyticJacobians();
-	Eigen::MatrixXd analyticEqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an equality constraint
-	Eigen::MatrixXd analyticIneqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an inequality constraint
+	bool isUsingAnalyticJacobian(){ return fc->state->usingAnalyticJacobian; }
+	Eigen::MatrixXd& analyticEqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an equality constraint
+	Eigen::MatrixXd& analyticIneqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an inequality constraint
 	void useBestFit();
 	void copyToOptimizer(double *myPars);
 	void copyFromOptimizer(double *myPars, FitContext *fc2);
@@ -174,7 +182,7 @@ void GradientOptimizerContext::numericalGradientWithRef(Eigen::MatrixBase<T1> &E
 			// of them.
 			copyFromOptimizer(myPars, fc2);
 			int want = FF_COMPUTE_FIT;
-			ComputeFit(optName, fc2->lookupDuplicate(fitMatrix), want, fc2);
+			ComputeFit(getOptName(), fc2->lookupDuplicate(fitMatrix), want, fc2);
 			double fit = fc2->fit;
 			if (fc2->outsideFeasibleSet()) {
 				fit = nan("infeasible");

@@ -5,9 +5,11 @@
 \alias{MxComputeLoadData-class}
 \title{Load columns into an MxData object}
 \usage{
-mxComputeLoadData(dest, column, method = "CSV", ..., path,
-  originalDataIsIndexOne = FALSE, byrow = TRUE, row.names = FALSE,
-  col.names = FALSE, verbose = 0L, cacheSize = 100L)
+mxComputeLoadData(dest, column, method = c("csv", "bgen", "pgen",
+  "data.frame"), ..., path = c(), originalDataIsIndexOne = FALSE,
+  byrow = TRUE, row.names = c(), col.names = c(), skip.rows = 0,
+  skip.cols = 0, verbose = 0L, cacheSize = 100L,
+  checkpointMetadata = TRUE, na.strings = c("NA"), observed = NULL)
 }
 \arguments{
 \item{dest}{the name of the model where the columns will be loaded}
@@ -18,40 +20,76 @@ mxComputeLoadData(dest, column, method = "CSV", ..., path,
 
 \item{...}{Not used.  Forces remaining arguments to be specified by name.}
 
-\item{path}{when method='CSV', the path to the file containing the data}
+\item{path}{the path to the file containing the data}
 
 \item{originalDataIsIndexOne}{logical. Whether to use the initial data for index 1}
 
-\item{byrow}{logical. Whether the data columns are stored in rows (TRUE)
-or columns (FALSE) on disk.}
+\item{byrow}{logical. Whether the data columns are stored in rows.}
 
-\item{row.names}{logical. Whether row names are present.}
+\item{row.names}{optional integer. Column containing the row names.}
 
-\item{col.names}{logical. Whether column names are present.}
+\item{col.names}{optional integer. Row containing the column names.}
+
+\item{skip.rows}{integer. Number of rows to skip before reading data.}
+
+\item{skip.cols}{integer. Number of columns to skip before reading data.}
 
 \item{verbose}{integer. Level of diagnostic output.}
 
-\item{cacheSize}{integer. How many columns to cacheSize per
-scan through the data.}
+\item{cacheSize}{integer. How many columns to cache per
+scan through the data. Only used when byrow=FALSE.}
+
+\item{checkpointMetadata}{logical. Whether to add per record metadata to the checkpoint}
+
+\item{na.strings}{character vector. A vector of strings that denote a missing value.}
+
+\item{observed}{data frame. The reservoir of data for \code{method='data.frame'}.}
 }
 \description{
+THIS INTERFACE IS EXPERIMENTAL AND SUBJECT TO CHANGE.
+}
+\details{
 The purpose of this compute step is to help quickly perform many
 similar analyses. For example, if we are given a sample of people
 with a few million SNPs (single-nucleotide polymorphism) per
 person then we could fit a separate model for each SNP by iterating
 over the SNP data.
-}
-\details{
+
 The column names given in the \code{column} parameter must already
-exist in the model's MxData object. The data is assumed to be
+exist in the model's MxData object. Pre-existing data is assumed to be
 a placeholder and is not used unless
 \code{originalDataIsIndexOne} is set to TRUE.
 
-When \code{byrow} is FALSE, it is necessary to read through the
-whole file on disk to load a single column. To amortize the cost
-of reading through the file, \code{cacheSize} are loaded each
-pass through the file.
+The code to implement method='pgen' is based on plink 2.0
+alpha. plink's \sQuote{bed} file format is supported in addition
+to \sQuote{pgen}. Data are coerced appropriately depending on the
+type of the destination column. For a numeric column, data are
+recorded as the values NA, 0, 1, or 2. An ordinal column must have
+exactly 3 levels.
+
+For \code{method='bgen'}, the file \code{path+".bgi"} must also
+exist. If not available, generate this index file with the
+\href{https://bitbucket.org/gavinband/bgen/wiki/bgenix}{bgenix}
+tool.
+
+For \code{method='csv'}, the highest performance arrangement is
+\code{byrow=TRUE} because entire columns are stored in single
+chunks (rows) on the disk and can be easily loaded. For
+\code{byrow=FALSE}, the data requires transposition. To load a
+single column of observed data, it is necessary to read through
+the whole file. This can be slow for large files. To amortize the
+cost of transposition, \code{cacheSize} columns are loaded on
+every pass through the file.
+
+After \code{mxRun} returns, the \code{dest} mxData object will
+contain the most recently loaded data. Hence, any single analysis
+of a series can be reproduced by issuing \code{mxComputeLoadData}
+with the single index associated with a particular dataset,
+replacing the compute plan with something like
+\code{omxDefaultComputePlan}, and then passing the model back
+through \code{mxRun}. This can be a helpful approach when
+investigating unexpected results.
 }
 \seealso{
-\link{mxComputeLoadMatrix}, \link{mxComputeCheckpoint}
+\link{mxComputeLoadMatrix}, \link{mxComputeCheckpoint}, \link{mxRun}, \link{omxDefaultComputePlan}
 }

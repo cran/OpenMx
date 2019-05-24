@@ -27,6 +27,7 @@
 #ifndef _OMXDEFINES_H_
 #define _OMXDEFINES_H_
 
+#include <memory>
 #include <string.h>
 #include <string>
 
@@ -161,6 +162,7 @@ std::string string_snprintf(const char *fmt, ...) __attribute__((format (printf,
 void mxLog(const char* msg, ...) __attribute__((format (printf, 1, 2)));   // thread-safe
 void mxLogSetCurrentRow(int row);
 void mxLogBig(const std::string &str);
+void mxThrow(const char* msg, ...) __attribute__((format (printf, 1, 2))) __attribute__((noreturn));
 
 static inline int triangleLoc1(int diag)
 {
@@ -242,6 +244,7 @@ static OMXINLINE void omx_omp_unset_lock(omp_lock_t* __attribute__((unused)) loc
 
 #ifndef _OPENMP
 static inline int omp_get_thread_num() { return 0; }
+static inline int omp_get_num_threads(void) { return 1; }
 #endif
 
 #include <Eigen/Core>
@@ -457,7 +460,7 @@ class ScopedProtect { // DEPRECATED, use ProtectedSEXP
 		PROTECT_INDEX pix;
 		R_ProtectWithIndex(R_NilValue, &pix);
 		PROTECT_INDEX diff = pix - initialpix;
-		if (diff != 1) Rf_error("Depth %d != 1, ScopedProtect was nested", diff);
+		if (diff != 1) mxThrow("Depth %d != 1, ScopedProtect was nested", diff);
 		Rf_unprotect(2);
 	}
 };
@@ -476,7 +479,7 @@ class ProtectedSEXP {
 		PROTECT_INDEX pix;
 		R_ProtectWithIndex(R_NilValue, &pix);
 		PROTECT_INDEX diff = pix - initialpix;
-		if (diff != 1) Rf_error("Depth %d != 1, ProtectedSEXP was nested", diff);
+		if (diff != 1) mxThrow("Depth %d != 1, ProtectedSEXP was nested", diff);
 		Rf_unprotect(2);
 	}
         operator SEXP() const { return var; }
@@ -505,18 +508,25 @@ class ProtectAutoBalanceDoodad {
 };
 
 class AssertProtectStackBalanced {
-	ProtectAutoBalanceDoodad &myDoodad;
 	const char *context;
 	int preDepth;
+	PROTECT_INDEX initialpix;
 	
+	PROTECT_INDEX getDepth() {
+		PROTECT_INDEX pix;
+		R_ProtectWithIndex(R_NilValue, &pix);
+		PROTECT_INDEX diff = pix - initialpix;
+		Rf_unprotect(1);
+		return diff;
+	}
  public:
- 	AssertProtectStackBalanced(const char *_context,
-			    ProtectAutoBalanceDoodad &_myDoodad) :
-	myDoodad(_myDoodad), context(_context) {
-		preDepth = myDoodad.getDepth();
+ 	AssertProtectStackBalanced(const char *_context) : context(_context) {
+		R_ProtectWithIndex(R_NilValue, &initialpix);
+		Rf_unprotect(1);
+		preDepth = getDepth();
 	};
 	~AssertProtectStackBalanced() {
-		int postDepth = myDoodad.getDepth();
+		int postDepth = getDepth();
 		if (preDepth != postDepth) {
 			Rf_warning("%s: "
 				   "protect stack usage %d > 0, PLEASE REPORT TO OPENMX DEVELOPERS",

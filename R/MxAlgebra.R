@@ -35,11 +35,13 @@ setClass(Class = "MxAlgebra",
 	    result = "matrix",
 	    joinModel = "MxCharOrNumber",
 	    joinKey = "MxCharOrNumber",
-	    verbose= "integer"
+	    verbose= "integer",
+	    initial = "matrix"
 	))
 		
 setMethod("initialize", "MxAlgebra",
-	function(.Object, formula, name, fixed, joinKey, joinModel, verbose) {
+	function(.Object, formula, name, fixed, joinKey, joinModel,
+		 verbose, initial) {
 		.Object@formula <- sys.call(which=-3)[[3]]
 		.Object@name <- name
 		.Object@fixed <- fixed
@@ -47,6 +49,7 @@ setMethod("initialize", "MxAlgebra",
 		.Object@joinKey <- joinKey
 		.Object@joinModel <- joinModel
 		.Object@verbose <- verbose
+		.Object@initial <- initial
 		return(.Object)
 	}
 )
@@ -82,7 +85,9 @@ setReplaceMethod("$", "MxAlgebra",
 setMethod("names", "MxAlgebra", slotNames)
 
 mxAlgebra <- function(expression, name = NA, dimnames = NA, ..., fixed = FALSE,
-		      joinKey=as.character(NA), joinModel=as.character(NA), verbose=0L) {
+		      joinKey=as.character(NA), joinModel=as.character(NA),
+		      verbose=0L, initial=matrix(as.numeric(NA),1,1),
+		      recompute=c('always','onDemand')) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxAlgebra does not accept values for the '...' argument")
@@ -91,7 +96,11 @@ mxAlgebra <- function(expression, name = NA, dimnames = NA, ..., fixed = FALSE,
 		name <- imxUntitledName()
 	}
 	imxVerifyName(name, 0)
-	retval <- new("MxAlgebra", NA, name, fixed, joinKey, joinModel, as.integer(verbose))
+	if (!missing(fixed) && !missing(recompute)) stop("The 'fixed' argument is renamed to recompute")
+	if (!missing(fixed) && fixed == TRUE) recompute <- 'onDemand'
+	recompute <- match.arg(recompute)
+	retval <- new("MxAlgebra", NA, name, recompute=='onDemand', joinKey, joinModel,
+		as.integer(verbose), initial)
 	formula <- match.call()$expression
 	if(is.character(formula)){
 		stop("mxAlgebra wants an unquoted expression or formula")
@@ -109,7 +118,7 @@ mxAlgebra <- function(expression, name = NA, dimnames = NA, ..., fixed = FALSE,
 #' @param algString the character string to convert into an R expression
 #' @param name An optional character string indicating the name of the object.
 #' @param dimnames list. The dimnames attribute for the algebra: a list of length 2 giving the row and column names respectively. An empty list is treated as NULL, and a list of length one as row names. The list can be named, and the list names will be used as names for the dimensions.
-#' @param ... Not used.  Forces any remaining arguments to be specified by name.
+#' @param ... Forwarded verbatim to \link{mxAlgebra}
 #' @seealso \link{mxAlgebra}
 #' @examples
 #' A <- mxMatrix(values = runif(25), nrow = 5, ncol = 5, name = 'A')
@@ -120,11 +129,7 @@ mxAlgebra <- function(expression, name = NA, dimnames = NA, ..., fixed = FALSE,
 #' model[['test']]$result
 #' A$values * (B$values + A$values)
 mxAlgebraFromString <- function(algString, name=NA, dimnames=NA, ...) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxAlgebraFromString does not accept values for the '...' argument")
-	}
-	eval(substitute(mxAlgebra(tExp, name=name, dimnames=dimnames),
+	eval(substitute(mxAlgebra(tExp, name=name, dimnames=dimnames, ...),
 			list(tExp = parse(text=algString)[[1]])))
 }
 
@@ -175,7 +180,20 @@ generateAlgebraHelper <- function(algebra, joinModel, joinKey, matrixNumbers, al
 	retval <- eval(substitute(substitute(e, algebraNumbers), list(e = retval)))
 	retval <- substituteOperators(as.list(retval), algebra@name)
 	algebraSymbolCheck(retval, algebra@name)
-	return(list(algebra@.dimnames, algebra@verbose, joinModel, joinKey, retval))
+	initial <- matrix(as.numeric(NA),1,1)
+	if (.hasSlot(algebra, 'initial')) {
+		initial <- algebra@initial
+		if (!algebra@fixed && !single.na(initial)) {
+			stop(paste("In algebra", omxQuotes(algebra@name),
+				"initial result will be immediately discarded"))
+		}
+		if (algebra@fixed && any(is.na(initial))) {
+			stop(paste("Missing value found in initial result of algebra",
+				omxQuotes(algebra@name)))
+		}
+	}
+	return(list(algebra@.dimnames, algebra@verbose, algebra@fixed,
+		initial, joinModel, joinKey, retval))
 }
 
 substituteOperators <- function(algebra, name) {

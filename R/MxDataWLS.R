@@ -62,10 +62,10 @@ legacyMxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullW
 		stop("Number of observations must be specified for non-raw data, i.e., add numObs=XXX to mxData()")
 	}
 	if (type == "acov") {
-		verifyCovarianceMatrix(observed)
-		verifyCovarianceMatrix(acov, nameMatrix="asymptotic")
+		verifyCovarianceMatrix(observed, strictPD=FALSE)
+		verifyCovarianceMatrix(acov, nameMatrix="asymptotic", strictPD=FALSE)
 		if(!single.na(fullWeight)){
-			verifyCovarianceMatrix(fullWeight, nameMatrix="asymptotic")
+			verifyCovarianceMatrix(fullWeight, nameMatrix="asymptotic", strictPD=FALSE)
 		}
 		if ( !single.na(thresholds) ) {
 			verifyThresholdNames(thresholds, observed)
@@ -476,7 +476,8 @@ univariateMeanVarianceStatisticsHelper <- function(ntvar, n, ords, data, useMinu
 	return(list(meanEst, varEst, meanHess, varHess, meanJac, varJac))
 }
 
-# useMinusTwo is deprecated
+# mxDataWLS itself is deprecated
+# useMinusTwo parameter is deprecated
 mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, fullWeight=TRUE,
 		      suppressWarnings = TRUE, allContinuousMethod=c("cumulants", "marginals"),
 		      silent=!interactive())
@@ -831,6 +832,7 @@ wls.permute <- function(mxd) {
 ##' @param exogenous names variables to be modelled as exogenous
 ##' @param fullWeight whether to produce a fullWeight matrix
 ##' @param returnModel whether to return the whole mxModel (TRUE) or just the mxData (FALSE)
+##' @param silent logical. Whether to print status to terminal.
 ##' @seealso
 ##' \link{mxFitFunctionWLS}
 ##' @examples
@@ -838,7 +840,8 @@ wls.permute <- function(mxd) {
 
 omxAugmentDataWithWLSSummary <- function(mxd, type=c('WLS','DWLS','ULS'),
 			      allContinuousMethod=c("cumulants", "marginals"),
-			      ..., exogenous=c(), fullWeight=TRUE, returnModel=FALSE)
+			      ..., exogenous=c(), fullWeight=TRUE, returnModel=FALSE,
+			      silent=TRUE)
 {
 	type <- match.arg(type)
 	allContinuousMethod <- match.arg(allContinuousMethod)
@@ -903,7 +906,7 @@ omxAugmentDataWithWLSSummary <- function(mxd, type=c('WLS','DWLS','ULS'),
 		fake <- mxModel(fake, mxMatrix(values=tmpThr, name="thresh"))
 		fake$expectation$thresholds <- "thresh"
 	}
-	fake <- mxRun(fake, silent=TRUE)
+	fake <- mxRun(fake, silent=silent)
 	if (returnModel) return(fake)
 	fake$data
 }

@@ -26,7 +26,6 @@ struct omxWLSFitFunction : omxFitFunction {
 	omxMatrix* expectedSlope;
 	omxMatrix* observedFlattened;
 	omxMatrix* expectedFlattened;
-	omxMatrix* weights;
 	omxMatrix* P;
 	omxMatrix* B;
 	int numOrdinal;
@@ -46,7 +45,11 @@ struct omxWLSFitFunction : omxFitFunction {
 	void flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *slope, omxMatrix *thresholdMat,
 				 std::vector< omxThresholdColumn > &thresholds, omxMatrix* vector);
 	void prepData();
-	virtual void invalidateCache() { prepData(); }
+	virtual void invalidateCache()
+	{
+		omxFreeMatrix(observedFlattened);
+		observedFlattened = 0;
+	}
 };
 
 void omxWLSFitFunction::flattenDataToVector(omxMatrix* cov, omxMatrix* means, omxMatrix *slope,
@@ -61,8 +64,8 @@ omxWLSFitFunction::~omxWLSFitFunction()
 {
 	if(OMX_DEBUG) {mxLog("Freeing WLS FitFunction.");}
 	
+	invalidateCache();
 	omxWLSFitFunction* owo = this;
-	omxFreeMatrix(owo->observedFlattened);
 	omxFreeMatrix(owo->expectedFlattened);
 	omxFreeMatrix(owo->B);
 	omxFreeMatrix(owo->P);
@@ -73,7 +76,11 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 {
 	auto *oo = this;
 	auto *owo = this;
-	if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) return;
+	if (want & FF_COMPUTE_INITIAL_FIT) return;
+	if ((want & FF_COMPUTE_PREOPTIMIZE) && !observedFlattened) {
+		prepData();
+		return;
+	}
 	
 	if(OMX_DEBUG) { mxLog("Beginning WLS Evaluation.");}
 	// Requires: Data, means, covariances.
@@ -86,7 +93,8 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	eCov		= owo->expectedCov;
 	eMeans 		= owo->expectedMeans;
 	auto &eThresh   = oo->expectation->getThresholdInfo();
-	oFlat		= owo->observedFlattened;
+	if (!observedFlattened) return;
+	oFlat		= observedFlattened;
 	eFlat		= owo->expectedFlattened;
 	int onei	= 1;
 	
@@ -104,6 +112,7 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	omxDAXPY(-1.0, eFlat, B);
 	//if(OMX_DEBUG) {omxPrintMatrix(B, "....WLS Observed - Expected Vector: "); }
 	
+	omxMatrix *weights = expectation->data->getSingleObsSummaryStats().acovMat;
 	if(weights != NULL) {
 		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(weights, "....WLS Weight Matrix: "); }
 		omxDGEMV(TRUE, 1.0, weights, B, 0.0, P);
@@ -128,7 +137,7 @@ void omxWLSFitFunction::populateAttr(SEXP algebra)
 	omxWLSFitFunction *argStruct = this;
 	omxMatrix *expCovInt = argStruct->expectedCov;	    		// Expected covariance
 	omxMatrix *expMeanInt = argStruct->expectedMeans;			// Expected means
-	omxMatrix *weightInt = argStruct->weights;			// Expected means
+	omxMatrix *weightInt = expectation->data->getSingleObsSummaryStats().acovMat;
 	
 	SEXP expCovExt, expMeanExt, gradients;
 	Rf_protect(expCovExt = Rf_allocMatrix(REALSXP, expCovInt->rows, expCovInt->cols));
@@ -195,22 +204,19 @@ void omxWLSFitFunction::prepData()
 	auto *newObj = this;
 
 	if (vectorSize != expectation->numSummaryStats())
-		Rf_error("%s: vectorSize changed from %d -> %d",
-			 vectorSize, expectation->numSummaryStats());
+		mxThrow("%s: vectorSize changed from %d -> %d",
+			name(), vectorSize, expectation->numSummaryStats());
 
 	omxData* dataMat = oo->expectation->data;
 
 	if (!matrix->currentState->isClone()) {
 		std::vector<int> exoPred;
 		expectation->getExogenousPredictors(exoPred);
-		if (dataMat->defVars.size() == exoPred.size()) {
-			// OK
-		} else if (dataMat->hasDefinitionVariables()) {
-			Rf_error("%s: def vars not implemented", oo->name());
-		}
+		// how to prohibit def vars? TODO
 	
 		dataMat->prepObsStats(matrix->currentState, expectation->getDataColumnNames(),
 				      exoPred, type, continuousType, fullWeight);
+		if (isErrorRaised()) return;
 	}
 
 	auto &obsStat = dataMat->getSingleObsSummaryStats();
@@ -223,22 +229,23 @@ void omxWLSFitFunction::prepData()
 
 	omxMatrix *means = obsStat.meansMat;
 	omxMatrix *obsThresholdsMat = obsStat.thresholdMat;
-	weights = obsStat.acovMat;
+	omxMatrix *weights = obsStat.acovMat;
 	std::vector< omxThresholdColumn > &oThresh = obsStat.thresholdCols;
 
 	numOrdinal = oo->expectation->numOrdinal;
 	auto &eThresh = oo->expectation->getThresholdInfo();
 
-	if (eThresh.size() && !means) {
-		omxRaiseError("Means are required when the data include ordinal measurements");
-		return;
-	}
-
 	// Error Checking: Observed/Expected means must agree.  
 	// ^ is XOR: true when one is false and the other is not.
 	if((newObj->expectedMeans == NULL) ^ (means == NULL)) {
 		if(newObj->expectedMeans != NULL) {
-			omxRaiseError("Observed means not detected, but an expected means matrix was specified.\n  If you  wish to model the means, you must provide observed means.\n");
+			if (eThresh.size() == 0) {
+				omxRaiseError("Observed means not detected, but expected means specified.\n"
+					      "The model has no continuous variables. "
+					      "Do you did forget allContinuousMethod='marginals'?");
+			} else {
+				omxRaiseError("Means are required when the data include ordinal measurements");
+			}
 			return;
 		} else {
 			omxRaiseError("Observed means were provided, but an expected means matrix was not specified.\n  If you provide observed means, you must specify a model for the means.\n");
@@ -290,9 +297,10 @@ void omxWLSFitFunction::prepData()
 		}
 	}
 	
+	observedFlattened = omxInitMatrix(vectorSize, 1, TRUE, matrix->currentState);
 	flattenDataToVector(cov, means, obsStat.slopeMat, obsThresholdsMat,
-			    oThresh, newObj->observedFlattened);
-	if(OMX_DEBUG) {omxPrintMatrix(newObj->observedFlattened, "....WLS Observed Vector: "); }
+			    oThresh, observedFlattened);
+	if(OMX_DEBUG) {omxPrintMatrix(observedFlattened, "....WLS Observed Vector: "); }
 	flattenDataToVector(newObj->expectedCov, newObj->expectedMeans,
 			    newObj->expectedSlope, oo->expectation->thresholdsMat,
 				eThresh, newObj->expectedFlattened);
@@ -304,7 +312,7 @@ void omxWLSFitFunction::init()
 	
 	omxState *currentState = oo->matrix->currentState;
 	
-	if (!oo->expectation) { Rf_error("%s requires an expectation", name()); }
+	if (!oo->expectation) { mxThrow("%s requires an expectation", name()); }
 	
 	if (R_has_slot(rObj, Rf_install("type"))) {
 		ProtectedSEXP RwlsType(R_do_slot(rObj, Rf_install("type")));
@@ -320,7 +328,7 @@ void omxWLSFitFunction::init()
 	}
 
 	if (!fullWeight && !strEQ(type, "ULS")) {
-		Rf_error("%s: !fullWeight && !strEQ(type, ULS)", name());
+		mxThrow("%s: !fullWeight && !strEQ(type, ULS)", name());
 	}
 
 	expectedCov = omxGetExpectationComponent(oo->expectation, "cov");
@@ -332,10 +340,8 @@ void omxWLSFitFunction::init()
 	if(OMX_DEBUG) { mxLog("Intial WLSFitFunction vectorSize comes to: %d.", vectorSize); }
 	
 	/* Temporary storage for calculation */
-	observedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
+	observedFlattened = 0;
 	expectedFlattened = omxInitMatrix(vectorSize, 1, TRUE, currentState);
 	P = omxInitMatrix(1, vectorSize, TRUE, currentState);
 	B = omxInitMatrix(vectorSize, 1, TRUE, currentState);
-
-	prepData();
 }

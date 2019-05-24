@@ -6,7 +6,8 @@
 \usage{
 omxAugmentDataWithWLSSummary(mxd, type = c("WLS", "DWLS", "ULS"),
   allContinuousMethod = c("cumulants", "marginals"), ...,
-  exogenous = c(), fullWeight = TRUE, returnModel = FALSE)
+  exogenous = c(), fullWeight = TRUE, returnModel = FALSE,
+  silent = TRUE)
 }
 \arguments{
 \item{mxd}{an MxData object containing raw data}
@@ -22,6 +23,8 @@ omxAugmentDataWithWLSSummary(mxd, type = c("WLS", "DWLS", "ULS"),
 \item{fullWeight}{whether to produce a fullWeight matrix}
 
 \item{returnModel}{whether to return the whole mxModel (TRUE) or just the mxData (FALSE)}
+
+\item{silent}{logical. Whether to print status to terminal.}
 }
 \description{
 The summary statistics are returned in the observedStats slot of

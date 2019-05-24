@@ -13,9 +13,16 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-mxOption <- function(model, key, value, reset = FALSE) {
-	if (length(key) != 1 || !is.character(key)) {
+mxOption <- function(model=NULL, key=NULL, value, reset = FALSE) {
+	if (!reset && (length(key) != 1 || !is.character(key))) {
 		stop("argument 'key' must be a character string")
+	}
+	if (!missing(model) && !is.null(model) && !is(model, "MxModel")) {
+		stop(paste("The first argument to mxOption must",
+			"be an MxModel, not", omxQuotes(class(model))))
+	}
+	if (is.null(model) && reset) {
+		return(invisible(mxSetDefaultOptions()))
 	}
 	if (missing(value)) {
 		if (length(model) && !is.null(model@options[[key]])) {
@@ -45,8 +52,8 @@ mxOption <- function(model, key, value, reset = FALSE) {
 			stop(msg)
 		}
 	}
-    if (length(model) == 0 && is.null(model)) {
-        return(processDefaultOptionList(key, value))
+    if (is.null(model)) {
+	    return(processDefaultOptionList(key, value))
     }
 	if (length(model) > 1 || !is(model, "MxModel")) {
 		stop("argument 'model' must be an MxModel object")
@@ -206,11 +213,8 @@ generateOptionsList <- function(model, constraints, useOptimizer) {
 	input <- list()
 	if (!is.null(model)) {
 		input <- model@options
-		if (is.null(input[["Standard Errors"]]) && constraints > 0) {
+		if (is.null(input[["Standard Errors"]]) && constraints > 0 && imxHasWLS(model)){
 			input[["Standard Errors"]] <- "No"
-		}
-		if (is.null(input[["Calculate Hessian"]]) && constraints > 0) {
-			input[["Calculate Hessian"]] <- "No"
 		}
 		if( !is.null(input[["UsePPML"]]) 
 		   && (input[["UsePPML"]] == "PartialSolved" || input[["UsePPML"]] == "Split") ) {
@@ -300,7 +304,7 @@ imxAutoOptionValue <- function(optionName, optionList=options()$mxOption){
 		return(numcast)
 	}
 	#Otherwise, if the current value is a string and can be matched to "Auto",
-	#convert to default nuermical value for the three motivating cases: 
+	#convert to default numerical value for the three motivating cases: 
 	else{
 		if(length(grep(pattern="Auto",x=optionList[[optionName]],ignore.case=T))){
 			if(optionName=="Gradient step size"){return(1.0e-7)}

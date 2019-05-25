@@ -1,5 +1,5 @@
 c2ef3dc7d3a0f743eb1f260ea47ae824 *CHANGES
-15d7148128bf60f9eb036755dba90f57 *DESCRIPTION
+1b91eb7980e82ca2a86e3103d58c3555 *DESCRIPTION
 7cdae994d4a36bf5dc7b250b3fb50109 *NAMESPACE
 a8af79b376de414018dcb5a4aba6ef52 *NEWS.md
 c3b0a5378bcc52ede224e9de334623ff *R/0ClassUnion.R
@@ -97,7 +97,7 @@ bcd6f112d7c844890fc0d8505417f166 *R/MxThreshold.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 f4ee46e5dd50c3767578b9cc12af34ff *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-a65a6f990717d4b9e56aeeb6ed594d6b *R/MxVersion.R
+d72dbe0fb2cb7a062cd9705eae0ebe33 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 efb5443716e21122f8ec2a75bd60eed7 *R/OriginalMx.R
 9a96eb6827dc9d723426280c1bcb0981 *R/SdiagMatrix.R
@@ -221,7 +221,7 @@ ed9ee1469a2bd6de0e3fefcc20ba2d86 *demo/UnivariateSaturated_MatrixCov.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 52168875a6d4e1e645611a544c656244 *demo/omxConstrainMLThresholds.R
-686acb721951f031a999399bb9ca7f5f *inst/CITATION
+5855b19f54618f98b13540dee62ddb39 *inst/CITATION
 c9b8c08f65e3a8311c2c7fd2df4be6f7 *inst/WORDLIST
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
@@ -1129,7 +1129,7 @@ d339299402926af223a028eef75ca4f5 *src/omxHessianCalculation.cpp
 2dd12aa2d7adafe3ea7abafcf14f3d0e *src/omxLISRELExpectation.h
 3525be2b74b44f0b2de2f44856c4b6f0 *src/omxMLFitFunction.cpp
 971fbc73a7140b2db812ee1bfaaef76d *src/omxMatrix.cpp
-f497278252a7e05334ac978b3d730ca5 *src/omxMatrix.h
+20998f2b5c368cf17a042658aee9728c *src/omxMatrix.h
 d14706593f9b4aecbe0630683ad74b26 *src/omxNLopt.cpp
 fbb0eadf99a870291b8491a9fc28ecff *src/omxNLopt.h
 1e314e254b34d9dae53a049ff43b13d0 *src/omxNPSOLSpecific.cpp
@@ -1152,7 +1152,7 @@ f0ce07f08f0b130ace28a6fe879ba2fc *src/omxSadmvnWrapper.h
 fa9b7476fe255f034ef43add55593c12 *src/pgenlib_internal.cpp
 9f2ac45f80192f3a514e8f976e80d89c *src/pgenlib_internal.h
 9db60790258410f6f5b18852a7e701d6 *src/plink2_base.cc
-ea0e4ede59f6f57171f188326cd9756c *src/plink2_base.h
+bbca7f8e344ceac60200713cb4463eda *src/plink2_base.h
 a1b38a84f46dccdf10798308557a1277 *src/sadmvn.f
 75bd7432d807074069f464055e105b88 *src/slsqp.c
 1489f6bdcad2b7542e7d65f545ce3062 *src/slsqp.h

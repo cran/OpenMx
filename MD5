@@ -1,5 +1,5 @@
 c2ef3dc7d3a0f743eb1f260ea47ae824 *CHANGES
-1b91eb7980e82ca2a86e3103d58c3555 *DESCRIPTION
+9ad826ed93af00f2a6cb4d1b829f85d5 *DESCRIPTION
 7cdae994d4a36bf5dc7b250b3fb50109 *NAMESPACE
 a8af79b376de414018dcb5a4aba6ef52 *NEWS.md
 c3b0a5378bcc52ede224e9de334623ff *R/0ClassUnion.R
@@ -97,7 +97,7 @@ bcd6f112d7c844890fc0d8505417f166 *R/MxThreshold.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 f4ee46e5dd50c3767578b9cc12af34ff *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-d72dbe0fb2cb7a062cd9705eae0ebe33 *R/MxVersion.R
+b50a52e400a1b8f6af2e19f81bc46610 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 efb5443716e21122f8ec2a75bd60eed7 *R/OriginalMx.R
 9a96eb6827dc9d723426280c1bcb0981 *R/SdiagMatrix.R
@@ -221,7 +221,7 @@ ed9ee1469a2bd6de0e3fefcc20ba2d86 *demo/UnivariateSaturated_MatrixCov.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 52168875a6d4e1e645611a544c656244 *demo/omxConstrainMLThresholds.R
-5855b19f54618f98b13540dee62ddb39 *inst/CITATION
+45e68e5495987987599ef1dd997047e6 *inst/CITATION
 c9b8c08f65e3a8311c2c7fd2df4be6f7 *inst/WORDLIST
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
@@ -844,7 +844,7 @@ a611f432c1cbeb56697ae1bc15eb35d5 *man/multiData1_data.Rd
 8897cb60d2868d93b9ecb7addde553d9 *man/mxAvailableOptimizers.Rd
 19ac6b151b7e8a4a0c65f65b836610fe *man/mxBootstrap.Rd
 a3b4820eaffd42bcedf7da203be12459 *man/mxBootstrapEval.Rd
-b3a475ff475ab4d22ae826f2a8784701 *man/mxBootstrapStdizeRAMpaths.Rd
+794e1f3c56879440aba2bdd1d182ca2e *man/mxBootstrapStdizeRAMpaths.Rd
 378f37c9d1cfb1ce5d9327af8f3af53e *man/mxBounds.Rd
 7a96e2f1f7787e1ef5b1ebe9699901a2 *man/mxCI.Rd
 82493433180b103eb99f40975efa7724 *man/mxCheckIdentification.Rd
@@ -1055,7 +1055,7 @@ e3c57313d241f92305a12cf81ef13946 *src/include/db/SQLite3Statement.hpp
 83234531118efb3bf062f2df9f2e88b6 *src/include/genfile/bgen/IndexQuery.hpp
 d107385d41fa36e18e4acaef6fd2665b *src/include/genfile/bgen/Query.hpp
 92c5ee86d55c0289f434a316b1939bb8 *src/include/genfile/bgen/View.hpp
-c36a790a3c41497c4c7ad15fe8d08324 *src/include/genfile/bgen/bgen.hpp
+7bfc2f3768a3f63d4d9510f5eafcc3e8 *src/include/genfile/bgen/bgen.hpp
 868097a168dcad4219695a382c881178 *src/include/genfile/types.hpp
 aa3022540a8c2b98b8484d6eb96eb214 *src/include/genfile/zlib.hpp
 957c1f36f0ae881113272c1eafd5b0cb *src/include/sqlite3/sqlite3.h

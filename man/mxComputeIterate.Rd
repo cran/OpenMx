@@ -18,7 +18,7 @@ mxComputeIterate(steps, ..., maxIter = 500L, tolerance = 1e-09,
 
 \item{tolerance}{iterates until maximum relative change is less than tolerance}
 
-\item{verbose}{level of debugging output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{freeSet}{Names of matrices containing free variables.}
 

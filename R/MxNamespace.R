@@ -592,14 +592,14 @@ checkNamespaceHelper <- function(model, topmodel, namespace) {
 	overlap <- intersect(allEntities, namespace$parameters)
 	if (length(overlap) > 0) {
 		item1 = overlap[1]
-		stop(paste("In model", omxQuotes(model@name),
-			"the following are both named",
-			"entities and free parameters:",
+		stop(paste("In model ", omxQuotes(model@name),
+			" the following are used both as named ",
+			"entities and free parameters: ",
 			omxQuotes(overlap),
-			"\nIf you are trying to set a path using an mxAlgebra, then",
-			"refer to the Algebra with square-bracket notation.",
-			"\ni.,e, instead of labels=\"", omxQuotes(overlap), "\"",
-			"use: labels=\"", omxQuotes(overlap), "[1,1]\""), call. = FALSE)
+			"\nIf you are trying to set a path using an mxAlgebra, then ",
+			"refer to the algebra with square-bracket notation.",
+			"\ni.e., instead of labels=", omxQuotes(overlap),
+			" use: labels='", overlap, "[1,1]'", sep= ""), call. = FALSE)
 	}
 	overlap <- intersect(allEntities, namespace$values)
 	if (length(overlap) > 0) {
@@ -616,7 +616,7 @@ checkNamespaceHelper <- function(model, topmodel, namespace) {
 		stop(paste("In model", omxQuotes(topmodel@name),
 			"the name", omxQuotes(select),
 			"is used as a free parameter in", omxQuotes(freelocation),
-			"and as a fixed parameter in", omxQuotes(fixedlocation)), call. = FALSE)
+			"but as a fixed parameter in", omxQuotes(fixedlocation)), call. = FALSE)
 	}
 }
 
@@ -653,11 +653,12 @@ locateLabelHelper <- function(matrix, model, label, parameter) {
 }
 
 legalGlobalReference <- function(name) {
-	if(exists(name, envir = globalenv())) {
-		value <- get(name, envir = globalenv())
-		return(is.numeric(value) || is.character(value))
-	}
-	return(FALSE);
+  topEnv <- parent.frame(10L)
+  if(exists(name, envir=topEnv)) {
+    value <- get(name, envir=topEnv)
+    return(is.numeric(value) || is.character(value))
+  }
+  return(FALSE)
 }
 
 checkNamespaceIdentifier <- function(identifier, model, entity, namespace) {

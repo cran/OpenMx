@@ -58,7 +58,7 @@ void GradientOptimizerContext::setupIneqConstraintBounds() //used with CSOLNP.
 	globalState->countNonlinearConstraints(globalState->numEqC, globalState->numIneqC, false);
 	equality.resize(globalState->numEqC);
 	inequality.resize(globalState->numIneqC);
-};
+}
 
 void GradientOptimizerContext::setupAllBounds() //used with NPSOL.
 {
@@ -196,8 +196,8 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 	int want = FF_COMPUTE_FIT;
 	// eventually want to permit analytic gradient during CI
 	if (*mode > 0 && !fc->ciobj && useGradient && fitMatrix->fitFunction->gradientAvailable) {
-		fc->grad.resize(fc->numParam);
-		fc->grad.setZero();
+		fc->initGrad();
+		fc->gradZ.setZero();
 		want |= FF_COMPUTE_GRADIENT;
 	}
 	ComputeFit(getOptName(), fitMatrix, want, fc);
@@ -216,7 +216,7 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 	}
 
 	return fc->fit;
-};
+}
 
 // NOTE: All non-linear constraints are applied regardless of free
 // variable group.
@@ -224,7 +224,7 @@ void GradientOptimizerContext::solEqBFun(bool wantAJ) //<--"want analytic Jacobi
 {
 	fc->solEqBFun(wantAJ, verbose);
 	return;
-};
+}
 
 // NOTE: All non-linear constraints are applied regardless of free
 // variable group.
@@ -232,7 +232,7 @@ void GradientOptimizerContext::myineqFun(bool wantAJ)
 {
 	fc->myineqFun(wantAJ, verbose, ineqType, CSOLNP_HACK);
 	return;
-};
+}
 
 
 // ------------------------------------------------------------
@@ -467,7 +467,8 @@ void omxComputeGD::computeImpl(FitContext *fc)
 		omxCSOLNP(rf);
 		rf.finish();
 		if (rf.gradOut.size()) {
-			fc->grad = rf.gradOut.tail(numParam);
+			fc->haveGrad.assign(numParam, true);
+			fc->gradZ = rf.gradOut.tail(numParam);
 			Eigen::Map< Eigen::MatrixXd > hess(fc->getDenseHessUninitialized(), numParam, numParam);
 			hess = rf.hessOut.bottomRightCorner(numParam, numParam);
 			fc->wanted |= FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN;
@@ -598,6 +599,7 @@ class ComputeCI : public omxCompute {
 	omxCompute *plan;
 	omxMatrix *fitMatrix;
 	int verbose;
+	int totalIntervals;
 	SEXP intervals, intervalCodes, detail;
 	const char *ctypeName;
 	bool useInequality;
@@ -679,7 +681,7 @@ void ComputeCI::initFromFrontend(omxState *globalState, SEXP rObj)
 	fitMatrix = omxNewMatrixFromSlot(rObj, globalState, "fitfunction");
 	omxCompleteFitFunction(fitMatrix);
 
-	PushLoopIndex pli(name, NA_INTEGER);
+	PushLoopIndex pli(name);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
 	SEXP s4class;
@@ -688,7 +690,7 @@ void ComputeCI::initFromFrontend(omxState *globalState, SEXP rObj)
 	plan->initFromFrontend(globalState, slotValue);
 }
 
-extern "C" { void F77_SUB(npoptn)(char* string, int Rf_length); };
+extern "C" { void F77_SUB(npoptn)(char* string, int Rf_length); }
 
 class notImplementedConstraint : public omxConstraint {
 	typedef omxConstraint super;
@@ -1138,7 +1140,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 
 	bool boundActive = fabs(Mle[currentCI->varIndex] - nearBox) < sqrt(std::numeric_limits<double>::epsilon());
 	if (currentCI->bound[!side] > 0.0) {	// ------------------------------ away from bound side --
-		PushLoopIndex pli(name, detailRow);
+		PushLoopIndex pli(name, detailRow, totalIntervals);
 		if (!boundActive) {
 			Diagnostic diag;
 			double val;
@@ -1197,7 +1199,7 @@ void ComputeCI::boundAdjCI(FitContext *mle, FitContext &fc, ConfidenceInterval *
 
  part2:
 	if (currentCI->bound[side] > 0.0) {     // ------------------------------ near to bound side --
-		PushLoopIndex pli(name, detailRow);
+		PushLoopIndex pli(name, detailRow, totalIntervals);
 		double boundLL = NA_REAL;
 		double sqrtCrit95 = sqrt(currentCI->bound[side]);
 		if (!boundActive) {
@@ -1387,7 +1389,7 @@ void ComputeCI::regularCI2(FitContext *mle, FitContext &fc, ConfidenceInterval *
 		int lower = 1-upper;
 		if (!(currentCI->bound[upper])) continue;
 
-		PushLoopIndex pli(name, detailRow);
+		PushLoopIndex pli(name, detailRow, totalIntervals);
 		Global->checkpointMessage(mle, mle->est, "%s[%d, %d] %s CI",
 					  matName.c_str(), currentCI->row + 1, currentCI->col + 1,
 					  upper? "upper" : "lower");
@@ -1432,7 +1434,7 @@ void ComputeCI::computeImpl(FitContext *mle)
 	Rf_protect(intervals = Rf_allocMatrix(REALSXP, numInts, 3));
 	Rf_protect(intervalCodes = Rf_allocMatrix(INTSXP, numInts, 2));
 
-	int totalIntervals = 0;
+	totalIntervals = 0;
 	{
 		Eigen::Map< Eigen::ArrayXXd > interval(REAL(intervals), numInts, 3);
 		interval.fill(NA_REAL);
@@ -1629,7 +1631,7 @@ void ComputeTryH::initFromFrontend(omxState *globalState, SEXP rObj)
 	invocations = 0;
 	numRetries = 0;
 
-	PushLoopIndex pli(name, NA_INTEGER);
+	PushLoopIndex pli(name);
 
 	SEXP slotValue;
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
@@ -1667,7 +1669,7 @@ void ComputeTryH::computeImpl(FitContext *fc)
 	}
 
 	{
-		PushLoopIndex pli(name, 1);
+		PushLoopIndex pli(name, 1, 0);
 		bestStatus = INFORM_UNINITIALIZED;
 		bestFit = NA_REAL;
 		fc->setInform(INFORM_UNINITIALIZED);
@@ -1702,7 +1704,7 @@ void ComputeTryH::computeImpl(FitContext *fc)
 		}
 
 		--retriesRemain;
-		PushLoopIndex pli(name, maxRetries - retriesRemain);
+		PushLoopIndex pli(name, maxRetries - retriesRemain, 0);
 
 		fc->setInform(INFORM_UNINITIALIZED);
 		fc->wanted &= ~(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN);
@@ -1928,7 +1930,7 @@ void ComputeGenSA::initFromFrontend(omxState *state, SEXP rObj)
 		}
 	}
 
-	PushLoopIndex pli(name, NA_INTEGER);
+	PushLoopIndex pli(name);
 
 	SEXP slotValue;
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
@@ -2011,7 +2013,7 @@ double ComputeGenSA::asa_cost(double *x, int *cost_flag, int *exit_code, USER_DE
 
 	{
 		ReturnRNGState rrs;
-		PushLoopIndex pli(name, opt->N_Generated);
+		PushLoopIndex pli(name, opt->N_Generated, opt->Limit_Generated);
 		fc->setInform(INFORM_UNINITIALIZED);
 		curEst = proposal;
 		fc->copyParamToModel();
@@ -2156,7 +2158,7 @@ void ComputeGenSA::tsallis1996(FitContext *fc)
 
 			{
 				ReturnRNGState rrs;
-				PushLoopIndex pli(name, jj);
+				PushLoopIndex pli(name, jj, markovLength);
 				fc->setInform(INFORM_UNINITIALIZED);
 				fc->copyParamToModel();
 				fc->wanted = FF_COMPUTE_FIT;

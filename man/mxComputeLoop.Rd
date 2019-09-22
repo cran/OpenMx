@@ -7,7 +7,8 @@
 \title{Repeatedly invoke a series of compute objects}
 \usage{
 mxComputeLoop(steps, ..., i = NULL, maxIter = as.integer(NA),
-  freeSet = NA_character_, maxDuration = as.numeric(NA))
+  freeSet = NA_character_, maxDuration = as.numeric(NA),
+  verbose = 0L, startFrom = 1L)
 }
 \arguments{
 \item{steps}{a list of compute objects}
@@ -23,10 +24,13 @@ by name.}
 
 \item{maxDuration}{the maximum amount of time (in seconds) to
 iterate}
+
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
+
+\item{startFrom}{When \code{i=NULL}, permits starting from an index greater than 1.}
 }
 \description{
 When \code{i} is given then these values are iterated
         over instead of the sequence 1 to the number of
-        iterations.  If \code{i} is not given then \code{maxIter}
-        is set to 500 to prevent infinite loops.
+        iterations.
 }

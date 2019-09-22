@@ -11,8 +11,6 @@ mxComputeDefault(freeSet = NA_character_)
 \item{freeSet}{names of matrices containing free variables}
 }
 \description{
-The default compute plan is approximately as follows:
-\code{mxComputeSequence(list(mxComputeGradientDescent(),
-mxComputeConfidenceInterval(), mxComputeNumericDeriv(),
-mxComputeStandardError(), mxComputeReportDeriv()))}
+This is an empty placeholder for the default compute plan.
+To create an actual plan, use \link{omxDefaultComputePlan}.
 }

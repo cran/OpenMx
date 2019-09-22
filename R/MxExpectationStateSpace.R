@@ -723,7 +723,12 @@ mxKalmanScores <- function(model, data=NA, frontend=TRUE){
 
 #--------------------------------------------------------------------
 setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
-	function(.Object, model, nrows, subname) {
+	function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
+		   .backend, nrowsProportion) {
+  origData <- findDataForSubmodel(model, subname)
+  origRows <- if (!is.null(origData)) { nrowMxData(origData) } else { NULL }
+  nrows <- calcNumRows(nrows, nrowsProportion, origRows, subname)
+
 		A <- mxEvalByName(model[[subname]]@expectation@A, model, compute=TRUE)
 		B <- mxEvalByName(model[[subname]]@expectation@B, model, compute=TRUE)
 		C <- mxEvalByName(model[[subname]]@expectation@C, model, compute=TRUE)
@@ -773,12 +778,16 @@ setMethod("genericGenerateData", signature("MxExpectationStateSpace"),
 				Qd <- Q
 			}
 			xp <- Ad %*% tx[,i-1] + Bd %*% u
-			tx[,i] <- xp + t(mvtnorm::rmvnorm(1, rep(0, xdim), Qd))
-			ty[,i-1] <- C %*% tx[,i-1] + D %*% u + t(mvtnorm::rmvnorm(1, rep(0, ydim), R))
+			tx[,i] <- xp + t(.rmvnorm(1, rep(0, xdim), Qd, empirical))
+			ty[,i-1] <- C %*% tx[,i-1] + D %*% u + t(.rmvnorm(1, rep(0, ydim), R, empirical))
 		}
 		ret <- t(ty)
 		colnames(ret) <- dimnames(C)[[1]]
-		return(ret)
+		if (returnModel) {
+		  mxModel(model[[subname]], mxData(as.data.frame(ret), "raw"))
+		} else {
+		  as.data.frame(ret)
+		}
 	}
 )
 

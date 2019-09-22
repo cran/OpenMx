@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2019-05-26
+Date: 2019-09-21
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -29,13 +29,7 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Lester", "Ingber", role="cph"),
     person("Wong", "Shao Voon", role="cph"),
     person("Juan", "Palacios", role="cph"),
-    person("Jiang", "Yang", role="cph"),
-    person("Gavin", "Band", role="cph"),
-    person("Yann", "Collet", role="cph"),
-    person("Facebook, Inc.", role="cph"),
-    person("Yuta", "Mori", role="cph"),
-    person("Shaun", "Purcell", role="cph"),
-    person("Christopher", "Chang", role="cph"))
+    person("Jiang", "Yang", role="cph"))
 URL: http://openmx.ssri.psu.edu, https://github.com/OpenMx/OpenMx
 BugReports: http://openmx.ssri.psu.edu/forums
 Description: Create structural equation models that can be manipulated programmatically.
@@ -54,9 +48,9 @@ License: Apache License (== 2.0)
 LinkingTo: Rcpp, RcppEigen, StanHeaders (>= 2.10.0.2), BH (>=
         1.69.0-1), rpf (>= 0.45)
 Imports: digest, MASS, Matrix, methods, Rcpp, parallel
-Depends: R (>= 3.1.0)
+Depends: R (>= 3.5.0)
 Suggests: mvtnorm, numDeriv, roxygen2 (>= 6.1), Rmpi, rpf (>= 0.45),
-        snowfall, lme4
+        snowfall, lme4, covr, testthat
 LazyLoad: yes
 LazyData: yes
 Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
@@ -67,10 +61,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'LowerMatrix.R' 'SdiagMatrix.R' 'StandMatrix.R' 'SymmMatrix.R'
         'UnitMatrix.R' 'ZeroMatrix.R' 'MxMatrixFunctions.R'
         'MxAlgebra.R' 'MxCycleDetection.R' 'MxDependencies.R'
-        'MxAlgebraConvert.R' 'MxAlgebraTransform.R' 'MxSquareBracket.R'
-        'MxEval.R' 'MxRename.R' 'MxPath.R' 'MxObjectiveMetaData.R'
-        'MxRAMMetaData.R' 'MxExpectation.R' 'MxExpectationNormal.R'
-        'MxExpectationRAM.R' 'MxExpectationLISREL.R' 'MxFitFunction.R'
+        'MxAlgebraConvert.R' 'MxSquareBracket.R' 'MxEval.R'
+        'MxRename.R' 'MxPath.R' 'MxObjectiveMetaData.R'
+        'MxExpectation.R' 'MxExpectationNormal.R' 'MxExpectationRAM.R'
+        'MxExpectationLISREL.R' 'MxFitFunction.R'
         'MxFitFunctionAlgebra.R' 'MxFitFunctionML.R'
         'MxFitFunctionMultigroup.R' 'MxFitFunctionRow.R'
         'MxFitFunctionWLS.R' 'MxRAMObjective.R' 'MxLISRELObjective.R'
@@ -83,7 +77,7 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxRunHelperFunctions.R' 'MxSummary.R' 'MxCompare.R'
         'MxSwift.R' 'MxOptions.R' 'MxThreshold.R' 'OriginalMx.R'
         'MxGraph.R' 'MxGraphviz.R' 'MxDeparse.R' 'MxCommunication.R'
-        'MxRestore.R' 'MxVersion.R' 'MxPPML.R' 'MxRAMtoML.R' 'MxDiff.R'
+        'MxRestore.R' 'MxVersion.R' 'MxPPML.R' 'MxRAMtoML.R'
         'MxErrorHandling.R' 'MxDetectCores.R' 'MxSaturatedModel.R'
         'omxBrownie.R' 'omxConstrainThresholds.R' 'omxGetNPSOL.R'
         'MxFitFunctionR.R' 'MxRObjective.R'
@@ -94,10 +88,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'MxMMI.R'
         'omxReadGRMBin.R' 'zzz.R'
 Biarch: true
-Version: 2.13.2
+Version: 2.14.11
 RoxygenNote: 6.1.1
 NeedsCompilation: yes
-Packaged: 2019-05-26 19:49:56 UTC; joshua
+Packaged: 2019-09-21 15:37:38 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -131,13 +125,7 @@ Author: Steven M. Boker [aut],
   Lester Ingber [cph],
   Wong Shao Voon [cph],
   Juan Palacios [cph],
-  Jiang Yang [cph],
-  Gavin Band [cph],
-  Yann Collet [cph],
-  Facebook, Inc. [cph],
-  Yuta Mori [cph],
-  Shaun Purcell [cph],
-  Christopher Chang [cph]
+  Jiang Yang [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2019-05-26 23:10:04 UTC
+Date/Publication: 2019-09-22 17:30:07 UTC

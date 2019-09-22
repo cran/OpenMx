@@ -159,7 +159,13 @@ class FitContext {
 		std::vector<bool> &po = profiledOut;
 		return numParam - std::count(po.begin(), po.end(), true);
 	};
-	Eigen::VectorXd grad;
+	std::vector<bool> haveGrad;
+	Eigen::VectorXd gradZ;
+	void initGrad(int pars) { // should dimension to numParam always? TODO
+		haveGrad.assign(pars, false);
+		gradZ = Eigen::VectorXd::Zero(pars);
+	};
+	void initGrad() { initGrad(numParam); };
 	int infoDefinite;
 	double infoCondNum;
 	Eigen::MatrixXd hess;
@@ -289,7 +295,7 @@ class FitContext {
 		int px=0;
 		for (size_t vx=0; vx < numParam; ++vx) {
 			if (profiledOut[vx]) continue;
-			out[px] = grad[vx];
+			out[px] = haveGrad[vx]? gradZ[vx] : NA_REAL;
 			++px;
 		}
 	};
@@ -297,7 +303,8 @@ class FitContext {
 		int px=0;
 		for (size_t vx=0; vx < numParam; ++vx) {
 			if (profiledOut[vx]) continue;
-			grad[vx] = in[px];
+			gradZ[vx] = in[px];
+			haveGrad[vx] = true;
 			++px;
 		}
 	};
@@ -312,13 +319,14 @@ class FitContext {
 	};
 	template<typename T1, typename T2>
 	void setEstGradFromOptimizer(const T1 &ein, const T2 &gin) {
-		grad.resize(numParam);
-		grad.setConstant(nan("unset"));
+		haveGrad.assign(numParam, true);
+		gradZ.resize(numParam);
+		gradZ.setConstant(NA_REAL);
 		int px=0;
 		for (size_t vx=0; vx < numParam; ++vx) {
 			if (profiledOut[vx]) continue;
 			est[vx] = ein[px];
-			grad[vx] = gin[px];
+			gradZ[vx] = gin[px];
 			++px;
 		}
 		copyParamToModel();
@@ -392,14 +400,22 @@ class omxCompute {
 	bool isPersist() { return dotPersist; };
 };
 
-struct PushLoopIndex {
-	PushLoopIndex(const char *name, int ix) {
+class PushLoopIndex {
+	void init(const char *name, int ix, int last)
+	{
 		Global->computeLoopContext.push_back(name);
 		Global->computeLoopIndex.push_back(ix);
+		Global->computeLoopMax.push_back(last);
 	}
+public:
+	PushLoopIndex(const char *name, int ix, int last)
+	{ init(name, ix, last); }
+	PushLoopIndex(const char *name)
+	{ init(name, NA_INTEGER, 0); }
 	~PushLoopIndex() {
 		Global->computeLoopContext.pop_back();
 		Global->computeLoopIndex.pop_back();
+		Global->computeLoopMax.pop_back();
 	}
 };
 
@@ -513,5 +529,7 @@ void copyParamToModelFake1(omxState *os, Eigen::MatrixBase<T1> &point)
 		freeVar->copyToState(os, 1.0);
 	}
 }
+
+void AddLoadDataProvider(double version, class LoadDataProviderBase *ldp);
 
 #endif

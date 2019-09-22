@@ -264,7 +264,7 @@ void omxStateSpaceExpectation::populateAttr(SEXP algebra) {
 		
 		// Create Full observed cov prediction
 		if(OMX_DEBUG_ALGEBRA) { mxLog("Hand prediction of full observed cov ..."); }
-		omxDSYMM(FALSE, 1.0, ose->P, ose->C, 0.0, ose->Y); // Y = C P
+		omxDSYMM(FALSE, ose->P, ose->C, ose->Y); // Y = C P
 		omxCopyMatrix(ose->S, ose->R); // S = R
 		omxDGEMM(FALSE, TRUE, 1.0, ose->Y, ose->C, 1.0, ose->S); // S = Y C^T + S THAT IS C P C^T + R
 		
@@ -472,7 +472,7 @@ void omxKalmanPredict(omxStateSpaceExpectation* ose) {
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(x, "....State Space: x = A x + B u"); }
 	
 	/* P = A P A^T + Q */
-	omxDSYMM(FALSE, 1.0, P, A, 0.0, Z); // Z = A P
+	omxDSYMM(FALSE, P, A, Z); // Z = A P
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(Z, "....State Space: Z = A P"); }
 	omxCopyMatrix(P, Q); // P = Q
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(P, "....State Space: P = Q"); }
@@ -521,7 +521,6 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	toRemoveNoneOne.setZero();
 	
 	omxMatrix* covInfo = ose->covInfo;
-	int info = 0; // Used for computing inverse for Kalman gain
 	
 	omxCopyMatrix(smallS, ose->S);
 	
@@ -596,7 +595,7 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	
 	
 	/* S = C P C^T + R */
-	omxDSYMM(FALSE, 1.0, P, smallC, 0.0, smallY); // Y = C P
+	omxDSYMM(FALSE, P, smallC, smallY); // Y = C P
 	//omxCopyMatrix(S, smallR); // S = R
 	memcpy(smallS->data, smallR->data, smallR->rows * smallR->cols * sizeof(double)); // Less safe omxCopyMatrix that keeps smallS aliased to S.
 	omxDGEMM(FALSE, TRUE, 1.0, smallY, smallC, 1.0, smallS); // S = Y C^T + S THAT IS C P C^T + R
@@ -605,23 +604,21 @@ void omxKalmanUpdate(omxStateSpaceExpectation* ose) {
 	
 	/* Now compute the Kalman Gain and update the error covariance matrix */
 	/* S = S^-1 */
-	omxDPOTRF(smallS, &info); // S replaced by the lower triangular matrix of the Cholesky factorization
-	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: Cholesky of S"); }
-	covInfo->data[0] = (double) info;
-	for(int i = 0; i < smallS->cols; i++) {
-		*Det->data += log(fabs(omxMatrixElement(smallS, i, i)));
-	}
-	//det *= 2.0; //sum( log( abs( diag( chol(S) ) ) ) )*2
-	omxDPOTRI(smallS, &info); // S = S^-1 via Cholesky factorization
-	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallS, "....State Space: Inverse of S"); }
-	// If Cholesky of exp cov failed (i.e. non-positive def), Populate 1,1 element of smallS (inverse of exp cov) with NA_REAL
-	if(covInfo->data[0] > 0) {
+	EigenMatrixAdaptor EsmallS(smallS);
+	SimpCholesky< Eigen::Ref<Eigen::MatrixXd>, Eigen::Upper > sc(EsmallS);
+	if (sc.info() != Eigen::Success || !sc.isPositive()) {
+		covInfo->data[0] = 1;
 		omxSetMatrixElement(smallS, 0, 0, NA_REAL);
+	} else {
+		covInfo->data[0] = 0;
+		sc.refreshInverse();
+		*Det->data = sc.log_determinant();
+		EsmallS.derived() = sc.getInverse();
 	}
 	
 	/* K = P C^T S^-1 */
 	/* Computed as K^T = S^-1 C P */
-	omxDSYMM(TRUE, 1.0, smallS, smallY, 0.0, smallK); // K = Y^T S THAT IS K = P C^T S^-1
+	omxDSYMM(TRUE, smallS, smallY, smallK); // K = Y^T S THAT IS K = P C^T S^-1
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(smallK, "....State Space: K^T = S^-1 C P"); }
 	
 	/* x = x + K r */
@@ -897,6 +894,7 @@ void omxStateSpaceExpectation::init()
 	if(OMX_DEBUG) { mxLog("Processing first data row for y."); }
 	SSMexp->y = omxInitMatrix(ny, 1, TRUE, currentState);
 	for(int i = 0; i < ny; i++) {
+		data->assertColumnIsData(i);
 		omxSetMatrixElement(SSMexp->y, i, 0, omxDoubleDataElement(data, 0, i));
 	}
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(SSMexp->y, "....State Space: y"); }

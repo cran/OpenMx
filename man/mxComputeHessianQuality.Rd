@@ -12,7 +12,7 @@ mxComputeHessianQuality(freeSet = NA_character_, ..., verbose = 0L)
 
 \item{...}{Not used.  Forces remaining arguments to be specified by name.}
 
-\item{verbose}{Level of debugging output.}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 }
 \description{
 Tests whether the Hessian is positive definite

@@ -2,16 +2,23 @@
 % Please edit documentation in R/OriginalMx.R
 \name{imxOriginalMx}
 \alias{imxOriginalMx}
-\title{imxOriginalMx}
+\title{Run an classic mx script}
 \usage{
 imxOriginalMx(mx.filename, output.directory)
 }
 \arguments{
-\item{mx.filename}{mx.filename}
+\item{mx.filename}{Name of file containing the mx script.}
 
-\item{output.directory}{output.directory}
+\item{output.directory}{Where to write mxo output from the script}
+}
+\value{
+processed matrix output.
 }
 \description{
-This is an internal function exported for those people who know
-what they are doing.
+For this to work, classic mx must be installed, and callable from the command line.
+}
+\examples{
+\dontrun{
+output = imxOriginalMx(mx.filename = "power1.mx", "~/Desktop")
+}
 }

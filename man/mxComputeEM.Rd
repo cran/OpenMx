@@ -26,7 +26,7 @@ mxComputeEM(expectation = NULL, predict = NA_character_, mstep,
 
 \item{tolerance}{optimization is considered converged when the maximum relative change in fit is less than tolerance}
 
-\item{verbose}{level of diagnostic output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{freeSet}{names of matrices containing free variables}
 

@@ -32,8 +32,6 @@
 #include <functional>
 #include "omxDefines.h"
 #include <R_ext/Rdynload.h> 
-#include <R_ext/BLAS.h>
-#include <R_ext/Lapack.h>
 
 #include "omxMatrix.h"
 #include "omxAlgebra.h"
@@ -115,5 +113,6 @@ double totalLogLikelihood(omxMatrix *fitMat);
 
 const char *fitUnitsToName(FitStatisticUnits units);
 bool fitUnitsIsChiSq(FitStatisticUnits units);
+SEXP makeFitUnitsFactor(SEXP obj);
 
 #endif /* _OMXFITFUNCTION_H_ */

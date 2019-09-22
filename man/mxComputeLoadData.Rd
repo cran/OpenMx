@@ -34,7 +34,7 @@ mxComputeLoadData(dest, column, method = c("csv", "bgen", "pgen",
 
 \item{skip.cols}{integer. Number of columns to skip before reading data.}
 
-\item{verbose}{integer. Level of diagnostic output.}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{cacheSize}{integer. How many columns to cache per
 scan through the data. Only used when byrow=FALSE.}

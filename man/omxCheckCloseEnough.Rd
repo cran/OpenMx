@@ -4,7 +4,7 @@
 \alias{omxCheckCloseEnough}
 \title{Approximate Equality Testing Function}
 \usage{
-omxCheckCloseEnough(a, b, epsilon = 10^(-15), na.action = na.fail)
+omxCheckCloseEnough(a, b, epsilon = 10^(-15))
 }
 \arguments{
 \item{a}{a numeric vector or matrix}
@@ -12,9 +12,6 @@ omxCheckCloseEnough(a, b, epsilon = 10^(-15), na.action = na.fail)
 \item{b}{a numeric vector or matrix}
 
 \item{epsilon}{a non-negative tolerance threshold}
-
-\item{na.action}{either na.fail (default) or na.pass. Use of
-na.omit or na.exclude is not recommended.}
 }
 \description{
 This function tests whether two numeric vectors or matrixes are
@@ -26,13 +23,7 @@ ie. they must be either vectors of equal dimension or matrices of
 equal dimension. The two arguments are compared element-wise for
 approximate equality.  If the absolute value of the difference of
 any two values is greater than the threshold, then an error will
-be thrown. If \sQuote{a} and \sQuote{b} are approximately equal to
-each other, by default the function will print a statement
-informing the user the test has passed.  To turn off these print
-statements use \code{options("mxPrintUnitTests" = FALSE)}.
-
-When na.action is set to na.pass, a and b are expected to have
-identical missingness patterns.
+be thrown.
 }
 \examples{
 omxCheckCloseEnough(c(1, 2, 3), c(1.1, 1.9 ,3.0), epsilon = 0.5)

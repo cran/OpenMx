@@ -20,7 +20,6 @@
 #include "omxExpectationBA81.h"
 #include "libifa-rpf.h"
 #include "matrix.h"
-#include "omxBuffer.h"
 #include "Compute.h"
 #include "EnableWarnings.h"
 
@@ -382,7 +381,8 @@ ba81ComputeEMFit(omxFitFunction* oo, int want, FitContext *fc)
 
 				if (to < numFreeParams) {
 					if (want & FF_COMPUTE_GRADIENT) {
-						fc->grad(to) -= Scale * deriv0[ox];
+						fc->haveGrad[to] = true;
+						fc->gradZ(to) -= Scale * deriv0[ox];
 					}
 				} else {
 					if (want & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN)) {
@@ -666,7 +666,7 @@ struct ba81gradCovOp {
 		double *myDeriv = &ideriv.coeffRef(ix * itemDerivPadSize, thrId);
 		(*Glibrpf_model[id].dLL1)(spec1, iparam, abscissa.derived().data(),
 					  &expected.coeffRef(0, thrId), myDeriv);
-	};
+	}
 
 	void endQuadPoint(int thrId) {};
 };
@@ -781,7 +781,8 @@ static void gradCov(omxFitFunction *oo, FitContext *fc)
 		}
 	}
 	for (size_t d1=0; d1 < numParam; ++d1) {
-		fc->grad(d1) += thrGrad[d1];
+		fc->haveGrad[d1] = true;
+		fc->gradZ(d1) += thrGrad[d1];
 	}
 	if (fc->infoB) {
 		for (size_t d1=0; d1 < numParam; ++d1) {

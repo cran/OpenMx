@@ -20,8 +20,6 @@
 
 #include "omxDefines.h"
 #include <R_ext/Rdynload.h>
-#include <R_ext/BLAS.h>
-#include <R_ext/Lapack.h>
 
 #include "glue.h"
 #include "omxState.h"
@@ -299,6 +297,13 @@ static int untitledCounter = 0;
 
 static SEXP untitledNumberReset() {
 	untitledCounter = 0;
+	return Rf_ScalarLogical(1);
+}
+
+static SEXP loadedHook() {
+	void ComputeLoadDataLoadedHook();
+	untitledCounter = 0;
+	ComputeLoadDataLoadedHook();
 	return Rf_ScalarLogical(1);
 }
 
@@ -794,6 +799,7 @@ static R_CallMethodDef callMethods[] = {
 	{".dtmvnorm.marginal2", (DL_FUNC) dtmvnorm_marginal2, 7},
 	{".mtmvnorm", (DL_FUNC) mtmvnorm, 3},
 	{".enableMxLog", (DL_FUNC) &enableMxLog, 0},
+	{".OpenMxLoaded", (DL_FUNC) &loadedHook, 0},
 	{NULL, NULL, 0}
 };
 
@@ -804,6 +810,7 @@ extern "C" {
 void R_init_OpenMx(DllInfo *info) {
 	R_registerRoutines(info, NULL, callMethods, NULL, NULL);
 	R_useDynamicSymbols(info, FALSE);
+	R_RegisterCCallable("OpenMx", "AddLoadDataProvider", (DL_FUNC) AddLoadDataProvider);
 	R_forceSymbols(info, TRUE);
 
 	// There is no code that will change behavior whether openmp

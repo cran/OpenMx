@@ -16,7 +16,7 @@ mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
 
 \item{freeSet}{names of matrices containing free variables}
 
-\item{verbose}{level of debugging output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{engine}{deprecated}
 

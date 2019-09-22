@@ -20,12 +20,7 @@ that generates the warning and the message that is supposed to be generated, res
 \emph{note}: to test for no warning, set \code{message = NA}.
 }
 \examples{
-msg <- paste("Objective functions like mxFIMLObjective()",
-	"have been deprecated in favor of expectation and fit functions.\\n",
-	"Please use mxExpectationNormal(covariance= , means = , ...) instead,",
-	"and add a call to mxFitFunctionML().",
-	"See examples at help(mxExpectationNormal)")
-foo <- omxCheckWarning(mxFIMLObjective('cov', 'mean'), msg)
+foo <- omxCheckWarning(mxFIMLObjective('cov', 'mean'), "deprecated")
 
 # Test for no warning
 omxCheckWarning(2+2, message = NA)

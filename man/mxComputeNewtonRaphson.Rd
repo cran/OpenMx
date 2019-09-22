@@ -20,7 +20,7 @@ mxComputeNewtonRaphson(freeSet = NA_character_, ...,
 
 \item{tolerance}{optimization is considered converged when the maximum relative change in fit is less than tolerance}
 
-\item{verbose}{level of debugging output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 }
 \description{
 This optimizer requires analytic 1st and 2nd derivatives of the

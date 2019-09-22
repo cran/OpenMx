@@ -431,10 +431,18 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 		if (knownHessian) {
 			int khSize = int(khMap.size());
 			Eigen::Map< Eigen::MatrixXd > kh(knownHessian, khSize, khMap.size());
+			int warns=0;
 			for (int rx=0; rx < khSize; ++rx) {
 				for (int cx=0; cx < khSize; ++cx) {
 					if (khMap[rx] < 0 || khMap[cx] < 0) continue;
-					eH(khMap[rx], khMap[cx]) = kh(rx, cx);
+					if (!std::isfinite(kh(rx, cx))) continue;
+					if (rx < cx && fabs(kh(rx, cx) - kh(cx, rx)) > 1e-9) {
+						if (++warns < 3) {
+							Rf_warning("%s: knownHessian[%d,%d] is not symmetric",
+								   name, 1+rx, 1+cx);
+						}
+					}
+					eH(khMap[rx], khMap[cx]) = (kh(rx, cx) + kh(cx, rx))/2.0;
 				}
 			}
 		}
@@ -491,6 +499,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 	double feasibilityTolerance = Global->feasibilityTolerance;
 	for (int px=0; px < numParams; ++px) {
 		// factor out simliar code in ComputeNR
+		Gsymmetric[px] = true;
 		omxFreeVar &fv = *fc->varGroup->vars[ paramMap[px] ];
 		if ((fabs(optima[px] - fv.lbound) < feasibilityTolerance && Gc[px] > 0) ||
 		    (fabs(optima[px] - fv.ubound) < feasibilityTolerance && Gc[px] < 0)) {
@@ -499,14 +508,15 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 		}
 		gradNorm += Gc[px] * Gc[px];
 		double relsym = 2 * fabs(Gf[px] + Gb[px]) / (Gb[px] - Gf[px]);
-		Gsymmetric[px] = (Gf[px] < 0 && 0 < Gb[px] && relsym < 1.5);
+		Gsymmetric[px] &= (Gf[px] < 0 && 0 < Gb[px] && relsym < 1.5);
 		if (checkGradient && verbose >= 2 && !Gsymmetric[px]) {
 			mxLog("%s: param[%d] %d %f", name, px, Gsymmetric[px], relsym);
 		}
 	}
 	
-	fc->grad.resize(fc->numParam);
-	fc->grad.setZero();
+	fc->haveGrad.assign(fc->numParam, true);
+	fc->gradZ.resize(fc->numParam);
+	fc->gradZ.setZero();
 	fc->copyGradFromOptimizer(Gc);
 	
 	if(c_n){

@@ -19,7 +19,7 @@ mxComputeOnce(from, what = NULL, how = NULL, ...,
 
 \item{freeSet}{names of matrices containing free variables}
 
-\item{verbose}{the level of debugging output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{.is.bestfit}{do not use; for backward compatibility}
 }

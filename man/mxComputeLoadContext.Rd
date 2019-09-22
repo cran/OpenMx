@@ -6,7 +6,7 @@
 \title{Load contextual data to supplement checkpoint}
 \usage{
 mxComputeLoadContext(method = c("csv"), path = c(), column, ...,
-  sep = " ")
+  sep = " ", verbose = 0L, header = TRUE, col.names = NULL)
 }
 \arguments{
 \item{method}{name of the conduit used to load the columns.}
@@ -17,15 +17,24 @@ mxComputeLoadContext(method = c("csv"), path = c(), column, ...,
 
 \item{...}{Not used.  Forces remaining arguments to be specified by name.}
 
-\item{sep}{the field separator character. Values on each line of the file
-are separated by this character.}
+\item{sep}{the field separator character. Values on each line of the file are separated by this character.}
+
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
+
+\item{header}{logical. Whether the first row contains column headers.}
+
+\item{col.names}{character vector. Column names}
 }
 \description{
 THIS INTERFACE IS EXPERIMENTAL AND SUBJECT TO CHANGE.
 }
 \details{
-Currently, this only supports tab separated comma separated value
-format with a column header and no row names.
+Currently, this only supports comma separated value format and no
+row names. If \code{header=TRUE} and \code{col.names} are
+provided, the \code{col.names} take precedence. If
+\code{header=FALSE} and no \code{col.names} are provided then
+the column names consist of the file name and column offset.
+
 An \code{originalDataIsIndexOne} option is not offered. You'll need to
 add an extra line at the start on your file if you wish to make
 use of \code{originalDataIsIndexOne} in \code{mxComputeLoad*}.

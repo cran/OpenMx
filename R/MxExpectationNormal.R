@@ -183,49 +183,45 @@ setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
 		mns <- ret[['means']]
 		if (is.null(mns)) stop("mns is null")
 		nv <- nrow(cov)
-		covNames <- paste0('cov', vech(outer(1:nv, 1:nv, FUN=paste, sep='_')))
-		mnsNames <- paste0('mean', 1:nv)
 		thr <- ret[['thresholds']]
-		if (prod(dim(thr)) == 0) {
-			v <- c(vech(cov), mns[!is.na(mns)])
-			names(v) <- c(covNames, mnsNames[!is.na(mns)])
-		} else {
+		if (prod(dim(thr)) != 0) {
 			thrNames <- outer(paste0('thr', 1:nrow(thr)), 1:ncol(thr), paste, sep='_')
 			dth <- getThresholdMask(model, colnames(thr), subname)
-			v <- .standardizeCovMeansThresholds(cov, mns, thr, dth, vector=TRUE)
 		}
+		v <- .standardizeCovMeansThresholds(cov, mns, thr, dth, vector=TRUE)
 		return(v)
 })
 
 .standardizeCovMeansThresholds <- function(cov, means, thresholds, dth, vector=FALSE){
-	if(!is.null(names(means))){
-		mnames <- names(means)
-	} else if(!is.null(colnames(means)) && length(means) == length(colnames(means))) {
-		mnames <- colnames(means)
-	} else if(!is.null(rownames(means)) && length(means) == length(rownames(means))){
-		mnames <- rownames(means)
-	} else {
-		stop("I give up. Have no idea how to standardize this expectation.\nYour means must have rownames(), colnames(), or names().")
-	}
-	ordInd <- match(colnames(thresholds), mnames)
-	thresholds <- matrix( (c(thresholds) - rep(means[ordInd], each=nrow(thresholds)) ) / rep(sqrt(diag(cov)[ordInd]), each=nrow(thresholds)), nrow=nrow(thresholds), ncol=ncol(thresholds) )
-	means[ordInd] <- means[ordInd] - means[ordInd]
-	cov <- .ordinalCov2Cor(cov, ordInd)
+  mnames <- colnames(cov)
+  if (length(mnames) == 0) {
+    stop("I give up. Have no idea how to standardize this expectation.\nYour covariance matrix must have dimnames.")
+  }
+  if (prod(dim(thresholds)) == 0) {
+    ordInd <- c()
+  } else {
+    ordInd <- match(colnames(thresholds), mnames)
+    thresholds <- matrix( (c(thresholds) - rep(means[ordInd], each=nrow(thresholds)) ) / rep(sqrt(diag(cov)[ordInd]), each=nrow(thresholds)), nrow=nrow(thresholds), ncol=ncol(thresholds) )
+    means[ordInd] <- means[ordInd] - means[ordInd]
+    cov <- .ordinalCov2Cor(cov, ordInd)
+  }
 	if(!vector){
 		return(list(cov=cov, means=means, thresholds=thresholds))
 	} else {
 		v <- c()
 		vn <- c()
-		for (vx in 1:length(mnames)) {
-			tcol <- which(vx == ordInd)
-			if (length(tcol) == 0) {
-				v <- c(v, means[vx])
-				vn <- c(vn, mnames[vx])
-			} else {
-				tcount <- sum(dth[,tcol])
-				v <- c(v, thresholds[1:tcount,tcol])
-				vn <- c(vn, paste0(mnames[vx], 't', 1:tcount))
-			}
+		if (length(means)) {
+		  for (vx in 1:length(mnames)) {
+		    tcol <- which(vx == ordInd)
+		    if (length(tcol) == 0) {
+		      v <- c(v, means[vx])
+		      vn <- c(vn, mnames[vx])
+		    } else {
+		      tcount <- sum(dth[,tcol])
+		      v <- c(v, thresholds[1:tcount,tcol])
+		      vn <- c(vn, paste0(mnames[vx], 't', 1:tcount))
+		    }
+		  }
 		}
 		for (vx in 1:length(mnames)) {
 			if (any(vx == ordInd)) next
@@ -379,17 +375,49 @@ mxCheckIdentification <- function(model, details=TRUE){
 }
 
 setGeneric("genericGenerateData",
-	function(.Object, model, nrows, subname) {
+	function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
+		   .backend, nrowsProportion) {
 	return(standardGeneric("genericGenerateData"))
 })
 
 setMethod("genericGenerateData", signature("MxExpectationNormal"),
-	function(.Object, model, nrows, subname) {
-		return(generateNormalData(model, nrows, subname))
-})
+	  function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
+		   .backend, nrowsProportion) {
+	    return(generateNormalData(model, nrows, subname, empirical, returnModel,
+				      use.miss, .backend, nrowsProportion))
+	  })
 
-generateNormalData <- function(model, nrows, subname){
-	origData <- findDataForSubmodel(model, subname)
+.rmvnorm <- function(nrow, mean, sigma, empirical) {
+  if (!empirical) {
+    mvtnorm::rmvnorm(nrow, mean, sigma)
+  } else {
+    MASS::mvrnorm(nrow, mu=mean, Sigma=sigma, empirical=TRUE)
+  }
+}
+
+calcNumRows <- function(nrows, nrowsProportion, origRows, subname) {
+  if (is.null(nrows)) {
+    if (is.null(origRows)) stop("You must specify nrows")
+    if (!is.null(nrowsProportion)) {
+      nrows <- round(origRows * nrowsProportion)
+      if (nrows < 1) {
+	nrows <- 1
+	warning(paste("In model", omxQuotes(subname),
+		      "nrowsProportion is too small. Rounding up to 1 row"))
+      }
+    } else {
+      nrows <- origRows
+    }
+  }
+  nrows
+}
+
+generateNormalData <- function(model, nrows, subname, empirical, returnModel, use.miss,
+			       .backend, nrowsProportion) {
+  origData <- findDataForSubmodel(model, subname)
+  origRows <- if (!is.null(origData)) { nrowMxData(origData) } else { NULL }
+  nrows <- calcNumRows(nrows, nrowsProportion, origRows, subname)
+
 	# Check for definition variables
 	if(imxHasDefinitionVariable(model[[subname]])){
 		if (origData$type != 'raw') {
@@ -409,7 +437,7 @@ generateNormalData <- function(model, nrows, subname){
 			theMeans <- imxGetExpectationComponent(model, "means", defvar.row=i, subname=subname)
 			theCov <- imxGetExpectationComponent(model, "covariance", defvar.row=i, subname=subname)
 			theThresh <- imxGetExpectationComponent(model, "thresholds", defvar.row=i, subname=subname)
-			data[i,] <- mvtnorm::rmvnorm(1, theMeans, theCov)
+			data[i,] <- .rmvnorm(1, theMeans, theCov, empirical)
 		}
 		data <- ordinalizeDataHelper(data, theThresh, origData)
 		if (!is.null(origData)) {
@@ -417,20 +445,43 @@ generateNormalData <- function(model, nrows, subname){
 				data[[dcol]] <- origData[[dcol]]
 			}
 		}
+	} else if (!is.null(origData) && origData$type == 'cov' && returnModel) {
+		theMeans <- imxGetExpectationComponent(model, "means", subname=subname)
+		theCov <- imxGetExpectationComponent(model, "covariance", subname=subname)
+		if (length(theMeans) == 0) theMeans <- NA
+		if (empirical) {
+		  got <- mxModel(model[[subname]], mxData(theCov, "cov", means=theMeans, numObs=nrows))
+		} else {
+		  newCov <- rWishart(1, nrows, theCov)[,,1] / nrows
+		  dimnames(newCov) <- dimnames(theCov)
+		  got <- mxModel(model[[subname]],
+				 mxData(newCov, "cov", means=theMeans, numObs=nrows))
+		}
+		  return(got)
 	} else{
-		#use generic functions and mvtnorm::rmvnorm() to generate data
 		theMeans <- imxGetExpectationComponent(model, "means", subname=subname)
 		theCov <- imxGetExpectationComponent(model, "covariance", subname=subname)
 		theThresh <- imxGetExpectationComponent(model, "thresholds", subname=subname)
 		if (length(theMeans) == 0) {
 			theMeans <- rep(0, nrow(theCov))
 		}
-		data <- mvtnorm::rmvnorm(nrows, theMeans, theCov)
+		data <- .rmvnorm(nrows, theMeans, theCov, empirical)
 		colnames(data) <- colnames(theCov)
 		data <- as.data.frame(data)
 		data <- ordinalizeDataHelper(data, theThresh, origData)
 	}
-	return(data)
+        if (use.miss && !is.null(origData) && all(colnames(data) %in% colnames(origData))) {
+	  del <- is.na(origData[,colnames(data),drop=FALSE])
+	  if (nrows != origRows) {
+	    del    <- del[sample.int(nrow(origData), nrows, replace=TRUE),,drop=FALSE]
+	  }
+	  data[del] <- NA
+	}
+	if (returnModel) {
+	  mxModel(model[[subname]], mxData(as.data.frame(data), "raw"))
+	} else {
+	  as.data.frame(data)
+	}
 }
 
 ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
@@ -455,10 +506,12 @@ ordinalizeDataHelper <- function(data, thresh, origData=NULL) {
 	return(data)
 }
 
-generateRelationalData <- function(model, returnModel, .backend, subname) {
+generateRelationalData <- function(model, returnModel, .backend, subname, empirical) {
 	model <- model[[subname]]
 	# TODO add outside data reference to relational data
 	if (.backend) {
+	  if (empirical) stop("mxGenerateData(..., empirical=TRUE) is not implemented for multilevel models")
+
 		plan <- mxComputeGenerateData()
 		model$expectation$.maxDebugGroups <- 0L
 		model$expectation$.optimizeMean <- 0L
@@ -495,6 +548,7 @@ generateRelationalData <- function(model, returnModel, .backend, subname) {
 		}
 	}
 
+	# nocov start
 	plan <- mxComputeSequence(list(
 	    mxComputeOnce('expectation', 'distribution', 'flat'),
 	    mxComputeReportExpectation()
@@ -519,8 +573,8 @@ generateRelationalData <- function(model, returnModel, .backend, subname) {
 		groupTodo <- ed$layout[ed[[groupName]]$layout[,'aIndex'],]
 		for (cx in 1:numCopies) {
 			todo <- groupTodo[seq(1+(cx-1)*clumpSize, cx*clumpSize),]
-			repl1 <- mvtnorm::rmvnorm(1, ed[[groupName]]$mean[seq(1+(cx-1)*cxLength, cx*cxLength)],
-						  sigma=as.matrix(ed[[groupName]]$covariance))
+			repl1 <- .rmvnorm(1, ed[[groupName]]$mean[seq(1+(cx-1)*cxLength, cx*cxLength)],
+					  sigma=as.matrix(ed[[groupName]]$covariance), empirical)
 			dx <- 1
 			for (tx in 1:nrow(todo)) {
 				modelName <- as.character(todo[tx,'model'])
@@ -557,6 +611,7 @@ generateRelationalData <- function(model, returnModel, .backend, subname) {
 		}
 		model
 	}
+	# nocov end
 }
 
 simulate.MxModel <- function(object, nsim = 1, seed = NULL, ...) {
@@ -583,10 +638,16 @@ extractObservedData <- function(model) {
 }
 
 mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE,
-			   ..., .backend=TRUE, subname=NULL) {
+			   ..., .backend=TRUE, subname=NULL, empirical=FALSE, nrowsProportion=NULL) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxGenerateData does not accept values for the '...' argument")
+	}
+	if (!is.null(nrows) && !is.null(nrowsProportion)) {
+	  stop("You cannot specify both nrows and nrowsProportion")
+	}
+	if (!is.null(nrows) && nrows != round(nrows)) {
+	  stop(paste("Cannot generate a non-integral number of rows:", nrows))
 	}
 	if (is(model, 'data.frame')) {
 		fake <- omxAugmentDataWithWLSSummary(mxData(model,'raw'), "ULS", "marginals",
@@ -596,15 +657,24 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 		fake$M$values <- obsStats$means
 		if (!is.null(obsStats$thresholds)) fake$thresh$values <- obsStats$thresholds
 
+		if (!is.null(nrowsProportion)) {
+		  nrows <- round(nrow(model) * nrowsProportion)
+		  if (nrows < 1) {
+		    nrows <- 1
+		    warning(paste("In model", omxQuotes(model$name),
+				  "nrowsProportion is too small. Rounding up to 1 row"))
+		  }
+		}
 		if(is.null(nrows)) nrows <- nrow(model)
-		return(mxGenerateData(fake, nrows, returnModel))
+		return(mxGenerateData(fake, nrows, returnModel, empirical=empirical))
 	}
 	if(is.null(subname)) subname <- model$name
 	if (is.null(model[[subname]]$expectation) && is(model[[subname]]$fitfunction, 'MxFitFunctionMultigroup')) {
 		todo <- sub(".fitfunction", "", model[[subname]]$fitfunction$groups, fixed=TRUE)
 		for (s1 in todo) {
-			model <- mxModel(model, mxGenerateData(model, returnModel=TRUE, nrows=nrows,
-							       use.miss=use.miss, .backend=.backend, subname=s1))
+		  model <- mxModel(model, mxGenerateData(model, returnModel=TRUE, nrows=nrows,
+							 use.miss=use.miss, .backend=.backend, subname=s1,
+							 empirical=empirical, nrowsProportion=nrowsProportion))
 		}
 		if (!returnModel) {
 			return(extractObservedData(model))
@@ -612,41 +682,8 @@ mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE
 			return(model)
 		}
 	}
-	fellner <- is(model[[subname]]$expectation, "MxExpectationRAM") && length(model[[subname]]$expectation$between);
-	if (!fellner) {
-		origData <- NULL
-		if (!is.null(model[[subname]]@data)) {
-			if (model[[subname]]@data@type == 'raw') {
-				origData <- model[[subname]]@data@observed
-				if (length(nrows)==0) nrows <- nrow(origData)
-			} else if (model[[subname]]@data@type %in% c('cov','cor')) {
-				if (length(nrows)==0) nrows <- model[[subname]]@data@numObs
-			}
-		}
-		if (is.null(nrows)) stop("You must specify nrows")
-		if (nrows != round(nrows)) stop(paste("Cannot generate a non-integral number of rows:", nrows))
-		data <- genericGenerateData(model[[subname]]$expectation, model, nrows, subname)
-		if (use.miss && !is.null(origData) && all(colnames(data) %in% colnames(origData))) {
-			del <- is.na(origData[,colnames(data),drop=FALSE])
-			if (nrows != nrow(origData)) {
-				del    <- del[sample.int(nrow(origData), nrows, replace=TRUE),,drop=FALSE]
-			}
-			data[del] <- NA
-		}
-		if (returnModel) {
-			mxModel(model[[subname]], mxData(as.data.frame(data), "raw"))
-		} else {
-			as.data.frame(data)
-		}
-	} else {
-		if (!use.miss) {
-			stop("use.miss=FALSE is not implemented for relational models")
-		}
-		if (length(nrows)) {
-			stop("Specification of the number of rows is not supported for relational models")
-		}
-		generateRelationalData(model, returnModel, .backend, subname)
-	}
+	genericGenerateData(model[[subname]]$expectation, model, nrows, subname, empirical,
+			    returnModel, use.miss, .backend, nrowsProportion)
 }
 
 verifyExpectedObservedNames <- function(data, covName, flatModel, modelname, objectiveName) {

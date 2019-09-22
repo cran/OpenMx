@@ -16,6 +16,6 @@ Get the non-CRAN version of OpenMx from the OpenMx website.
 This function
 }
 \examples{
-\dontrun{omxGetNPSOL()}
+\donttest{omxGetNPSOL()}
 
 }

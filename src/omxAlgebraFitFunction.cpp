@@ -16,7 +16,6 @@
 
 #include "omxFitFunction.h"
 #include "matrix.h"
-#include "omxBuffer.h"
 #include <algorithm>
 #include "Compute.h"
 #include "EnableWarnings.h"
@@ -144,7 +143,8 @@ void AlgebraFitFunction::compute(int want, FitContext *fc)
 			for (size_t v1=0; v1 < gradMap.size(); ++v1) {
 				int to = gradMap[v1];
 				if (to < 0) continue;
-				fc->grad(to) += omxVectorElement(gradient, v1);
+				fc->haveGrad[to] = true;
+				fc->gradZ(to) += omxVectorElement(gradient, v1);
 			}
 		}
 		if (want & FF_COMPUTE_INFO && fc->infoMethod == INFO_METHOD_MEAT) {

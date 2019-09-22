@@ -31,8 +31,6 @@
 
 #include "omxDefines.h"
 #include <R_ext/Rdynload.h> 
-#include <R_ext/BLAS.h>
-#include <R_ext/Lapack.h>
 
 #include "omxMatrix.h"
 #include "omxAlgebra.h"
@@ -87,6 +85,7 @@ class omxExpectation {					// An Expectation
 		asVector1(fc, row, out.derived());
 	}
 
+	virtual bool usesDataColumnNames() const { return true; }
 	void loadFromR();
 	bool loadDefVars(int row);
 

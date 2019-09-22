@@ -199,8 +199,9 @@ void NewtonRaphsonOptimizer::lineSearch(NewtonRaphsonObjective &nro)
 		}
 	}
 
-	if (verbose >= 3) mxLog("%s: using steepestDescent %d probes %d speed %f improved %.3g",
-				name, steepestDescent, probeCount, bestSpeed, bestImproved);
+	if (verbose >= 3) mxLog("%s: %s, probes %d speed %f improved %.3g",
+				name, steepestDescent?"steepestDescent":"normal step",
+				probeCount, bestSpeed, bestImproved);
 	priorSpeed = bestSpeed;
 
 	trial = (prevEst - bestSpeed * searchDir).
@@ -249,7 +250,7 @@ struct ComputeNRO : public NewtonRaphsonObjective {
 	virtual double getFit() { return fc->fit; };
 	virtual void resetDerivs() {
 		fc->resetOrdinalRelativeError();
-		fc->grad = Eigen::VectorXd::Zero(nr.numParam);
+		fc->initGrad(nr.numParam);
 		fc->clearHessian();
 	};
 	virtual const char *paramIndexToName(int px)
@@ -267,7 +268,7 @@ struct ComputeNRO : public NewtonRaphsonObjective {
 		ComputeFit(nr.engineName, nr.fitMatrix, want, fc);
 	}
 	virtual double *getParamVec() { return fc->est; };
-	virtual double *getGrad() { return fc->grad.data(); };
+	virtual double *getGrad() { return fc->gradZ.data(); };
 	virtual void setSearchDir(Eigen::Ref<Eigen::VectorXd> searchDir) {
 		searchDir = fc->ihessGradProd();
 	}
@@ -419,9 +420,9 @@ void ComputeNR::computeImpl(FitContext *fc)
 		double feasibilityTolerance = Global->feasibilityTolerance;
 		// factor out simliar code in omxHessianCalculation
 		for (int gx=0; gx < numParam; ++gx) {
-			if ((fc->grad[gx] > 0 && fabs(fc->est[gx] - obj.lbound[gx]) < feasibilityTolerance) ||
-			    (fc->grad[gx] < 0 && fabs(fc->est[gx] - obj.ubound[gx]) < feasibilityTolerance)) continue;
-			double g1 = fc->grad[gx];
+			if ((fc->gradZ[gx] > 0 && fabs(fc->est[gx] - obj.lbound[gx]) < feasibilityTolerance) ||
+			    (fc->gradZ[gx] < 0 && fabs(fc->est[gx] - obj.ubound[gx]) < feasibilityTolerance)) continue;
+			double g1 = fc->gradZ[gx];
 			gradNorm += g1 * g1;
 		}
 		gradNorm = sqrt(gradNorm);

@@ -12,3 +12,6 @@ omxDetectCores(...)
 \description{
 Detects the number of cores on the local machine
 }
+\examples{
+omxDetectCores()
+}

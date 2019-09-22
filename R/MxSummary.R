@@ -60,7 +60,7 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 		return(list(0, historySet))
 	}
 	obsStats <- data@observedStats
-	if (data@type == 'cov' || data@type == 'sscp') {
+	if (data@type == 'cov') {
 		if (data@name %in% historySet) {
 			return (list(0, historySet))
 		}
@@ -265,7 +265,7 @@ rmseaConfidenceIntervalHelper <- function(chi.squared, df, N, lower, upper){
 	# Lower confidence interval
 	if( pchisq(chi.squared, df=df, ncp=0) >= upper){ #sic
 		lower.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared,
-			degf=df, goal=upper, extendInt="upX")$root
+			degf=df, goal=upper, extendInt="upX", maxiter=100L)$root
 		# solve pchisq(ch, df=df, ncp=x) == upper for x
 	} else{
 		lower.lam <- 0
@@ -273,7 +273,7 @@ rmseaConfidenceIntervalHelper <- function(chi.squared, df, N, lower, upper){
 	# Upper confidence interval
 	if( pchisq(chi.squared, df=df, ncp=0) >= lower){ #sic
 		upper.lam <- uniroot(f=pChiSqFun, interval=c(1e-10, 1e4), val=chi.squared,
-			degf=df, goal=lower, extendInt="upX")$root
+			degf=df, goal=lower, extendInt="upX", maxiter=100L)$root
 		# solve pchisq(ch, df=df, ncp=x) == lower for x
 	} else{
 		upper.lam <- 0
@@ -322,15 +322,6 @@ parameterListHelper <- function(model, withModelName) {
 			mCol <- parameters[[i]][[5]][[3]] + 1
 			lbound <- parameters[[i]][[1]]
 			ubound <- parameters[[i]][[2]]
-			aMatrix <- matrices[[mLocation]][[1]]
-			if (getOption('mxShowDimnames')) {
-				if (!is.null(rownames(aMatrix))) {
-					mRow <- rownames(aMatrix)[[mRow]]
-				}
-				if (!is.null(colnames(aMatrix))) {
-					mCol <- colnames(aMatrix)[[mCol]]
-				}
-			}
 			if (withModelName) {
 				ptable[i, 'model'] <- model@name
 			}

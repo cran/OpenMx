@@ -60,7 +60,8 @@ setClass(Class = "MxDataStatic",
 	     weight = "MxCharOrNumber",
 	     frequency = "MxCharOrNumber",
 	     minVariance = "numeric",
-	     algebra = "MxOptionalCharOrNumber"))
+	   algebra = "MxOptionalCharOrNumber",
+	   warnNPDacov = "logical"))
 
 setClass(Class = "MxDataDynamic",
 	 contains = "NonNullData",
@@ -74,7 +75,7 @@ setClassUnion("MxData", c("NULL", "MxDataStatic", "MxDataDynamic"))
 setMethod("initialize", "MxDataStatic",
 	  function(.Object, observed, means, type, numObs, observedStats,
 		   sort, primaryKey, weight, frequency, verbose, .parallel, .noExoOptimize,
-		   minVariance, algebra) {
+		   minVariance, algebra, warnNPDacov) {
 		.Object@observed <- observed
 		.Object@means <- means
 		.Object@type <- type
@@ -101,6 +102,7 @@ setMethod("initialize", "MxDataStatic",
 		.Object@verbose <- verbose
 		.Object@minVariance <- minVariance
 		.Object@algebra <- algebra
+		.Object@warnNPDacov <- warnNPDacov
 		return(.Object)
 	}
 )
@@ -126,7 +128,17 @@ setReplaceMethod("$", "MxData",
 setMethod("names", "MxData", slotNames)
 
 ##' Valid types of data that can be contained by MxData
-imxDataTypes <- c("raw", "cov", "cor", "sscp", "acov")
+imxDataTypes <- c("raw", "cov", "cor", "acov")
+
+nrowMxData <- function(mxd) {
+    if (mxd@type == 'raw') {
+      return(nrow(mxd$observed))
+    } else if (mxd@type %in% c('cov','cor')) {
+      return(mxd@numObs)
+    } else {
+      stop(paste("nrowMxData not implemented for type", omxQuotes(mxd@type)))
+    }
+}
 
 ##' Create dynamic data
 ##'
@@ -152,7 +164,8 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 		   thresholds=NA, ...,
 		   observedStats=NA, sort=NA, primaryKey = as.character(NA), weight = as.character(NA),
 		   frequency = as.character(NA), verbose=0L, .parallel=TRUE, .noExoOptimize=TRUE,
-		   minVariance=sqrt(.Machine$double.eps), algebra=c()) {
+		   minVariance=sqrt(.Machine$double.eps), algebra=c(),
+		   warnNPDacov=TRUE) {
 	garbageArguments <- list(...)
 	if (length(garbageArguments) > 0) {
 		stop("mxData does not accept values for the '...' argument")
@@ -190,9 +203,6 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 	rm(acov)
 	rm(fullWeight)
 	rm(thresholds)
-	if (type == "sscp") {
-		stop(paste("'sscp' is not yet implemented."))
-	}
 	if ((!is.vector(means) && !(prod(dim(means)) == length(means))) || !is.numeric(means)) {
 		stop("Means argument must be of numeric vector type")
 	}
@@ -284,7 +294,7 @@ mxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=
 	return(new("MxDataStatic", observed, means, type, as.numeric(numObs),
 		observedStats, sort, primaryKey, weight, frequency, as.integer(verbose),
 		as.logical(.parallel), as.logical(.noExoOptimize), minVariance,
-		as.character(algebra)))
+		as.character(algebra), as.logical(warnNPDacov)))
 }
 
 setGeneric("preprocessDataForBackend", # DEPRECATED

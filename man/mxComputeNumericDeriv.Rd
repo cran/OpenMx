@@ -24,7 +24,7 @@ mxComputeNumericDeriv(freeSet = NA_character_, ...,
 
 \item{iterations}{number of Richardson extrapolation iterations (defaults to 4L)}
 
-\item{verbose}{Level of debugging output.}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{knownHessian}{an optional matrix of known Hessian entries}
 
@@ -50,6 +50,12 @@ symmetry. When sufficient asymmetry is detected, the standard
 error is flagged. In the case, profile likelihood confidence
 intervals should be used for inference instead of standard errors
 (see \code{mxComputeConfidenceInterval}).
+
+If provided, the square matrix \code{knownHessian} should have
+dimnames set to the names of some subset of the free
+parameters. Entries of the matrix set to NA will be estimated
+numerically while entries containing finite values will be copied
+to the Hessian result.
 }
 \examples{
 library(OpenMx)

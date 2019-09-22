@@ -31,8 +31,6 @@
 #include "omxDefines.h"
 
 #include <R_ext/Rdynload.h>
-#include <R_ext/BLAS.h>
-#include <R_ext/Lapack.h>
 #include <sys/types.h>
 
 #include <time.h>
@@ -269,8 +267,13 @@ class omxGlobal {
 	std::vector< omxCompute* > computeList;
 	void omxProcessMxComputeEntities(SEXP rObj, omxState *currentState);
 
+	// bundle computeLoop* into a structure?
 	std::vector<const char *> computeLoopContext;
 	std::vector<int> computeLoopIndex;
+	std::vector<int> computeLoopMax;
+	int lastIndexDone;
+	time_t lastIndexDoneTime;
+
 	std::vector< std::string > checkpointColnames;
 	std::vector< std::string > checkpointValues;
 	std::vector< std::string > bads;

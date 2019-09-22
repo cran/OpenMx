@@ -141,7 +141,7 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 		this->data = _data;
 		this->thresholdMat = tMat;
 		this->colInfoPtr = &colInfo;
-	};
+	}
 
 	template <typename T1>
 	void setCovariance(Eigen::MatrixBase<T1> &cov, FitContext *fc)
@@ -268,14 +268,14 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 		for (int bx=0; bx < (int)blocks.size(); ++bx) {
 			blocks[bx].setMean(meanIn);
 		}
-	};
+	}
 
 	template <typename T1>
 	void setColumns(Eigen::ArrayBase<T1> &colIn)
 	{
 		//mxPrintMat("setColumns", colIn);
 		ordColumns = colIn;
-	};
+	}
 
 	inline double likelihood(FitContext *fc, int row)
 	{
@@ -284,7 +284,7 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 			lk *= blocks[bx].likelihood(fc, row);  // log space instead?
 		}
 		return lk;
-	};
+	}
 
 	template <typename T1, typename T2>
 	double likelihood(FitContext *fc, const Eigen::MatrixBase<T1> &lbound, const Eigen::MatrixBase<T2> &ubound)
@@ -296,7 +296,7 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 			lk *= l1;
 		}
 		return lk;
-	};
+	}
 
 	void log()
 	{
@@ -568,7 +568,7 @@ bool _dtmvnorm_marginal2(FitContext *fc, double alpha, const Eigen::MatrixBase<T
 		loc[0] = xq[dx];
 		loc[1] = xr[dx];
 		double dist = loc.transpose() * covDecomp.getInverse() * loc;
-		density[dx] = exp(-0.5 * (M_LN_2PI * 2 + covDecomp.log_determinant() + dist)) / alpha;
+		density[dx] = exp(-(M_LN_2PI + covDecomp.log_determinant() + dist * 0.5)) / alpha;
 	}
 
 	if (sigma.rows() == 2) return true;

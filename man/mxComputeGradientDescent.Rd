@@ -23,7 +23,7 @@ mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
 
 \item{fitfunction}{name of the fitfunction (defaults to 'fitfunction')}
 
-\item{verbose}{level of debugging output}
+\item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
 \item{tolerance}{how close to the optimum is close enough (also known as the optimality tolerance)}
 

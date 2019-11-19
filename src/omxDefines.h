@@ -86,12 +86,6 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #define OMX_DEBUG_ROWS(row) 0
 #endif /* DEBUGMX_ROWS */
 
-#ifdef DEBUGMX_MATRIX
-#define OMX_DEBUG_MATRIX 1
-#else
-#define OMX_DEBUG_MATRIX 0
-#endif /* DEBUGMX_MATRIX */
-
 #ifdef DEBUGMX_ALGEBRA
 #define OMX_DEBUG_ALGEBRA 1
 #else
@@ -247,6 +241,7 @@ static inline int omp_get_thread_num() { return 0; }
 static inline int omp_get_num_threads(void) { return 1; }
 #endif
 
+#include <stan/math/prim/mat/fun/Eigen.hpp>
 #include <Eigen/Core>
 
 // Refactor as a single split function that pulls out all 3 parts

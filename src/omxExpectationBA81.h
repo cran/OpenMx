@@ -50,6 +50,7 @@ struct BA81LatentSummary {
 };
 
 class BA81Expect : public omxExpectation {
+	typedef omxExpectation super;
  public:
 	virtual ~BA81Expect();
 	virtual void init();
@@ -95,7 +96,8 @@ class BA81Expect : public omxExpectation {
 	bool debugInternal;
 	struct omxFitFunction *fit;  // weak pointer
 
-	BA81Expect() : grp(Global->numThreads, true) {};
+	BA81Expect(omxState *st, int num) :
+		super(st, num), grp(Global->numThreads, true) {};
 	const char *getLatentIncompatible(BA81Expect *other);
 
 	void refreshPatternLikelihood(bool hasFreeLatent);

@@ -96,7 +96,7 @@ setMethod("genericExpRename", signature("MxExpectationNormal"),
 setMethod("genericGetExpected", signature("MxExpectationNormal"),
 	function(.Object, model, what, defvar.row=1, subname=model@name) {
 		ret <- list()
-		if ('covariance' %in% what) {
+		if (any(c('covariance','covariances') %in% what)) {
 			covname <- .modifyDottedName(subname, .Object@covariance)
 			cov <- mxEvalByName(covname, model, compute=TRUE, defvar.row=defvar.row)
 			dnames <- .Object$dims
@@ -106,7 +106,7 @@ setMethod("genericGetExpected", signature("MxExpectationNormal"),
 			}
 			ret[['covariance']] <- cov
 		}
-		if ('means' %in% what) {
+		if (any(c('means', 'mean') %in% what)) {
 			meanname <- .Object@means
 			if(!single.na(meanname)){
 				meanname <- .modifyDottedName(subname, meanname, sep=".")
@@ -254,6 +254,9 @@ setMethod("genericGetExpectedStandVector", signature("BaseExpectationNormal"),
 
 imxGetExpectationComponent <- function(model, component, defvar.row=1, subname=model$name)
 {
+  if (!is(model[[subname]], "MxModel")) {
+    stop(paste("Submodel", subname, "in model", model$name, "is not found"))
+  }
 	if(is.null(model[[subname]]$expectation) && (class(model[[subname]]$fitfunction) %in% "MxFitFunctionMultigroup") ){
 		submNames <- sapply(strsplit(model$fitfunction$groups, ".", fixed=TRUE), "[", 1)
 		got <- list()
@@ -639,10 +642,7 @@ extractObservedData <- function(model) {
 
 mxGenerateData <- function(model, nrows=NULL, returnModel=FALSE, use.miss = TRUE,
 			   ..., .backend=TRUE, subname=NULL, empirical=FALSE, nrowsProportion=NULL) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxGenerateData does not accept values for the '...' argument")
-	}
+	prohibitDotdotdot(list(...))
 	if (!is.null(nrows) && !is.null(nrowsProportion)) {
 	  stop("You cannot specify both nrows and nrowsProportion")
 	}

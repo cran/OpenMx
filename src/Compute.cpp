@@ -931,12 +931,11 @@ void FitContext::log(int what)
 std::string FitContext::asProgressReport()
 {
 	std::string str;
-	if (!std::isfinite(previousReportFit) || !std::isfinite(fit) ||
-	    previousReportFit == fit) {
+	if (!std::isfinite(previousReportFit) || !std::isfinite(fit)) {
 		str = string_snprintf("evaluations %d fit %.6g", getGlobalComputeCount(), fit);
 	} else {
 		str = string_snprintf("evaluations %d fit %.6g change %.4g",
-				      getGlobalComputeCount(), fit, fit - previousReportFit);
+													getGlobalComputeCount(), fit, fit - previousReportFit);
 	}
 	previousReportFit = fit;
 	return str;
@@ -1060,16 +1059,6 @@ void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at)
 	for(size_t k = 0; k < numParam; k++) {
 		omxFreeVar* freeVar = varGroup->vars[k];
 		freeVar->copyToState(os, at[k]);
-	}
-}
-
-void copyParamToModelRestore(omxState *os, const Eigen::Ref<const Eigen::VectorXd> point)
-{
-	auto varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
-	size_t numParam = varGroup->vars.size();
-	for(size_t k = 0; k < numParam; k++) {
-		omxFreeVar* freeVar = varGroup->vars[k];
-		freeVar->copyToState(os, point[k]);
 	}
 }
 
@@ -1991,7 +1980,7 @@ struct ParJacobianSense {
 		for (int ex=0, offset=0; ex < numOf; offset += numStats[ex++]) {
 			if (exList) {
 				(*exList)[ex]->asVector(fc, defvar_row, tmp);
-				result1.segment(offset, numStats[ex]) =
+				result1.block(offset, 0, numStats[ex], 1) =
 					tmp.segment(0, numStats[ex]);
 			} else {
 				omxMatrix *mat = (*alList)[ex];
@@ -2000,11 +1989,51 @@ struct ParJacobianSense {
 				if (numStats[ex] != vec.size()) {
 					mxThrow("Algebra '%s' changed size during Jacobian", mat->name());
 				}
-				result1.segment(offset, numStats[ex]) = vec;
+				result1.block(offset, 0, numStats[ex], 1) = vec;
 			}
 		}
 	}
 };
+
+struct ParJacobianSense1 {
+	FitContext *fc;
+	omxMatrix *alg;
+	Eigen::MatrixXd ref;
+	Eigen::MatrixXd result;
+
+	ParJacobianSense1() : alg(0) {};
+
+	void attach(omxMatrix * _alg) {
+		if (_alg) mxThrow("_alg");
+		alg = _alg;
+	};
+
+	void measureRef(FitContext *_fc) {
+		using Eigen::Map;
+		using Eigen::VectorXd;
+		fc = _fc;
+		int numFree = fc->calcNumFree();
+		Map< VectorXd > curEst(fc->est, numFree);
+		result.resize(alg->rows, alg->cols);
+		ref.resize(alg->rows, alg->cols);
+		(*this)(curEst, ref);
+	}
+
+	template <typename T1, typename T2>
+	void operator()(Eigen::MatrixBase<T1> &, Eigen::MatrixBase<T2> &result1) const {
+		fc->copyParamToModel();
+		omxRecompute(alg, fc);
+		EigenMatrixAdaptor Ealg(alg);
+		result1 = Ealg;
+	}
+};
+
+// usage:
+//
+// ParJacobianSense1 sense;
+// sense.attach(myAlgebra);
+// sense.measureRef(fc);
+// fd_jacobian1<false>(GradientAlgorithm_Forward, 2, 1e-4, sense, sense.ref, curEst, px, sense.result);
 
 class ComputeJacobian : public omxCompute {
 	typedef omxCompute super;
@@ -2563,9 +2592,11 @@ void ComputeLoop::computeImpl(FitContext *fc)
 	bool hasIndices = indicesLength != 0;
 	bool hasMaxIter = maxIter != NA_INTEGER;
 	time_t startTime = time(0);
+	int lastIndex = indicesLength;
+	if (hasMaxIter) lastIndex = std::min(lastIndex, maxIter);
 	while (1) {
 		PushLoopIndex pli(name, hasIndices? indices[iterations] : startFrom+iterations,
-				  hasMaxIter? maxIter : 0);
+											iterations, lastIndex);
 		++iterations;
 		++fc->iterations;
 		for (size_t cx=0; cx < clist.size(); ++cx) {
@@ -4590,7 +4621,15 @@ void ComputeLoadData::initFromFrontend(omxState *globalState, SEXP rObj)
 			break;
 		}
 	}
-	if (!provider) mxThrow("%s: unknown method '%s'", name, methodName);
+	if (!provider) {
+		std::string avail;
+		for (auto pr : Providers) {
+			avail += " ";
+			avail += pr->getName();
+		}
+		mxThrow("%s: unknown provider '%s'; available providers are:%s",
+						name, methodName, avail.c_str());
+	}
 
 	if (provider->wantCheckpoint()) {
 		auto &cp = Global->checkpointColnames;
@@ -4635,10 +4674,17 @@ void ComputeLoadData::loadedHook()
 	Providers.push_back(new LoadDataDFProvider());
 }
 
-void AddLoadDataProvider(double version, LoadDataProviderBase *ldp)
+void AddLoadDataProvider(double version, int ldpbSz, LoadDataProviderBase *ldp)
 {
-	if (version != OPENMX_LOAD_DATA_API_VERSION)
+	if (version == OPENMX_LOAD_DATA_API_VERSION) {
+		if (ldpbSz != sizeof(LoadDataProviderBase)) {
+			mxThrow("Cannot add mxComputeLoadData provider, version matches "
+							"but OpenMx is compiled with different compiler options (%d != %d)",
+							ldpbSz, int(sizeof(LoadDataProviderBase)));
+		}
+	} else {
 		mxThrow("Cannot add mxComputeLoadData provider, version mismatch");
+	}
 	ComputeLoadData::addProvider(ldp);
 }
 
@@ -5128,7 +5174,7 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 				else       { ofs << '\t'; }
 				ofs << cn;
 			}
-			ofs << '\n';
+			ofs << std::endl;
 			wroteHeader = true;
 		}
 
@@ -5208,7 +5254,7 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 			ofs << '\t' << std::setprecision(digits) << s1.algebraEnt[x1];
 		}
 		for (auto &x1 : s1.extra) ofs << '\t' << x1;
-		ofs << '\n';
+		ofs << std::endl;
 		ofs.flush();
 	}
 

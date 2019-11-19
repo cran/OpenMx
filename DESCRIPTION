@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2019-09-21
+Date: 2019-11-19
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -15,6 +15,7 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     role=c("aut", 'cre')), person("Mahsa", "Zahery", role="aut"),
     person(c("Robert", "M."), "Kirkpatrick", role="aut"),
     person(c("Yang"), "Wang", role="ctb"),
+		person("Ben", "Goodrich", email="goodrich.ben@gmail.com", role="ctb"),
     person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"),
     person("Massachusetts Institute of Technology", role="cph"),
     person("S. G.", "Johnson", role="cph"),
@@ -29,7 +30,9 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Lester", "Ingber", role="cph"),
     person("Wong", "Shao Voon", role="cph"),
     person("Juan", "Palacios", role="cph"),
-    person("Jiang", "Yang", role="cph"))
+    person("Jiang", "Yang", role="cph"),
+		person("Gael", "Guennebaud", role="cph"),
+		person("Jitse", "Niesen", role="cph"))
 URL: http://openmx.ssri.psu.edu, https://github.com/OpenMx/OpenMx
 BugReports: http://openmx.ssri.psu.edu/forums
 Description: Create structural equation models that can be manipulated programmatically.
@@ -88,10 +91,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'MxMMI.R'
         'omxReadGRMBin.R' 'zzz.R'
 Biarch: true
-Version: 2.14.11
+Version: 2.15.3
 RoxygenNote: 6.1.1
 NeedsCompilation: yes
-Packaged: 2019-09-21 15:37:38 UTC; joshua
+Packaged: 2019-11-19 14:52:36 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -111,6 +114,7 @@ Author: Steven M. Boker [aut],
   Mahsa Zahery [aut],
   Robert M. Kirkpatrick [aut],
   Yang Wang [ctb],
+  Ben Goodrich [ctb],
   Charles Driver [ctb],
   Massachusetts Institute of Technology [cph],
   S. G. Johnson [cph],
@@ -125,7 +129,9 @@ Author: Steven M. Boker [aut],
   Lester Ingber [cph],
   Wong Shao Voon [cph],
   Juan Palacios [cph],
-  Jiang Yang [cph]
+  Jiang Yang [cph],
+  Gael Guennebaud [cph],
+  Jitse Niesen [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2019-09-22 17:30:07 UTC
+Date/Publication: 2019-11-19 23:10:10 UTC

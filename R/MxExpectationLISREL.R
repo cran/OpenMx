@@ -445,7 +445,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 		#
 		# Raw data error checking
 		#  Set the canonical order of observed variable names.
-		translatedNames <- c(dimnames(lyMatrix)[[1]], dimnames(lxMatrix)[[1]]) #fMatrixTranslateNames(fMatrix, modelname) #Rearrange the rownames of F to match the order of the columns
+		translatedNames <- c(dimnames(lyMatrix)[[1]], dimnames(lxMatrix)[[1]]) #modelManifestNames(fMatrix, modelname) #Rearrange the rownames of F to match the order of the columns
 		.Object@depth <- generateLISRELDepth(flatModel, beMatrix2, model@options) #Find out how many iterations of I + BE + BE^2 + ... are need until nilpotency.
 		if (dataIsRawish(mxDataObject)) {
 			threshName <- .Object@thresholds
@@ -682,7 +682,7 @@ setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 			  GA <- matrix( , nrow=ncol(LY), ncol=ncol(LX))
 			  TH <- matrix( , nrow=nrow(LX), ncol=nrow(LY))
 		  }
-		  if ('covariance' %in% what) {
+		  if (any(c('covariance','covariances') %in% what)) {
 			  endoBlock <- A %*% (GA %*% PH %*% t(GA) + PS) %*% t(A) + TE
 			  exoBlock <- LX %*% PH %*% t(LX) + TD
 			  exenBlock <- LX %*% PH %*% t(GA) %*% t(A) + TH
@@ -690,7 +690,7 @@ setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 				       cbind(exenBlock, exoBlock))
 			  ret[['covariance']] <- cov
 		  }
-		  if ('means' %in% what) {
+		  if (any(c('mean', 'means') %in% what)) {
 			  if(single.na(TXname) & single.na(TYname)){
 					warning("Means requested, but model has no means.\nAdd appropriate TX, TY, KA, and/or AL matrices to get real means.")
 				  mean <- matrix( , 0, 0)
@@ -809,7 +809,7 @@ generateLISRELDepth <- function(flatModel, aMatrixName, modeloptions) {
 
 
 #
-#fMatrixTranslateNames <- function(fMatrix, modelName) {
+#modelManifestNames <- function(fMatrix, modelName) {
 #	retval <- character()
 #	colNames <- dimnames(fMatrix)[[2]]
 #	for(i in 1:nrow(fMatrix)) {

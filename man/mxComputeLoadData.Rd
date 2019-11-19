@@ -5,11 +5,11 @@
 \alias{MxComputeLoadData-class}
 \title{Load columns into an MxData object}
 \usage{
-mxComputeLoadData(dest, column, method = c("csv", "bgen", "pgen",
-  "data.frame"), ..., path = c(), originalDataIsIndexOne = FALSE,
-  byrow = TRUE, row.names = c(), col.names = c(), skip.rows = 0,
-  skip.cols = 0, verbose = 0L, cacheSize = 100L,
-  checkpointMetadata = TRUE, na.strings = c("NA"), observed = NULL)
+mxComputeLoadData(dest, column, method = c("csv", "data.frame"), ...,
+  path = c(), originalDataIsIndexOne = FALSE, byrow = TRUE,
+  row.names = c(), col.names = c(), skip.rows = 0, skip.cols = 0,
+  verbose = 0L, cacheSize = 100L, checkpointMetadata = TRUE,
+  na.strings = c("NA"), observed = NULL)
 }
 \arguments{
 \item{dest}{the name of the model where the columns will be loaded}
@@ -59,18 +59,6 @@ The column names given in the \code{column} parameter must already
 exist in the model's MxData object. Pre-existing data is assumed to be
 a placeholder and is not used unless
 \code{originalDataIsIndexOne} is set to TRUE.
-
-The code to implement method='pgen' is based on plink 2.0
-alpha. plink's \sQuote{bed} file format is supported in addition
-to \sQuote{pgen}. Data are coerced appropriately depending on the
-type of the destination column. For a numeric column, data are
-recorded as the values NA, 0, 1, or 2. An ordinal column must have
-exactly 3 levels.
-
-For \code{method='bgen'}, the file \code{path+".bgi"} must also
-exist. If not available, generate this index file with the
-\href{https://bitbucket.org/gavinband/bgen/wiki/bgenix}{bgenix}
-tool.
 
 For \code{method='csv'}, the highest performance arrangement is
 \code{byrow=TRUE} because entire columns are stored in single

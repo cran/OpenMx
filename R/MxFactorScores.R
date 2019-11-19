@@ -68,7 +68,7 @@ mxFactorScores <- function(model, type=c('ML', 'WeightedML', 'Regression'), minM
 		factorScoreHelperFUN <- ramFactorScoreHelper
 	}
 	nrows <- nrow(model$data$observed)
-	res <- array(NA, c(nrows, nksi, 2))
+	res <- array(as.numeric(NA), c(nrows, nksi, 2))
 	if(any(type %in% c('ML', 'WeightedML'))){
 		model <- omxSetParameters(model, labels=names(omxGetParameters(model)), free=FALSE)
 		work <- factorScoreHelperFUN(model)
@@ -84,7 +84,7 @@ mxFactorScores <- function(model, type=c('ML', 'WeightedML', 'Regression'), minM
 		fullData <- as.data.frame(model$data$observed)
 		plan1 <- list(
 			GD=mxComputeGradientDescent(nudgeZeroStarts=FALSE))
-		wantSE <- tolower(mxOption(NULL,"Standard Errors")) == "yes"
+		wantSE <- tolower(mxOption(model=model, key="Standard Errors")) == "yes"
 		if (wantSE) {
 			plan1 <- c(plan1,
 				ND=mxComputeNumericDeriv(),
@@ -107,9 +107,9 @@ mxFactorScores <- function(model, type=c('ML', 'WeightedML', 'Regression'), minM
 		}
 		fit <- mxRun(mxModel(fit, plan))
 		got <- fit$compute$steps$CP$log
-		res[,,1] <- got[,names(coef(fit))]
+		res[,,1] <- as.matrix(got[,names(coef(fit)),drop=FALSE])
 		if (wantSE) {
-			res[,,2] <- got[,paste0(names(coef(fit)), 'SE')]
+			res[,,2] <- as.matrix(got[,paste0(names(coef(fit)), 'SE'),drop=FALSE])
 		} else {
 			msg <- paste0("factor-score standard errors not available from MxModel '",
 				model$name,"' because calculating SEs is turned off for that ",

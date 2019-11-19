@@ -242,10 +242,7 @@ setMethod("initialize", "MxComputeOnce",
 
 mxComputeOnce <- function(from, what=NULL, how=NULL, ...,
 			  freeSet=NA_character_, verbose=0L, .is.bestfit=FALSE) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeOnce does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	if (length(from) == 0) warning("mxComputeOnce from nothing will have no effect")
 	verbose <- as.integer(verbose)
 	new("MxComputeOnce", from, what, how, freeSet, verbose, .is.bestfit)
@@ -409,10 +406,7 @@ mxComputeGradientDescent <- function(freeSet=NA_character_, ...,
 				     gradientIterations=imxAutoOptionValue("Gradient iterations"),
 				     gradientStepSize=imxAutoOptionValue("Gradient step size")) {
 
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeGradientDescent does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	if (missing(engine)) {
 		engine <- options()$mxOptions[["Default optimizer"]]
 	}
@@ -554,10 +548,7 @@ setMethod("initialize", "MxComputeTryHard",
 mxComputeTryHard <- function(plan, ..., freeSet=NA_character_, verbose=0L,
 			     location=1.0, scale=0.25, maxRetries=3L)
 {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeTryHard does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	maxRetries <- as.integer(maxRetries)
 	new("MxComputeTryHard", freeSet, plan, verbose, location, scale, maxRetries)
@@ -664,10 +655,7 @@ setMethod("initialize", "MxComputeTryCatch",
 ##' MxComputeTryCatch-class
 mxComputeTryCatch <- function(plan, ..., freeSet=NA_character_)
 {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeTryCatch does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	new("MxComputeTryCatch", freeSet, plan)
 }
 
@@ -782,10 +770,7 @@ mxComputeConfidenceInterval <- function(plan, ..., freeSet=NA_character_, verbos
 					engine=NULL, fitfunction='fitfunction',
 					tolerance=NA_real_, constraintType='none') {
 
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeConfidenceInterval does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	new("MxComputeConfidenceInterval", freeSet, plan, verbose, fitfunction, constraintType)
 }
@@ -882,11 +867,7 @@ setMethod("initialize", "MxComputeNewtonRaphson",
 mxComputeNewtonRaphson <- function(freeSet=NA_character_, ..., fitfunction='fitfunction', maxIter = 100L,
 				   tolerance=1e-12, verbose=0L)
 {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeNewtonRaphson does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	maxIter <- as.integer(maxIter)
 	new("MxComputeNewtonRaphson", freeSet, fitfunction, maxIter, tolerance, verbose)
@@ -999,11 +980,7 @@ mxComputeSimAnnealing <- function(freeSet=NA_character_, ..., fitfunction='fitfu
 			   defaultGradientStepSize=imxAutoOptionValue("Gradient step size"),
 			   defaultFunctionPrecision=imxAutoOptionValue("Function precision"))
 {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeSimAnnealing does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	method <- match.arg(method)
 	verbose <- as.integer(verbose)
 	new("MxComputeSimAnnealing", freeSet, fitfunction, verbose, plan, method, control,
@@ -1100,11 +1077,7 @@ setMethod("initialize", "MxComputeIterate",
 ##' MxComputeIterate-class
 mxComputeIterate <- function(steps, ..., maxIter=500L, tolerance=1e-9, verbose=0L, freeSet=NA_character_,
 			     maxDuration=as.numeric(NA)) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeIterate does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	maxIter <- as.integer(maxIter)
 	new("MxComputeIterate", steps=steps, maxIter=maxIter, tolerance=tolerance,
@@ -1168,10 +1141,7 @@ setMethod("initialize", "MxComputeLoop",
 ##' @aliases MxComputeLoop-class mxComputeBenchmark
 mxComputeLoop <- function(steps, ..., i=NULL, maxIter=as.integer(NA), freeSet=NA_character_,
 			     maxDuration=as.numeric(NA), verbose=0L, startFrom=1L) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeBenchmark does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	if (length(i) && startFrom != 1L) {
 	  warning("Argument startFrom is ignored when i is provided")
 	}
@@ -1404,10 +1374,7 @@ setMethod("initialize", "MxComputeEM",
 mxComputeEM <- function(expectation=NULL, predict=NA_character_, mstep, observedFit="fitfunction", ...,
 			maxIter=500L, tolerance=1e-9, verbose=0L, freeSet=NA_character_,
 			accel="varadhan2008", information=NA_character_, infoArgs=list(), estep=NULL) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeEM does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	maxIter <- as.integer(maxIter)
 	accel <- as.character(accel)
@@ -1491,10 +1458,7 @@ mxComputeNelderMead <- function(
 	backtrackCtrl=c(0.5,5),
 	centerIniSimplex=FALSE
 	){
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeNelderMead() does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose[1])
 	maxIter <- as.integer(maxIter[1])
 	if(is.character(nudgeZeroStarts[1])){
@@ -1772,11 +1736,7 @@ mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfu
 				  iterations=4L, verbose=0L,
 				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE)
 {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeNumericDeriv does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
 	iterations <- as.integer(iterations)
 
@@ -1972,11 +1932,7 @@ setMethod("initialize", "MxComputeHessianQuality",
 ##' Luenberger, D. G. & Ye, Y. (2008). Linear and nonlinear programming. Springer.
 
 mxComputeHessianQuality <- function(freeSet=NA_character_, ..., verbose=0L) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeHessianQuality does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	new("MxComputeHessianQuality", freeSet, as.integer(verbose))
 }
 
@@ -2099,11 +2055,7 @@ setMethod("updateFromBackend", signature("MxComputeBootstrap"),
 mxComputeBootstrap <- function(data, plan, replications=200, ...,
 			       verbose=0L, parallel=TRUE, freeSet=NA_character_,
 			       OK=c("OK", "OK/green"), only=NA_integer_) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeConfidenceInterval does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	data <- vapply(data, function(e1) {
 		path <- unlist(strsplit(e1, imxSeparatorChar, fixed = TRUE))
 		if (length(path) == 1) {
@@ -2305,18 +2257,6 @@ setMethod("convertForBackend", signature("MxComputeLoadData"),
 ##' a placeholder and is not used unless
 ##' \code{originalDataIsIndexOne} is set to TRUE.
 ##'
-##' The code to implement method='pgen' is based on plink 2.0
-##' alpha. plink's \sQuote{bed} file format is supported in addition
-##' to \sQuote{pgen}. Data are coerced appropriately depending on the
-##' type of the destination column. For a numeric column, data are
-##' recorded as the values NA, 0, 1, or 2. An ordinal column must have
-##' exactly 3 levels.
-##'
-##' For \code{method='bgen'}, the file \code{path+".bgi"} must also
-##' exist. If not available, generate this index file with the
-##' \href{https://bitbucket.org/gavinband/bgen/wiki/bgenix}{bgenix}
-##' tool.
-##'
 ##' For \code{method='csv'}, the highest performance arrangement is
 ##' \code{byrow=TRUE} because entire columns are stored in single
 ##' chunks (rows) on the disk and can be easily loaded. For
@@ -2356,18 +2296,14 @@ setMethod("convertForBackend", signature("MxComputeLoadData"),
 ##' MxComputeLoadData-class
 ##' @seealso
 ##' \link{mxComputeLoadMatrix}, \link{mxComputeCheckpoint}, \link{mxRun}, \link{omxDefaultComputePlan}
-mxComputeLoadData <- function(dest, column, method=c('csv', 'bgen', 'pgen', 'data.frame'), ..., path=c(),
+mxComputeLoadData <- function(dest, column, method=c('csv', 'data.frame'), ..., path=c(),
 			      originalDataIsIndexOne=FALSE, byrow=TRUE,
 			      row.names=c(), col.names=c(),
 			      skip.rows=0, skip.cols=0,
 			      verbose=0L,
 			      cacheSize=100L, checkpointMetadata=TRUE, na.strings=c('NA'),
 			      observed=NULL) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeLoadData does not accept values for the '...' argument")
-	}
-	method <- match.arg(method)
+  prohibitDotdotdot(list(...))
 	if (cacheSize < 1L) stop("cacheSize must be a positive integer")
 	new("MxComputeLoadData", dest, column, path, originalDataIsIndexOne,
 		as.integer(row.names), as.integer(col.names),
@@ -2433,10 +2369,7 @@ setMethod("initialize", "MxComputeLoadContext",
 ##' \link{mxComputeCheckpoint}, \link{mxComputeLoadData}, \link{mxComputeLoadMatrix}
 mxComputeLoadContext <- function(method=c('csv'), path=c(), column, ..., sep=' ',
 				 verbose=0L, header=TRUE, col.names=NULL) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeLoadContext does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	method <- match.arg(method)
 	if (length(column) > 1 && any(diff(column) < 0))
 	  stop("Columns must be ordered from left to right")
@@ -2497,10 +2430,7 @@ setMethod("convertForBackend", signature("MxComputeLoadMatrix"),
 mxComputeLoadMatrix <- function(dest, method=c('csv','data.frame'), ..., path=NULL,
 				originalDataIsIndexOne=FALSE,
 				row.names=FALSE, col.names=FALSE, observed=NULL) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeLoadMatrix does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	method <- match.arg(method)
 	new("MxComputeLoadMatrix", dest, method, path, originalDataIsIndexOne,
 		as.logical(row.names), as.logical(col.names), observed)
@@ -2617,10 +2547,7 @@ setMethod("convertForBackend", signature("MxComputeCheckpoint"),
 mxComputeCheckpoint <- function(what=NULL, ..., path=NULL, append=FALSE, header=TRUE, toReturn=FALSE,
 				parameters=TRUE, loopIndices=TRUE, fit=TRUE, counters=TRUE,
 				status=TRUE, standardErrors=FALSE, gradient=FALSE, vcov=FALSE) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeCheckpoint does not accept values for the '...' argument")
-	}
+  prohibitDotdotdot(list(...))
 	what <- as.character(what)
 	path <- as.character(path)
 	new("MxComputeCheckpoint", what, path, as.logical(append), as.logical(header), as.logical(toReturn),
@@ -2655,11 +2582,7 @@ setMethod("initialize", "MxComputeSequence",
 ##' @aliases
 ##' MxComputeSequence-class
 mxComputeSequence <- function(steps=list(), ..., freeSet=NA_character_, independent=FALSE) {
-	garbageArguments <- list(...)
-	if (length(garbageArguments) > 0) {
-		stop("mxComputeSequence does not accept values for the '...' argument")
-	}
-
+  prohibitDotdotdot(list(...))
 	new("MxComputeSequence", steps=steps, freeSet, independent)
 }
 

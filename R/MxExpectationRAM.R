@@ -21,13 +21,13 @@ setClass(Class = "MxExpectationRAM",
 		M = "MxCharOrNumber",
 		thresholds = "MxCharOrNumber",
 		dims = "character",
-		depth = "integer",
 		threshnames = "character",
 		usePPML = "logical",
 		ppmlData = "MxData",
 		UnfilteredExpCov = "matrix",
 	    numStats = "numeric",
 	    between = "MxOptionalCharOrNumber",
+    isProductNode = "MxOptionalLogical",
 	    verbose = "integer",
 	    .rampartCycleLimit = "integer",
 	    .rampartUnitLimit = "integer",
@@ -35,13 +35,14 @@ setClass(Class = "MxExpectationRAM",
 	    .forceSingleGroup = "logical",
 	    .analyzeDefVars = "logical",
 	    .maxDebugGroups = "integer",
-	    .optimizeMean = "integer"
+    .optimizeMean = "integer",
+    .useSparse = "logical"
 	),
 	contains = "BaseExpectationNormal")
 
 setMethod("initialize", "MxExpectationRAM",
 	function(.Object, A, S, F, M, dims, thresholds, threshnames,
-		 between, verbose, data = as.integer(NA), name = 'expectation') {
+		 between, verbose, useSparse, data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@A <- A
 		.Object@S <- S
@@ -62,6 +63,7 @@ setMethod("initialize", "MxExpectationRAM",
 		.Object@.useSufficientSets <- TRUE
 		.Object@.maxDebugGroups <- 0L
 		.Object@.optimizeMean <- 2L
+    .Object@.useSparse <- useSparse
 		return(.Object)
 	}
 )
@@ -197,8 +199,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 				stop(msg, call. = FALSE)
 			}
 		}
-		translatedNames <- fMatrixTranslateNames(fMatrix, modelname)
-		.Object@depth <- generateRAMDepth(flatModel, aMatrix, model@options)
+		translatedNames <- modelManifestNames(fMatrix, modelname)
 		if (length(translatedNames)) {
 			.Object@dataColumnNames <- translatedNames
 			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
@@ -262,12 +263,12 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 		  S <- mxEvalByName(Sname, model, compute=TRUE, defvar.row=defvar.row)
 		  F <- mxEvalByName(Fname, model, compute=TRUE, defvar.row=defvar.row)
 		  I <- diag(1, nrow=nrow(A))
-		  if ('covariance' %in% what) {
+		  if (any(c('covariance','covariances') %in% what)) {
 			  ImA <- solve(I-A)
 			  cov <- F %*% ImA %*% S %*% t(ImA) %*% t(F)
 			  ret[['covariance']] <- cov
 		  }
-		  if ('means' %in% what) {
+		  if (any(c('mean','means') %in% what)) {
 				if(single.na(Mname)){
 					mean <- matrix( , 0, 0)
 				} else {
@@ -287,27 +288,6 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 			}
 			ret
 })
-
-generateRAMDepth <- function(flatModel, aMatrixName, modeloptions) {
-	mxObject <- flatModel[[aMatrixName]]
-	if (!is(mxObject, "MxMatrix")) {
-		return(as.integer(NA))
-	}
-	if (identical(modeloptions[['RAM Inverse Optimization']], "No")) {
-		return(as.integer(NA))
-	}
-	if (is.null(modeloptions[['RAM Inverse Optimization']]) &&
-		identical(getOption('mxOptions')[['RAM Inverse Optimization']], "No")) {
-		return(as.integer(NA))
-	}	
-	maxdepth <- modeloptions[['RAM Max Depth']]
-	if (is.null(maxdepth) || (length(maxdepth) != 1) ||
-		is.na(maxdepth) || !is.numeric(maxdepth) || maxdepth < 0) {
-		maxdepth <- nrow(mxObject) - 1
-	}
-	return(omxGetRAMDepth(mxObject, maxdepth))
-}
-
 
 ##' omxGetRAMDepth
 ##'
@@ -346,7 +326,7 @@ generateDepthHelper <- function(aValues, currentProduct, depth, maxdepth) {
 	}
 }
 
-fMatrixTranslateNames <- function(fMatrix, modelName) {
+modelManifestNames <- function(fMatrix, modelName) {
 	retval <- character()
 	if (length(fMatrix) == 0) return(retval)
 	colNames <- dimnames(fMatrix)[[2]]
@@ -481,11 +461,9 @@ imxSimpleRAMPredicate <- function(model) {
 }
 
 mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresholds = NA,
-	threshnames = dimnames, ..., between=NULL, verbose=0L) {
+	threshnames = dimnames, ..., between=NULL, verbose=0L, .useSparse=NA) {
 
-	if (length(list(...)) > 0) {
-		stop(paste("Remaining parameters must be passed by name", deparse(list(...))))
-	}
+	prohibitDotdotdot(list(...))
 
 	if (typeof(A) != "character") {
 		msg <- paste("argument 'A' is not a string",
@@ -524,7 +502,7 @@ mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresho
 	}
 	threshnames <- checkThreshnames(threshnames)
 	return(new("MxExpectationRAM", A, S, F, M, dimnames, thresholds, threshnames,
-		   between, as.integer(verbose)))
+		   between, as.integer(verbose), as.logical(.useSparse)))
 }
 
 displayMxExpectationRAM <- function(expectation) {

@@ -1,4 +1,4 @@
-10bb35abd31ee4af2a0d5b09955f8ba3 *DESCRIPTION
+0c14735d10c007bb5430ee5ed00ff7d9 *DESCRIPTION
 096f40e52caeb0f7381aa5503e65a107 *NAMESPACE
 357d217890a3652c72cf691ad8110cb3 *NEWS.md
 3deba0f330b305e51b8a59f0b4755010 *R/0ClassUnion.R
@@ -52,7 +52,7 @@ e60c2c342cf9343e1e78a689c7261e28 *R/MxFitFunctionWLS.R
 4343d7a8b8326752018d40732e2bcf55 *R/MxFlatSearchReplace.R
 083cc646f24b79ed92be86efa1cbfb67 *R/MxGraph.R
 7e16b69c60a7a3cdbb04bf86392f280f *R/MxGraphviz.R
-8e6984fc59210a0317c05889fa7beb64 *R/MxInterval.R
+f2ada317c8068f2d7616a6c30cb6c6f9 *R/MxInterval.R
 00aa2cf5a94e81c1b88df53b2cdafdd9 *R/MxLISRELModel.R
 a2c6c0a32312546c5b0a825ffcea0ec5 *R/MxLISRELObjective.R
 cbb331895c34a805ee0016c453fe8b1c *R/MxMI.R
@@ -78,7 +78,7 @@ def326b089ec1b59d284940fbf595d6c *R/MxRObjective.R
 786fe5c58b1f4e316d438b7239a3d257 *R/MxReservedNames.R
 edfa8c9b2677abf55fb5b04a5d12329a *R/MxRestore.R
 98502f854cdf2c135d37033a6ede6a95 *R/MxRetro.R
-54eec2d8b10344326c522f312ab38154 *R/MxRobustSE.R
+6de30c77f559bc8cb84a92b001c34011 *R/MxRobustSE.R
 b14386c76d82bb8927b70754b9b93694 *R/MxRowObjective.R
 0b6cfd661aabc2ac70009c7d459f1088 *R/MxRun.R
 c84090abe37a10c06b384bb2f30c6016 *R/MxRunHelperFunctions.R
@@ -86,14 +86,14 @@ c84090abe37a10c06b384bb2f30c6016 *R/MxRunHelperFunctions.R
 7dc3e90567db382562ff8f6602db7de2 *R/MxSaturatedModel.R
 4305a4b98e3d6061d3c8269696e129cb *R/MxSearchReplace.R
 abefb1a2f51ebf5b831458b44fedc434 *R/MxSquareBracket.R
-786a3a535ca58983ace30a32276dbe48 *R/MxSummary.R
+1e974b0037ea3ca0bfd163f88d908fe7 *R/MxSummary.R
 e78110627d52c0fec3e73a3d8c287c9b *R/MxSwift.R
 bcd6f112d7c844890fc0d8505417f166 *R/MxThreshold.R
 2076fa1ca28fedc502f94dd4be701470 *R/MxTryHard.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 56655c030765998cfecf196c9a2784de *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-1d5eb8f982d49507909689200dcaa2e2 *R/MxVersion.R
+2bf7e61114bc7e91d4c2fabb1004be5c *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 62cef5a27642a1461345a90805e1d389 *R/OriginalMx.R
 9a96eb6827dc9d723426280c1bcb0981 *R/SdiagMatrix.R
@@ -110,7 +110,7 @@ ded649ec0df858e5927022c200efb576 *R/omxReadGRMBin.R
 4dea83df53329e7b559f0aa160496638 *R/zzz.R
 4c73c48f4edb77b4641cb785d9c4edd5 *README.md
 e8545ff6937032ff553a1f8b3048e415 *cleanup
-47ff2bfe339c7ef0539088df6ec71577 *configure
+0359543342fc847c18715380cc014696 *configure
 bafb6b4f4a01d57b4850203e79fe94fe *data/Bollen.txt.gz
 5bd7961132d7e516d7b4db49ce354bde *data/HS.ability.data.txt.gz
 561287c31a5215436ea557c25eda2ab7 *data/LongitudinalOverdispersedCounts.rda
@@ -217,7 +217,7 @@ ed9ee1469a2bd6de0e3fefcc20ba2d86 *demo/UnivariateSaturated_MatrixCov.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 52168875a6d4e1e645611a544c656244 *demo/omxConstrainMLThresholds.R
-9c2d53eb21243447c6a53442e49ce216 *inst/CITATION
+736227f0aa8a4b326021df9f0780e3bd *inst/CITATION
 1d775fa097d35e3b32e0b4d8d4289f48 *inst/WORDLIST
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
@@ -786,7 +786,7 @@ e929e2548554c723364df8434530e68b *man/imxReplaceModels.Rd
 b1270912c6702be990b2f2ac081a34e6 *man/imxReportProgress.Rd
 54b23f433b43369f4d2ee01a951fe4c9 *man/imxReservedNames.Rd
 916aa0c9d2e0cf1913508f44a13594ce *man/imxReverseIdentifier.Rd
-f1ba1665ef2c82915088277da9d512f8 *man/imxRobustSE.Rd
+f3b4ea8def8d48e8711b8d1ee58a4c7e *man/imxRobustSE.Rd
 cbf12319e9cb23635ec3389995a2e365 *man/imxRowGradients.Rd
 da4305b877bacc36b456a078870ed832 *man/imxSameType.Rd
 b273fc8f77263fcaf38bca168b68b97f *man/imxSeparatorChar.Rd
@@ -865,7 +865,7 @@ ca70e7f00361bd98ec6ba2b8550ac364 *man/mxExpectationHiddenMarkov.Rd
 75c8b1222fb54fd63c5e7b0e703d0eba *man/mxExpectationLISREL.Rd
 e81c00f3969dfb05153f4438c864d8cf *man/mxExpectationMixture.Rd
 8307b8178e7b139dd39314ac198f3485 *man/mxExpectationNormal.Rd
-8dc16a65567578d172ea0f0d05fce10f *man/mxExpectationRAM.Rd
+9ffb3272d50900155024de37da7b9741 *man/mxExpectationRAM.Rd
 a34fe965a349b90a34438a94c2c51ad6 *man/mxExpectationStateSpace.Rd
 48e0e02359ea81ecc14c071ca5fdb249 *man/mxExpectationStateSpaceContinuousTime.Rd
 a1f480039a1fb4483acde4c7b54e361b *man/mxFIMLObjective.Rd

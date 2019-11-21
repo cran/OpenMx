@@ -40,6 +40,7 @@ of AIC calculated from the "bread," the "meat," and the loglikelihood
 at the maximum-likelihood solution.
 
 This function does not work correctly with multigroup models in which the 
-groups themselves contain subgroups.  This function also does not 
-correctly handle multilevel data.
+groups themselves contain subgroups, or in which groups contain references
+to objects in other groups.  This function also does not correctly handle
+multilevel data.
 }

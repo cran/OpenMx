@@ -83,10 +83,10 @@ observedStatisticsHelper <- function(model, expectation, datalist, historySet) {
 	} else if (is(expectation, "MxExpectationBA81")) {  # refactor TODO
 		if (!is.na(expectation@weightColumn) || !is.na(data@weight)) {
 			dof <- nrow(data@observed) - 1
-			historySet <- append(data, historySet)
 		} else {
-			return(list(NA, historySet))
+			dof <- nrow(rpf::compressDataFrame(data@observed)) - 1
 		}
+    historySet <- append(data, historySet)
 	} else if (!is.null(obsStats[['cov']])) {
 		if (data@name %in% historySet) {
 			return (list(0, historySet))
@@ -981,25 +981,62 @@ logLik.MxModel <- function(object, ...) {
 	assertModelFreshlyRun(model)
 	ll <- NA
 	if (length(model@output) && !is.null(model@output$Minus2LogLikelihood) && 
-			!is.null(model@output$fitUnits) && model@output$fitUnits=="-2lnL") {
-		ll <- -0.5*model@output$Minus2LogLikelihood
+			!is.null(model@output$fitUnits) ) {
+		if(model@output$fitUnits=="-2lnL"){
+			ll <- -0.5*model@output$Minus2LogLikelihood
+			#TODO: this doesn't count "implicit" free parameters that are "profiled out":
+			attr(ll, "df") <- length(model@output$estimate)
+		} else if(model@output$fitUnits=="r'Wr") {
+			ll <- model@output$chi
+			attr(ll, "df") <- model@output$chiDoF
+			# TODO is this right?
+		}
+	} else {
+		attr(ll,"df") <- NA
 	}
-
+	
 	nobs <- numberObservations(model@runstate$datalist, model@runstate$fitfunctions)
 	if (!is.na(nobs)) {
 		attr(ll,"nobs") <- nobs
 	}
-
-	if (!is.null(model@output))
-		#TODO: this doesn't count "implicit" free parameters that are "profiled out":
-		attr(ll,"df")<- length(model@output$estimate)
-	else
-		attr(ll,"df") <- NA
+	
 	class(ll) <- "logLik"
 	if (length(moreModels)) {
 		c(list(ll), lapply(moreModels, logLik.MxModel))
 	} else {
 		ll
+	}
+}
+
+AIC.MxModel <- function(object, ..., k=2){
+	model <- object
+	if( length(model@output) && !is.null(model@output$Minus2LogLikelihood) && 
+			!is.null(model@output$fitUnits) && model@output$fitUnits=="r'Wr" ){
+		aicMult <- 1
+	} else {
+		aicMult <- -2
+	}
+	# Copied from AIC.default
+	# Modified by using logLik instead of -2*logLik for WLS
+	# because logLik on a WLS model returns the Chi-Squared value
+	if (!missing(...)) {
+		lls <- lapply(list(object, ...), logLik)
+		vals <- sapply(lls, function(el) {
+			no <- attr(el, "nobs")
+			c(as.numeric(el), attr(el, "df"), if (is.null(no)) NA_integer_ else no)
+		})
+		val <- data.frame(df = vals[2L, ], ll = vals[1L, ])
+		nos <- na.omit(vals[3L, ])
+		if (length(nos) && any(nos != nos[1L])) 
+			warning("models are not all fitted to the same number of observations")
+		val <- data.frame(df = val$df, AIC = aicMult * val$ll + k * val$df)
+		Call <- match.call()
+		Call$k <- NULL
+		row.names(val) <- as.character(Call[-1L])
+		return(val)
+	} else {
+		lls <- logLik(object)
+		return(aicMult * as.numeric(lls) + k * attr(lls, "df"))
 	}
 }
 

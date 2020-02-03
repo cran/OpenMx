@@ -5,8 +5,15 @@
 \alias{MxComputeOnce-class}
 \title{Compute something once}
 \usage{
-mxComputeOnce(from, what = NULL, how = NULL, ...,
-  freeSet = NA_character_, verbose = 0L, .is.bestfit = FALSE)
+mxComputeOnce(
+  from,
+  what = NULL,
+  how = NULL,
+  ...,
+  freeSet = NA_character_,
+  verbose = 0L,
+  .is.bestfit = FALSE
+)
 }
 \arguments{
 \item{from}{the object to perform the computation (a vector of expectation or fit function names)}

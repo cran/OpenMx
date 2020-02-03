@@ -4,10 +4,16 @@
 \alias{omxAugmentDataWithWLSSummary}
 \title{Estimate summary statistics used by the WLS fit function}
 \usage{
-omxAugmentDataWithWLSSummary(mxd, type = c("WLS", "DWLS", "ULS"),
-  allContinuousMethod = c("cumulants", "marginals"), ...,
-  exogenous = c(), fullWeight = TRUE, returnModel = FALSE,
-  silent = TRUE)
+omxAugmentDataWithWLSSummary(
+  mxd,
+  type = c("WLS", "DWLS", "ULS"),
+  allContinuousMethod = c("cumulants", "marginals"),
+  ...,
+  exogenous = c(),
+  fullWeight = TRUE,
+  returnModel = FALSE,
+  silent = TRUE
+)
 }
 \arguments{
 \item{mxd}{an MxData object containing raw data}

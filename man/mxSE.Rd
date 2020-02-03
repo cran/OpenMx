@@ -4,8 +4,17 @@
 \alias{mxSE}
 \title{Compute standard errors in OpenMx}
 \usage{
-mxSE(x, model, details = FALSE, cov, forceName = FALSE,
-  silent = FALSE, ..., defvar.row = as.integer(NA), data = "data")
+mxSE(
+  x,
+  model,
+  details = FALSE,
+  cov,
+  forceName = FALSE,
+  silent = FALSE,
+  ...,
+  defvar.row = as.integer(NA),
+  data = "data"
+)
 }
 \arguments{
 \item{x}{the parameter to get SEs on (reference or expression)}

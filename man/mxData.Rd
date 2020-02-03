@@ -29,7 +29,8 @@
           weight = as.character(NA), frequency = as.character(NA),
           verbose = 0L, .parallel=TRUE, .noExoOptimize=TRUE,
      minVariance=sqrt(.Machine$double.eps), algebra=c(),
-   warnNPDacov=TRUE, exoFree=NULL)
+   warnNPDacov=TRUE, exoFree=NULL,
+   naAction=c("pass","fail","omit","exclude"))
 }
 
 \arguments{
@@ -58,13 +59,14 @@
    exogenous predictors. Defaults to all TRUE, but you can fix some
    regression coefficients in the \code{observedStats} \code{slope}
    matrix to zero by setting entries to FALSE. EXPERIMENTAL}
+ \item{naAction}{Specify treatment of missing data. See details.}
 }
 
 \details{
 The mxData function creates \link{MxData} objects used in \link{mxModel}s.
 The \sQuote{observed} argument may take either a data frame or a matrix, which is then described with the
 \sQuote{type} argument. Data types describe compatibility and usage with expectation functions in MxModel
-objects. Three data types are supported (cor is not yet implemented).
+objects. Three data types are supported (acov is deprecated).
 
 \describe{
 \item{raw}{The contents of the \sQuote{observed} argument are treated as raw data. Missing values are permitted and must be
@@ -94,6 +96,14 @@ Thus for data provided as a data.frame, ensure the columns have appropriate \cod
 Covariance and correlation matrices need to have both the row and column names set and these must be
 identical, for instance by using \code{dimnames = list(varNames, varNames)}.
 
+\strong{Correlation data}
+
+To obtain accurate parameter estimates and standard errors,
+it is necessary to constrain the model implied covariance matrix to have
+unit variances. This constraint is added automatically if you use an
+\code{\link{mxModel}} with \code{type='RAM'} or \code{type='LISREL'}.
+Otherwise, you will need to add this constraint yourself.
+
 \strong{WLS data}
 
 The \code{observedStats} contains the following named objects: cov, slope, means, acov, fullWeight, and thresholds.
@@ -116,6 +126,18 @@ The \code{observedStats} contains the following named objects: cov, slope, means
 continuing to support modeling applications which require direct access to the object in the front end. Some user-interface
 changes should be expected as we optimize both these workflows.
 
+
+\strong{Missing values}
+
+For raw data, the \sQuote{naAction} option controls the treatment of missing values.
+When set to \sQuote{pass}, the data is passed as-is.
+When set to \sQuote{fail}, the presence of any missing value will
+trigger an error.
+When set to \sQuote{omit}, missing data will be discarded row-wise.
+For example, a single missing value in a row will cause the whole row to
+be discarded.
+When set to \sQuote{exclude}, rows with missing data are retained
+but their \sQuote{frequency} is set to zero.
 
 \strong{Weights}
 

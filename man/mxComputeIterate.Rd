@@ -5,9 +5,15 @@
 \alias{MxComputeIterate-class}
 \title{Repeatedly invoke a series of compute objects until change is less than tolerance}
 \usage{
-mxComputeIterate(steps, ..., maxIter = 500L, tolerance = 1e-09,
-  verbose = 0L, freeSet = NA_character_,
-  maxDuration = as.numeric(NA))
+mxComputeIterate(
+  steps,
+  ...,
+  maxIter = 500L,
+  tolerance = 1e-09,
+  verbose = 0L,
+  freeSet = NA_character_,
+  maxDuration = as.numeric(NA)
+)
 }
 \arguments{
 \item{steps}{a list of compute objects}

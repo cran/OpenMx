@@ -4,8 +4,16 @@
 \alias{imxGenericModelBuilder}
 \title{imxGenericModelBuilder}
 \usage{
-imxGenericModelBuilder(model, lst, name, manifestVars, latentVars,
-  submodels, remove, independent)
+imxGenericModelBuilder(
+  model,
+  lst,
+  name,
+  manifestVars,
+  latentVars,
+  submodels,
+  remove,
+  independent
+)
 }
 \arguments{
 \item{model}{model}

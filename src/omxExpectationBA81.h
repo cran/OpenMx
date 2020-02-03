@@ -51,6 +51,7 @@ struct BA81LatentSummary {
 
 class BA81Expect : public omxExpectation {
 	typedef omxExpectation super;
+	bool ready;
  public:
 	virtual ~BA81Expect();
 	virtual void init();
@@ -64,6 +65,7 @@ class BA81Expect : public omxExpectation {
 	int numItems() { return grp.numItems(); }
 	int getNumUnique() { return (int) grp.rowMap.size(); }
 	int itemOutcomes(int ix) { return grp.itemOutcomes[ix]; }
+	void prep();
 
 	double LogLargestDouble;       // should be const but need constexpr
 	double LargestDouble;          // should be const but need constexpr
@@ -97,7 +99,10 @@ class BA81Expect : public omxExpectation {
 	struct omxFitFunction *fit;  // weak pointer
 
 	BA81Expect(omxState *st, int num) :
-		super(st, num), grp(Global->numThreads, true) {};
+		super(st, num), ready(false), grp(true)
+	{
+		grp.quad.setNumThreads(Global->numThreads);
+	};
 	const char *getLatentIncompatible(BA81Expect *other);
 
 	void refreshPatternLikelihood(bool hasFreeLatent);

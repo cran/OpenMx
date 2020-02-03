@@ -5,11 +5,24 @@
 \alias{MxComputeLoadData-class}
 \title{Load columns into an MxData object}
 \usage{
-mxComputeLoadData(dest, column, method = c("csv", "data.frame"), ...,
-  path = c(), originalDataIsIndexOne = FALSE, byrow = TRUE,
-  row.names = c(), col.names = c(), skip.rows = 0, skip.cols = 0,
-  verbose = 0L, cacheSize = 100L, checkpointMetadata = TRUE,
-  na.strings = c("NA"), observed = NULL)
+mxComputeLoadData(
+  dest,
+  column,
+  method = c("csv", "data.frame"),
+  ...,
+  path = c(),
+  originalDataIsIndexOne = FALSE,
+  byrow = TRUE,
+  row.names = c(),
+  col.names = c(),
+  skip.rows = 0,
+  skip.cols = 0,
+  verbose = 0L,
+  cacheSize = 100L,
+  checkpointMetadata = TRUE,
+  na.strings = c("NA"),
+  observed = NULL
+)
 }
 \arguments{
 \item{dest}{the name of the model where the columns will be loaded}

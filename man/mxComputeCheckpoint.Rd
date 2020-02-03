@@ -5,10 +5,22 @@
 \alias{MxComputeCheckpoint-class}
 \title{Log parameters and state to disk or memory}
 \usage{
-mxComputeCheckpoint(what = NULL, ..., path = NULL, append = FALSE,
-  header = TRUE, toReturn = FALSE, parameters = TRUE,
-  loopIndices = TRUE, fit = TRUE, counters = TRUE, status = TRUE,
-  standardErrors = FALSE, gradient = FALSE, vcov = FALSE)
+mxComputeCheckpoint(
+  what = NULL,
+  ...,
+  path = NULL,
+  append = FALSE,
+  header = TRUE,
+  toReturn = FALSE,
+  parameters = TRUE,
+  loopIndices = TRUE,
+  fit = TRUE,
+  counters = TRUE,
+  status = TRUE,
+  standardErrors = FALSE,
+  gradient = FALSE,
+  vcov = FALSE
+)
 }
 \arguments{
 \item{what}{a character vector of algebra names to include in each checkpoint}
@@ -67,7 +79,8 @@ m1 <- mxRun(mxModel(m1, plan)) # see the file 'result.log'
 \code{\link{mxComputeLoadData}}, \code{\link{mxComputeLoadMatrix}},
 \code{\link{mxComputeLoadContext}}, \code{\link{mxComputeLoop}}
 
-Other model state: \code{\link{mxRestore}},
-  \code{\link{mxSave}}
+Other model state: 
+\code{\link{mxRestore}()},
+\code{\link{mxSave}()}
 }
 \concept{model state}

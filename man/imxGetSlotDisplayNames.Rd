@@ -4,8 +4,13 @@
 \alias{imxGetSlotDisplayNames}
 \title{imxGetSlotDisplayNames}
 \usage{
-imxGetSlotDisplayNames(object, pattern = ".*",
-  slotList = slotNames(object), showDots = FALSE, showEmpty = FALSE)
+imxGetSlotDisplayNames(
+  object,
+  pattern = ".*",
+  slotList = slotNames(object),
+  showDots = FALSE,
+  showEmpty = FALSE
+)
 }
 \arguments{
 \item{object}{The object from which to get slot names}

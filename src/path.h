@@ -70,7 +70,6 @@ class PathCalc {
 	int numVars;
 	int numObs;
 	Eigen::ArrayXi obsMap;
-	std::unique_ptr<PathCalcIO> mio, aio, sio;
 	bool algoSet;
 	Eigen::SelfAdjointEigenSolverNosort< Eigen::MatrixXd > symSolver;
 	std::vector< Polynomial< double > > polyRep;
@@ -105,6 +104,7 @@ class PathCalc {
 
  public:
 
+	std::unique_ptr<PathCalcIO> mio, aio, sio;
 	const int verbose;
 	const bool ignoreVersion;
 
@@ -115,7 +115,7 @@ class PathCalc {
 
 	void clone(PathCalc &pc)
 	{
-		if (!pc.algoSet) mxThrow("PathCalc::clone but setAlgo not called yet");
+		if (!pc.algoSet) stop("PathCalc::clone but setAlgo not called yet");
 		numVars = pc.numVars;
 		numObs = pc.numObs;
 		useSparse = pc.useSparse;
@@ -246,6 +246,17 @@ class PathCalc {
 			}
 		}
 	}
+
+	std::string getPolyRep()
+	{
+		auto &symEv = symSolver.eigenvalues();
+		std::ostringstream temp;
+		for (int ii=0; ii < numVars; ++ii) {
+			temp << "[" << ii << "] " << symEv[ii] << " : " << std::string(polyRep[ii]) << "\n";
+		}
+		return temp.str();
+	}
+
 };
 
 #endif // __path_h_

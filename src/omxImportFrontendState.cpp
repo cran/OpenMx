@@ -156,13 +156,11 @@ void omxState::omxProcessMxExpectationEntities(SEXP expList)
 {
 	if(OMX_DEBUG) { mxLog("Initializing %d Model Expectation(s).", Rf_length(expList));}
 	SEXP nextExp;
-	SEXP eNames = Rf_getAttrib(expList, R_NamesSymbol);
 
 	for(int index = 0; index < Rf_length(expList); index++) {
 		if (isErrorRaised()) return;
 		Rf_protect(nextExp = VECTOR_ELT(expList, index));
 		omxExpectation *ex = omxNewIncompleteExpectation(nextExp, index, this);
-		ex->name = CHAR(STRING_ELT(eNames, index));
 		expectationList.push_back(ex);
 	}
 }
@@ -189,7 +187,7 @@ void omxGlobal::omxProcessMxComputeEntities(SEXP rObj, omxState *currentState)
 	computeList.push_back(compute);
 
 	if (Global->computeLoopContext.size()) {
-		mxThrow("computeLoopContext imbalance of %d in initFromFrontend",
+		stop("computeLoopContext imbalance of %d in initFromFrontend",
 			int(Global->computeLoopContext.size()));
 	}
 
@@ -287,13 +285,13 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 			if(OMX_DEBUG) { mxLog("Opening File: %s", fullname); }
 			oC->file = fopen(fullname, "w");
 			if(!oC->file) {
-				mxThrow("Unable to open file %s for checkpoint storage: %s",
+				stop("Unable to open file %s for checkpoint storage: %s",
 					 fullname, strerror(errno));
 			}
 			break;}
 
 		case OMX_CONNECTION_CHECKPOINT:{
-			mxThrow("Warning NYI: Socket checkpoints Not Yet Implemented.\n");
+			stop("Warning NYI: Socket checkpoints Not Yet Implemented.\n");
 			break;}
 		}
 
@@ -306,7 +304,7 @@ void omxProcessCheckpointOptions(SEXP checkpointList)
 		} else if (strEQ(units, "evaluations")) {
 			oC->evalsPerCheckpoint = Rf_asInteger(VECTOR_ELT(nextLoc, next++));
 		} else {
-			mxThrow("In 'Checkpoint Units' model option, '%s' not recognized", units);
+			stop("In 'Checkpoint Units' model option, '%s' not recognized", units);
 		}
 		Global->checkpointList.push_back(oC);
 	}

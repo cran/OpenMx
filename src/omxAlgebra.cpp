@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ void omxAlgebraAllocArgs(omxAlgebra *oa, int numArgs)
 
 	if(oa->algArgs != NULL) {
 		if (oa->numArgs < numArgs)
-			mxThrow("omxAlgebra: %d args requested but %d available",
+			stop("omxAlgebra: %d args requested but %d available",
 			      numArgs, oa->numArgs);
 		return;
 	}
@@ -52,7 +52,7 @@ void omxAlgebraAllocArgs(omxAlgebra *oa, int numArgs)
 	memset(oa->algArgs, 0, sizeof(omxMatrix*) * numArgs);  //remove debug TODO
 }
 
-omxMatrix* omxInitAlgebra(omxAlgebra *oa, omxState* os) {
+static omxMatrix* omxInitAlgebra(omxAlgebra *oa, omxState* os) {
 
 	omxMatrix* om = omxInitMatrix(0, 0, TRUE, os);
 	
@@ -61,16 +61,9 @@ omxMatrix* omxInitAlgebra(omxAlgebra *oa, omxState* os) {
 	return om;
 }
 
-void omxInitAlgebraWithMatrix(omxAlgebra *oa, omxMatrix *om) {
-	
-	if(oa == NULL) {
-		oa = (omxAlgebra*) R_alloc(1, sizeof(omxAlgebra));
-	}
-	
-	omxAlgebraAllocArgs(oa, 0);
-	oa->funWrapper = NULL;
+void omxInitAlgebraWithMatrix(omxAlgebra *oa, omxMatrix *om)
+{
 	oa->matrix = om;
-	oa->oate = NULL;
 	om->algebra = oa;
 }
 
@@ -161,6 +154,17 @@ struct AlgebraProcessingGuard {
 	}
 };
 
+static void refreshExpectationOp(FitContext *fc, class omxMatrix **matList, int numArgs,
+																 class omxMatrix *result)
+{
+	auto *oa = result->algebra;
+	omxExpectation *ex = oa->expectation;
+	if (OMX_DEBUG_ALGEBRA || oa->verbose >= 2) {
+		mxLog("Recompute %s(%s) for algebra %s", ex->name, oa->what, result->name());
+	}
+	ex->compute(fc, oa->what, 0);
+}
+
 void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 {
 	omxAlgebra *oa = mat->algebra;
@@ -199,7 +203,7 @@ void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 	if (isErrorRaised()) return;
 
 	if(oa->funWrapper == NULL) {
-		if(oa->numArgs != 1) mxThrow("Internal Error: Empty algebra evaluated");
+		if(oa->numArgs != 1) stop("Internal Error: Empty algebra evaluated");
 		if(OMX_DEBUG_ALGEBRA) { omxPrint(oa->algArgs[0], "Copy no-op algebra"); }
 		if (oa->algArgs[0]->canDiscard()) {
 			oa->matrix->take(oa->algArgs[0]);
@@ -215,7 +219,7 @@ void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 				const char *argname = oa->algArgs[ax]->name();
 				buf += argname? argname : "?";
 			}
-			mxLog("Algebra '%s' %s(%s)", oa->matrix->name(), oa->oate->rName, buf.c_str());
+			mxLog("Algebra '%s' %s(%s)", oa->matrix->name(), oa->oate? oa->oate->rName : "?", buf.c_str());
 		}
 		(*(algebra_op_t)oa->funWrapper)(fc, oa->algArgs, (oa->numArgs), oa->matrix);
 		for(int j = 0; j < oa->numArgs; j++) {
@@ -246,17 +250,29 @@ void omxAlgebraRecompute(omxMatrix *mat, int want, FitContext *fc)
 	}
 }
 
-omxAlgebra::omxAlgebra()
+omxAlgebra::omxAlgebra() :
+	funWrapper(0), algArgs(0), numArgs(0), expectation(0), what(0),
+	matrix(0), calcDimnames(false), verbose(0), fixed(false), sexpAlgebra(0),
+	processing(false), oate(0)
+{}
+
+void connectMatrixToExpectation(omxMatrix *result, omxExpectation *ex, const char *what)
 {
-	processing = false;
-	verbose = 0;
-	fixed = false;
+	if (result->algebra) stop("already connected");
+	result->algebra = new omxAlgebra;
+	auto *oa = result->algebra;
+	oa->matrix = result;
+	oa->expectation = ex;
+	oa->funWrapper = refreshExpectationOp;
+	oa->what = what;
+	//oa->verbose = 2;
+	result->unshareMemoryWithR();
 }
 
 void omxFillAlgebraFromTableEntry(omxAlgebra *oa, const omxAlgebraTableEntry* oate, const int realNumArgs)
 {
 	/* TODO: check for full initialization */
-	if(oa == NULL) mxThrow("Internal Error: Null Algebra Detected in fillAlgebra.");
+	if(oa == NULL) stop("Internal Error: Null Algebra Detected in fillAlgebra.");
 
 	oa->oate = oate;
 	oa->funWrapper = oate->calc;
@@ -297,7 +313,7 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name,
 		omxFillAlgebraFromTableEntry(oa, entry, Rf_length(algebra) - 1);
 		for(int j = 0; j < oa->numArgs; j++) {
 			ProtectedSEXP algebraArg(VECTOR_ELT(algebra, j+1));
-			auto name2 = string_snprintf("%s[%d]", name.c_str(), j);
+			auto name2 = string_snprintf("%s[%d]", name.c_str(), 1+j);
 			oa->algArgs[j] = omxAlgebraParseHelper(algebraArg, om->currentState, name2);
 		}
 	} else {		// This is an algebra pointer, and we're a No-op algebra.
@@ -306,7 +322,7 @@ void omxFillMatrixFromMxAlgebra(omxMatrix* om, SEXP algebra, std::string &name,
 		ScopedProtect p1(algebraElt, VECTOR_ELT(algebra, 1));
 		
 		if(!Rf_isInteger(algebraElt)) {   			// A List: only happens if bad optimization has occurred.
-			mxThrow("Internal Error: Algebra has been passed incorrectly: detected NoOp: (Operator Arg ...)\n");
+			stop("Internal Error: Algebra has been passed incorrectly: detected NoOp: (Operator Arg ...)\n");
 		} else {			// Still a No-op.  Sadly, we have to keep it that way.
 			
 			value = Rf_asInteger(algebraElt);
@@ -349,24 +365,17 @@ omxMatrix* omxMatrixLookupFromState1(SEXP matrix, omxState* os) {
 	} else if (matrix == R_NilValue) {
 		return NULL;
 	} else if (Rf_isString(matrix)) {
-		mxThrow("Internal error: string passed to omxMatrixLookupFromState1, did you forget to call imxLocateIndex?");
+		stop("Internal error: string passed to omxMatrixLookupFromState1, did you forget to call imxLocateIndex?");
 	} else {
-		mxThrow("Internal error: unknown type passed to omxMatrixLookupFromState1");
+		stop("Internal error: unknown type passed to omxMatrixLookupFromState1");
 	}		
 
 	return os->getMatrixFromIndex(value);
 }
 
 omxMatrix* omxMatrixLookupFromStateByNumber(int matrix, omxState* os) {
-	omxMatrix* output = NULL;
 	if(matrix == NA_INTEGER){return NULL;}
-	if (matrix >= 0) {
-		output = os->algebraList[matrix];
-	} 
-	else {
-		output = os->matrixList[~matrix];
-	}
-	return output;
+	return os->getMatrixFromIndex(matrix);
 }
 
 omxMatrix* omxNewAlgebraFromOperatorAndArgs(int opCode, omxMatrix* args[], int numArgs, omxState* os) {
@@ -376,7 +385,7 @@ omxMatrix* omxNewAlgebraFromOperatorAndArgs(int opCode, omxMatrix* args[], int n
 	omxAlgebra *oa = new omxAlgebra;
 	omxAlgebraTableEntry* entry = (omxAlgebraTableEntry*)&(omxAlgebraSymbolTable[opCode]);
 	if(entry->numArgs >= 0 && entry->numArgs != numArgs) {
-		mxThrow("Internal error: incorrect number of arguments passed to algebra %s.", entry->rName);
+		stop("Internal error: incorrect number of arguments passed to algebra %s.", entry->rName);
 	}
 	
 	om = omxInitAlgebra(oa, os);

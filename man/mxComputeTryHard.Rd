@@ -5,8 +5,15 @@
 \alias{MxComputeTryHard-class}
 \title{Repeatedly attempt a compute plan until successful}
 \usage{
-mxComputeTryHard(plan, ..., freeSet = NA_character_, verbose = 0L,
-  location = 1, scale = 0.25, maxRetries = 3L)
+mxComputeTryHard(
+  plan,
+  ...,
+  freeSet = NA_character_,
+  verbose = 0L,
+  location = 1,
+  scale = 0.25,
+  maxRetries = 3L
+)
 }
 \arguments{
 \item{plan}{compute plan to optimize the model}

@@ -14,8 +14,21 @@
 \alias{imxCreateMatrix,ZeroMatrix-method}
 \title{Create a matrix}
 \usage{
-imxCreateMatrix(.Object, labels, values, free, lbound, ubound, nrow, ncol,
-  byrow, name, condenseSlots, joinKey, joinModel)
+imxCreateMatrix(
+  .Object,
+  labels,
+  values,
+  free,
+  lbound,
+  ubound,
+  nrow,
+  ncol,
+  byrow,
+  name,
+  condenseSlots,
+  joinKey,
+  joinModel
+)
 }
 \arguments{
 \item{.Object}{the matrix}

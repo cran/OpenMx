@@ -31,6 +31,7 @@
 #define _OMXMATRIX_H_
 
 #include <R_ext/Arith.h>
+#include <memory>
 
 #include "omxDefines.h"
 #include <Eigen/Core>
@@ -71,6 +72,7 @@ class omxMatrix {
 								joinModel(0), shape(0), allocationLock(false),
 								freeRownames(false), freeColnames(false)
 		{};
+	struct dtor;
 	void setDependsOnParameters() { dependsOnParametersCache = true; };
 	void setDependsOnDefinitionVariables() { dependsOnDefVarCache = true; };
 	bool dependsOnParameters() const { return dependsOnParametersCache; };
@@ -118,6 +120,9 @@ class omxMatrix {
 	bool freeRownames, freeColnames;
 	std::vector<const char *> rownames;
 	std::vector<const char *> colnames;
+	bool hasDimnames() const { return rownames.size() && colnames.size(); }
+	bool sameSize(omxMatrix *other) const { return other->rows == rows && other->cols == cols; }
+	bool sameDimnames(omxMatrix *other) const;
 	int lookupColumnByName(const char *target);
 
 	friend void omxCopyMatrix(omxMatrix *dest, omxMatrix *src);  // turn into method later TODO
@@ -188,6 +193,12 @@ inline omxMatrix* omxInitMatrix(int nrows, int ncols, omxState* os)
 omxMatrix *omxCreateCopyOfMatrix(omxMatrix *orig, omxState *os);
 
 	void omxFreeMatrix(omxMatrix* om);						// Ditto, traversing argument trees
+
+struct omxMatrix::dtor {
+	void operator()(omxMatrix *om) { omxFreeMatrix(om); }
+};
+
+typedef std::unique_ptr< omxMatrix, omxMatrix::dtor > omxMatrixPtr;
 
 /* Matrix Creation Functions */
 omxMatrix* omxNewMatrixFromRPrimitive0(SEXP rObject, omxState* state, 
@@ -293,8 +304,8 @@ static OMXINLINE double omxMatrixElement(omxMatrix *om, int row, int col) {
 }
 
 static OMXINLINE double *omxMatrixColumn(omxMatrix *om, int col) {
-  if (!om->colMajor) mxThrow("omxMatrixColumn requires colMajor order");
-  if (col < 0 || col >= om->cols) mxThrow("omxMatrixColumn(%d) but only %d columns", col, om->cols);
+  if (!om->colMajor) stop("omxMatrixColumn requires colMajor order");
+  if (col < 0 || col >= om->cols) stop("omxMatrixColumn(%d) but only %d columns", col, om->cols);
   return om->data + col * om->rows;
 }
 
@@ -420,7 +431,7 @@ static OMXINLINE void omxDSYMV(double alpha, omxMatrix* mat,            // resul
 		// mxLog("DSYMV: %c, %d, %f, 0x%x, %d, 0x%x, %d, %f, 0x%x, %d\n", u, (mat->cols),alpha, mat->data, (mat->leading), 
 	                    // vec->data, onei, beta, result->data, onei); //:::DEBUG:::
 		if(mat->cols != nVecEl) {
-			mxThrow("Mismatch in symmetric vector/matrix multiply: %s (%d x %d) * (%d x 1).\n", "symmetric", mat->rows, mat->cols, nVecEl); // :::DEBUG:::
+			stop("Mismatch in symmetric vector/matrix multiply: %s (%d x %d) * (%d x 1).\n", "symmetric", mat->rows, mat->cols, nVecEl); // :::DEBUG:::
 		}
 	}
 
@@ -651,12 +662,12 @@ template <typename T> void omxMatrix::loadFromStream(T &st)
 	case 8: //Unit
 	case 9: //Zero
 	case 3: //Iden
-		mxThrow("loadFromStream: matrix '%s' is constant (type %d);"
+		stop("loadFromStream: matrix '%s' is constant (type %d);"
 			 " use a Full matrix if you wish to update it", name(), shape);
 		break;
 
 	default:
-		mxThrow("loadFromStream: matrix '%s' with shape %d is unimplemented",
+		stop("loadFromStream: matrix '%s' with shape %d is unimplemented",
 			 name(), shape);
 		break;
 	}

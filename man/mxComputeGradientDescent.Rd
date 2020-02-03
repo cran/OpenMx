@@ -5,14 +5,21 @@
 \alias{MxComputeGradientDescent-class}
 \title{Optimize parameters using a gradient descent optimizer}
 \usage{
-mxComputeGradientDescent(freeSet = NA_character_, ..., engine = NULL,
-  fitfunction = "fitfunction", verbose = 0L, tolerance = NA_real_,
-  useGradient = NULL, warmStart = NULL,
+mxComputeGradientDescent(
+  freeSet = NA_character_,
+  ...,
+  engine = NULL,
+  fitfunction = "fitfunction",
+  verbose = 0L,
+  tolerance = NA_real_,
+  useGradient = NULL,
+  warmStart = NULL,
   nudgeZeroStarts = mxOption(NULL, "Nudge zero starts"),
-  maxMajorIter = NULL, gradientAlgo = mxOption(NULL,
-  "Gradient algorithm"),
+  maxMajorIter = NULL,
+  gradientAlgo = mxOption(NULL, "Gradient algorithm"),
   gradientIterations = imxAutoOptionValue("Gradient iterations"),
-  gradientStepSize = imxAutoOptionValue("Gradient step size"))
+  gradientStepSize = imxAutoOptionValue("Gradient step size")
+)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free parameters.}

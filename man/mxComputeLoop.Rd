@@ -6,9 +6,16 @@
 \alias{mxComputeBenchmark}
 \title{Repeatedly invoke a series of compute objects}
 \usage{
-mxComputeLoop(steps, ..., i = NULL, maxIter = as.integer(NA),
-  freeSet = NA_character_, maxDuration = as.numeric(NA),
-  verbose = 0L, startFrom = 1L)
+mxComputeLoop(
+  steps,
+  ...,
+  i = NULL,
+  maxIter = as.integer(NA),
+  freeSet = NA_character_,
+  maxDuration = as.numeric(NA),
+  verbose = 0L,
+  startFrom = 1L
+)
 }
 \arguments{
 \item{steps}{a list of compute objects}

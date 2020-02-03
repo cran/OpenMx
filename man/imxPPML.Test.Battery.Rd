@@ -4,9 +4,15 @@
 \alias{imxPPML.Test.Battery}
 \title{imxPPML.Test.Battery}
 \usage{
-imxPPML.Test.Battery(model, verbose = FALSE, testMissingness = TRUE,
-  testPermutations = TRUE, testEstimates = TRUE,
-  testFakeLatents = TRUE, tolerances = c(0.001, 0.001, 0.001))
+imxPPML.Test.Battery(
+  model,
+  verbose = FALSE,
+  testMissingness = TRUE,
+  testPermutations = TRUE,
+  testEstimates = TRUE,
+  testFakeLatents = TRUE,
+  tolerances = c(0.001, 0.001, 0.001)
+)
 }
 \arguments{
 \item{model}{the model to test}

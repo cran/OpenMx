@@ -3,7 +3,6 @@
 \docType{package}
 \name{OpenMx}
 \alias{OpenMx}
-\alias{OpenMx-package}
 \title{OpenMx: An package for Structural Equation Modeling and Matrix Algebra Optimization}
 \description{
 OpenMx is a package for structural equation modeling, matrix algebra optimization and other statistical estimation problems. 

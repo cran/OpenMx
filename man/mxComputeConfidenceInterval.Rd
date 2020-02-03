@@ -5,9 +5,16 @@
 \alias{MxComputeConfidenceInterval-class}
 \title{Find likelihood-based confidence intervals}
 \usage{
-mxComputeConfidenceInterval(plan, ..., freeSet = NA_character_,
-  verbose = 0L, engine = NULL, fitfunction = "fitfunction",
-  tolerance = NA_real_, constraintType = "none")
+mxComputeConfidenceInterval(
+  plan,
+  ...,
+  freeSet = NA_character_,
+  verbose = 0L,
+  engine = NULL,
+  fitfunction = "fitfunction",
+  tolerance = NA_real_,
+  constraintType = "none"
+)
 }
 \arguments{
 \item{plan}{compute plan to optimize the model}

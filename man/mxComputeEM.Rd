@@ -5,11 +5,21 @@
 \alias{MxComputeEM-class}
 \title{Fit a model using DLR's (1977) Expectation-Maximization (EM) algorithm}
 \usage{
-mxComputeEM(expectation = NULL, predict = NA_character_, mstep,
-  observedFit = "fitfunction", ..., maxIter = 500L,
-  tolerance = 1e-09, verbose = 0L, freeSet = NA_character_,
-  accel = "varadhan2008", information = NA_character_,
-  infoArgs = list(), estep = NULL)
+mxComputeEM(
+  expectation = NULL,
+  predict = NA_character_,
+  mstep,
+  observedFit = "fitfunction",
+  ...,
+  maxIter = 500L,
+  tolerance = 1e-09,
+  verbose = 0L,
+  freeSet = NA_character_,
+  accel = "varadhan2008",
+  information = NA_character_,
+  infoArgs = list(),
+  estep = NULL
+)
 }
 \arguments{
 \item{expectation}{a vector of expectation names (DEPRECATED)}

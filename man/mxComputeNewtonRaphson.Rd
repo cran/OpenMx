@@ -5,9 +5,14 @@
 \alias{MxComputeNewtonRaphson-class}
 \title{Optimize parameters using the Newton-Raphson algorithm}
 \usage{
-mxComputeNewtonRaphson(freeSet = NA_character_, ...,
-  fitfunction = "fitfunction", maxIter = 100L, tolerance = 1e-12,
-  verbose = 0L)
+mxComputeNewtonRaphson(
+  freeSet = NA_character_,
+  ...,
+  fitfunction = "fitfunction",
+  maxIter = 100L,
+  tolerance = 1e-12,
+  verbose = 0L
+)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}

@@ -4,8 +4,13 @@
 \alias{imxPPML.Test.Test}
 \title{imxPPML.Test.Test}
 \usage{
-imxPPML.Test.Test(model, checkLL = TRUE, checkByName = FALSE,
-  tolerance = 0.5, testEstimates = TRUE)
+imxPPML.Test.Test(
+  model,
+  checkLL = TRUE,
+  checkByName = FALSE,
+  tolerance = 0.5,
+  testEstimates = TRUE
+)
 }
 \arguments{
 \item{model}{the MxModel to evaluate}

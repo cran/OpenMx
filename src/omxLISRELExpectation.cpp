@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2018 by the individuals mentioned in the source code history
+ *  Copyright 2007-2019 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ class omxLISRELExpectation : public omxExpectation {
 
 public:
 	omxMatrix *cov, *means; // expected covariance and means
+	omxMatrixPtr covOwner, meanOwner;
 	omxMatrix *LX, *LY, *BE, *GA, *PH, *PS, *TD, *TE, *TH; // LISREL model Matrices
 	omxMatrix *TX, *TY, *KA, *AL; //LISREL Means Matrices
 	omxMatrix *A, *B, *C, *D, *E, *F, *G, *H, *I, *J, *K, *L; // Place holder matrices used in computations.  Note: L is analogous to Ax in RAM and is used in I-BE inverse
@@ -93,9 +94,6 @@ omxLISRELExpectation::~omxLISRELExpectation()
 	
 	omxLISRELExpectation* argStruct = this;
 
-	omxFreeMatrix(argStruct->cov);
-	omxFreeMatrix(argStruct->means);
-	
 	omxFreeMatrix(argStruct->A);
 	omxFreeMatrix(argStruct->B);
 	omxFreeMatrix(argStruct->C);
@@ -386,7 +384,7 @@ void omxCalculateLISRELCovarianceAndMeans(omxLISRELExpectation* oro) {
 	double oned = 1.0, zerod=0.0;
 	
 	if(Ax == NULL || I == NULL || Z == NULL || Y == NULL || X == NULL) {
-		mxThrow("Internal Error: RAM Metadata improperly populated.  Please report this to the OpenMx development team.");
+		stop("Internal Error: RAM Metadata improperly populated.  Please report this to the OpenMx development team.");
 	}
 		
 	if(Cov == NULL && Means == NULL) {
@@ -401,7 +399,7 @@ void omxCalculateLISRELCovarianceAndMeans(omxLISRELExpectation* oro) {
 	// 	|| (Y->rows  != Cov->cols)  || (Y->cols  != A->rows)
 	// 	|| (M->cols  != Cov->cols)  || (M->rows  != 1)
 	// 	|| (Means->rows != 1)       || (Means->cols != Cov->cols) ) {
-	// 		mxThrow("INTERNAL ERROR: Incorrectly sized matrices being passed to omxRAMObjective Calculation.\n Please report this to the OpenMx development team.");
+	// 		stop("INTERNAL ERROR: Incorrectly sized matrices being passed to omxRAMObjective Calculation.\n Please report this to the OpenMx development team.");
 	// }
 	
 	omxShallowInverse(numIters, A, Z, Ax, I );
@@ -553,13 +551,17 @@ void omxLISRELExpectation::init() {
 	LISobj->MUY = 	omxInitMatrix(ny, 1, TRUE, currentState);
 	
 	
-	LISobj->cov = 	omxInitMatrix(ntotal, ntotal, TRUE, currentState);
+	cov = omxNewMatrixFromSlotOrAnon(rObj, currentState, "expectedCovariance", ntotal, ntotal);
+	if (!cov->hasMatrixNumber) covOwner = omxMatrixPtr(cov);
+	else connectMatrixToExpectation(cov, this, "covariance");
 
 	LISobj->args = (omxMatrix**) R_alloc(2, sizeof(omxMatrix*));
 	
 	/* Means */
 	if(LISobj->TX != NULL || LISobj->TY != NULL || LISobj->KA != NULL || LISobj->AL != NULL) {
-		LISobj->means = 	omxInitMatrix(1, ntotal, TRUE, currentState);
+		means = omxNewMatrixFromSlotOrAnon(rObj, currentState, "expectedMean", 1, ntotal);
+		if (!means->hasMatrixNumber) meanOwner = omxMatrixPtr(means);
+		else connectMatrixToExpectation(means, this, "mean");
 	} else LISobj->means  = 	NULL;
 	//TODO: Adjust means processing to allow only Xs or only Ys
 
@@ -611,7 +613,7 @@ void omxLISRELExpectation::studyExoPred() // compare with similar function for R
 		if (dv.matrix == alNum && hasVariance[ dv.row ] == 0.0) {
 			for (int cx=0; cx < eBE.rows(); ++cx) {
 				if (eBE(cx, dv.row) == 0.0) continue;
-				mxThrow("%s: latent exogenous variables are not supported (%s -> %s)", name,
+				stop("%s: latent exogenous variables are not supported (%s -> %s)", name,
 					 PS->rownames[dv.row], BE->rownames[cx]);
 			}
 			if (eLY.col(dv.row).array().abs().sum() == 0.) continue;
@@ -645,7 +647,7 @@ void omxLISRELExpectation::studyExoPred() // compare with similar function for R
 
 	exoPredMean.resize(exoDataColumns.size());
 	for (int cx=0; cx < int(exoDataColumns.size()); ++cx) {
-		auto &e1 = data->rawCols[ exoDataColumns[cx] ];
+		auto &e1 = data->rawCol( exoDataColumns[cx] );
 		Eigen::Map< Eigen::VectorXd > vec(e1.ptr.realData, data->numRawRows());
 		exoPredMean[cx] = vec.mean();
 	}

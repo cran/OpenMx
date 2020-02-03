@@ -186,7 +186,7 @@ void MLFitState::compute(int want, FitContext *fc)
 			if (fc) fc->recordIterationError("%s: unknown error", oo->name());
 		}
 		oo->matrix->data[0] = Scale * fit;
-	} else if (strEQ(expectation->expType, "MxExpectationNormal") &&
+	} else if (strEQ(expectation->name, "MxExpectationNormal") &&
 		   (want & (FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO))) {
 		if ((want & FF_COMPUTE_INFO) && fc->infoMethod != INFO_METHOD_HESSIAN) {
 			omxRaiseErrorf("Information matrix approximation method %d is not available",
@@ -260,7 +260,7 @@ void MLFitState::compute(int want, FitContext *fc)
 			delete hb;
 		}
 	} else {
-		mxThrow("Not implemented");
+		stop("Not implemented");
 	}
 }
 
@@ -308,23 +308,23 @@ omxFitFunction *MLFitState::initMorph()
 {
 	auto *oo = this;
 
-	if (!oo->expectation) { mxThrow("%s requires an expectation", oo->fitType); }
+	if (!oo->expectation) { stop("%s requires an expectation", oo->fitType); }
 	oo->units = FIT_UNITS_MINUS2LL;
 
-	if (strcmp(expectation->expType, "MxExpectationBA81")==0) {
+	if (strcmp(expectation->name, "MxExpectationBA81")==0) {
 		return omxChangeFitType(oo, "imxFitFunctionBA81");
 	}
 	
-	if (strEQ(expectation->expType, "MxExpectationGREML")) {
+	if (strEQ(expectation->name, "MxExpectationGREML")) {
 		return omxChangeFitType(oo, "imxFitFunciontGRMFIML");
 	}
 	
-	if (strEQ(expectation->expType, "MxExpectationStateSpace")) {
+	if (strEQ(expectation->name, "MxExpectationStateSpace")) {
 		return omxChangeFitType(oo, "imxFitFunciontStateSpace");
 	}
 
-	if (strEQ(expectation->expType, "MxExpectationHiddenMarkov") ||
-	    strEQ(expectation->expType, "MxExpectationMixture")) {
+	if (strEQ(expectation->name, "MxExpectationHiddenMarkov") ||
+	    strEQ(expectation->name, "MxExpectationMixture")) {
 		return omxChangeFitType(oo, "imxFitFunciontHiddenMarkov");
 	}
 
@@ -336,10 +336,10 @@ omxFitFunction *MLFitState::initMorph()
 	int wantRowwiseLikelihood = Rf_asInteger(R_do_slot(oo->rObj, Rf_install("vector")));
 
 	bool fellnerPossible = (strEQ(omxDataType(dataMat), "raw") && expectation->numOrdinal == 0 &&
-				strEQ(oo->expectation->expType, "MxExpectationRAM") && !wantRowwiseLikelihood);
+				strEQ(oo->expectation->name, "MxExpectationRAM") && !wantRowwiseLikelihood);
 
 	if (Rf_asLogical(Rfellner) == 1 && !fellnerPossible) {
-		mxThrow("%s: fellner requires raw data (have %s), "
+		stop("%s: fellner requires raw data (have %s), "
 			 "all continuous indicators (%d are ordinal), "
 			 "MxExpectationRAM (have %s), and no row-wise likelihoods (want %d)",
 			 oo->name(), dataMat->getType(), expectation->numOrdinal,
@@ -348,11 +348,11 @@ omxFitFunction *MLFitState::initMorph()
 
 	if (strEQ(omxDataType(dataMat), "raw")) {
 		int useFellner = Rf_asLogical(Rfellner);
-		if (strEQ(oo->expectation->expType, "MxExpectationRAM")) {
+		if (strEQ(oo->expectation->name, "MxExpectationRAM")) {
 			omxRAMExpectation *ram = (omxRAMExpectation*) expectation;
 			if (ram->between.size()) {
 				if (useFellner == 0) {
-					mxThrow("%s: fellner=TRUE is required for %s",
+					stop("%s: fellner=TRUE is required for %s",
 						 oo->name(), expectation->name);
 				}
 				useFellner = 1;
@@ -398,7 +398,7 @@ void MLFitState::init()
 
 	auto dc = oo->expectation->getDataColumns();
 	if (dc.size()) {
-		if (dataMat->isDynamic()) mxThrow("%s: dynamic data & column reordering"
+		if (dataMat->isDynamic()) stop("%s: dynamic data & column reordering"
 						   " is not implemented yet", name());
 		newObj->copiedData = true;
 		newObj->observedCov = omxCreateCopyOfMatrix(newObj->observedCov, oo->matrix->currentState);
@@ -437,7 +437,7 @@ void MLFitState::init()
 	}
 
 	// add expectation API for derivs TODO
-	if (strEQ(expectation->expType, "MxExpectationNormal") &&
+	if (strEQ(expectation->name, "MxExpectationNormal") &&
 	    newObj->expectedCov->isSimple() &&
 	    (!newObj->expectedMeans || newObj->expectedMeans->isSimple())) {
 		oo->gradientAvailable = true;

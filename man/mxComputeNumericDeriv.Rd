@@ -5,11 +5,18 @@
 \alias{MxComputeNumericDeriv-class}
 \title{Numerically estimate Hessian using Richardson extrapolation}
 \usage{
-mxComputeNumericDeriv(freeSet = NA_character_, ...,
-  fitfunction = "fitfunction", parallel = TRUE,
-  stepSize = imxAutoOptionValue("Gradient step size"), iterations = 4L,
-  verbose = 0L, knownHessian = NULL, checkGradient = TRUE,
-  hessian = TRUE)
+mxComputeNumericDeriv(
+  freeSet = NA_character_,
+  ...,
+  fitfunction = "fitfunction",
+  parallel = TRUE,
+  stepSize = imxAutoOptionValue("Gradient step size"),
+  iterations = 4L,
+  verbose = 0L,
+  knownHessian = NULL,
+  checkGradient = TRUE,
+  hessian = TRUE
+)
 }
 \arguments{
 \item{freeSet}{names of matrices containing free variables}

@@ -4,8 +4,7 @@
 \alias{omxManifestModelByParameterJacobian}
 \title{Estimate the Jacobian of manifest model with respect to parameters}
 \usage{
-omxManifestModelByParameterJacobian(model, defvar.row = 1,
-  standardize = FALSE)
+omxManifestModelByParameterJacobian(model, defvar.row = 1, standardize = FALSE)
 }
 \arguments{
 \item{model}{an mxModel}

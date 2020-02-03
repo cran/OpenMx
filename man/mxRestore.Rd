@@ -5,9 +5,13 @@
 \alias{mxRestoreFromDataFrame}
 \title{Restore model state from a checkpoint file}
 \usage{
-mxRestore(model, chkpt.directory = mxOption(model,
-  "Checkpoint directory"), chkpt.prefix = mxOption(model,
-  "Checkpoint Prefix"), line = NULL, strict = FALSE)
+mxRestore(
+  model,
+  chkpt.directory = mxOption(model, "Checkpoint directory"),
+  chkpt.prefix = mxOption(model, "Checkpoint Prefix"),
+  line = NULL,
+  strict = FALSE
+)
 
 mxRestoreFromDataFrame(model, checkpoint, line = NULL)
 }
@@ -72,7 +76,8 @@ modelRestore$expCov
 The OpenMx User's guide can be found at \url{http://openmx.ssri.psu.edu/documentation}
 }
 \seealso{
-Other model state: \code{\link{mxComputeCheckpoint}},
-  \code{\link{mxSave}}
+Other model state: 
+\code{\link{mxComputeCheckpoint}()},
+\code{\link{mxSave}()}
 }
 \concept{model state}

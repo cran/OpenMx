@@ -132,7 +132,8 @@ namespace RelationalRAMExpectation {
 		struct ApcIO : PathCalcIO {
 			independentGroup &par;
 			int clumpSize;
-			ApcIO(independentGroup &_par) : par(_par), clumpSize(_par.clumpSize) {}
+			bool useRampart;
+			ApcIO(independentGroup &_par) : par(_par), clumpSize(_par.clumpSize), useRampart(true) {}
 			virtual void recompute(FitContext *fc);
 			virtual unsigned getVersion(FitContext *fc);
 			template <typename T>
@@ -178,6 +179,7 @@ namespace RelationalRAMExpectation {
 		Eigen::VectorXd                  simDataVec;
 		Eigen::VectorXd                  fullMean;  // rename, latents are filtered out
 		Eigen::VectorXd                  rawFullMean;
+		int                              skipMean;
 		Eigen::VectorXd                  expectedVec;
 		Eigen::MatrixXd                  fullCov;   // rename, latents are filtered out
 		std::vector<bool>                latentFilter; // false when latent or missing
@@ -232,7 +234,7 @@ namespace RelationalRAMExpectation {
 		std::vector<addr>		 layout;
 
 		void clumpWith(int upper, int lower) {
-			if (layoutSetup[lower].clumped) mxThrow("%d is already clumped", lower);
+			if (layoutSetup[lower].clumped) stop("%d is already clumped", lower);
 			layoutSetup[upper].clump.push_back(lower);
 			layoutSetup[lower].clumped = true;
 		};
@@ -363,6 +365,7 @@ class omxRAMExpectation : public omxExpectation {
 	void logDefVarsInfluence();
 
 	omxMatrix *cov, *means; // observed covariance and means
+	omxMatrixPtr covOwner, meanOwner;
 	omxMatrix *slope;       // exogenous predictor slopes
 	omxMatrix *A, *S, *F, *M;
 

@@ -61,7 +61,8 @@ modelSaved$expCov
 The OpenMx User's guide can be found at \url{http://openmx.ssri.psu.edu/documentation}
 }
 \seealso{
-Other model state: \code{\link{mxComputeCheckpoint}},
-  \code{\link{mxRestore}}
+Other model state: 
+\code{\link{mxComputeCheckpoint}()},
+\code{\link{mxRestore}()}
 }
 \concept{model state}

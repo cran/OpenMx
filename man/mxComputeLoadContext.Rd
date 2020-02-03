@@ -5,8 +5,16 @@
 \alias{MxComputeLoadContext-class}
 \title{Load contextual data to supplement checkpoint}
 \usage{
-mxComputeLoadContext(method = c("csv"), path = c(), column, ...,
-  sep = " ", verbose = 0L, header = TRUE, col.names = NULL)
+mxComputeLoadContext(
+  method = c("csv"),
+  path = c(),
+  column,
+  ...,
+  sep = " ",
+  verbose = 0L,
+  header = TRUE,
+  col.names = NULL
+)
 }
 \arguments{
 \item{method}{name of the conduit used to load the columns.}

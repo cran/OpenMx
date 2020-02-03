@@ -4,8 +4,11 @@
 \alias{mxDescribeDataWLS}
 \title{Determine whether a dataset will have weights and summary statistics for the means if used with mxFitFunctionWLS}
 \usage{
-mxDescribeDataWLS(data, allContinuousMethod = c("cumulants",
-  "marginals"), verbose = FALSE)
+mxDescribeDataWLS(
+  data,
+  allContinuousMethod = c("cumulants", "marginals"),
+  verbose = FALSE
+)
 }
 \arguments{
 \item{data}{the (currently raw) data being used in a \code{\link{mxFitFunctionWLS}} model.}

@@ -5,8 +5,12 @@
 \alias{MxComputeSequence-class}
 \title{Invoke a series of compute objects in sequence}
 \usage{
-mxComputeSequence(steps = list(), ..., freeSet = NA_character_,
-  independent = FALSE)
+mxComputeSequence(
+  steps = list(),
+  ...,
+  freeSet = NA_character_,
+  independent = FALSE
+)
 }
 \arguments{
 \item{steps}{a list of compute objects}

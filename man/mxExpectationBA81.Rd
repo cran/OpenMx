@@ -7,10 +7,19 @@
 \alias{print,MxExpectationBA81-method}
 \title{Create a Bock & Aitkin (1981) expectation}
 \usage{
-mxExpectationBA81(ItemSpec, item = "item", ..., qpoints = 49L,
-  qwidth = 6, mean = "mean", cov = "cov", verbose = 0L,
-  weightColumn = NA_integer_, EstepItem = NULL,
-  debugInternal = FALSE)
+mxExpectationBA81(
+  ItemSpec,
+  item = "item",
+  ...,
+  qpoints = 49L,
+  qwidth = 6,
+  mean = "mean",
+  cov = "cov",
+  verbose = 0L,
+  weightColumn = NA_integer_,
+  EstepItem = NULL,
+  debugInternal = FALSE
+)
 }
 \arguments{
 \item{ItemSpec}{a single item model (to replicate) or a list of

@@ -25,10 +25,10 @@
 
 \usage{
 mxEval(expression, model, compute = FALSE, show = FALSE, defvar.row = 1,
-    cache = new.env(parent = emptyenv()), cacheBack = FALSE)
+    cache = new.env(parent = emptyenv()), cacheBack = FALSE, .extraBack=0L)
 
 mxEvalByName(name, model, compute = FALSE, show = FALSE, defvar.row = 1,
-    cache = new.env(parent = emptyenv()), cacheBack = FALSE)
+    cache = new.env(parent = emptyenv()), cacheBack = FALSE, .extraBack=0L)
 }
 
 \arguments{
@@ -41,6 +41,7 @@ mxEvalByName(name, model, compute = FALSE, show = FALSE, defvar.row = 1,
    \item{cache}{An R environment of matrix values used to speedup computation.}
    \item{cacheBack}{If TRUE then return the list pair (value, cache).}
    \item{name}{The character name of an object to evaluate.}
+   \item{.extraBack}{Depth of original caller in count of stack frames (environments).}
 }
 
 \details{

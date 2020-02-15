@@ -261,7 +261,7 @@ static void ensureElemConform(const char *opName, FitContext *fc, omxMatrix **ma
 			EigenMatrixAdaptor m(mat1);
 			detail += mxStringifyMatrix(mat1->name(), m, empty);
 		}
-		stop("Element-wise '%s' not conformable: '%s' is %dx%d and '%s' is %dx%d\n%s",
+		mxThrow("Element-wise '%s' not conformable: '%s' is %dx%d and '%s' is %dx%d\n%s",
 			 opName, mat0->name(), mat0->rows, mat0->cols,
 			 mat1->name(), mat1->rows, mat1->cols, detail.c_str());
 	}
@@ -277,7 +277,7 @@ static void omxBroadcast(FitContext *fc, omxMatrix** matList, int numArgs, omxMa
 	}
 
 	if (src->rows != 1 || src->cols != 1) {
-		stop("Don't know how to broadcast from %dx%d source "
+		mxThrow("Don't know how to broadcast from %dx%d source "
 			 "matrix '%s' to %dx%d result matrix '%s'",
 			 src->rows, src->cols, src->name(),
 			 result->rows, result->cols, result->name());
@@ -924,7 +924,7 @@ static void omxMatrixDeterminant(FitContext *fc, omxMatrix** matList, int numArg
 	omxMatrix* inMat = matList[0];
 	int rows = inMat->rows;
 	int cols = inMat->cols;
-	if(rows != cols) stop("Determinant of non-square matrix '%s' cannot be found", inMat->name());
+	if(rows != cols) mxThrow("Determinant of non-square matrix '%s' cannot be found", inMat->name());
 
 	EigenMatrixAdaptor Ein(inMat);
 	Eigen::PartialPivLU<Eigen::MatrixXd> lu(Ein);
@@ -1907,13 +1907,7 @@ static void omxMatrixVechs(FitContext *fc, omxMatrix** matList, int numArgs, omx
 		}
 	}
 
-	if(counter != size) {
-		char *errstr = (char*) calloc(250, sizeof(char));
-		sprintf(errstr, "Internal stop in vechs().\n");
-		omxRaiseError(errstr);
-		free(errstr);
-	}
-
+	if(counter != size) mxThrow("Internal error in vechs()");
 }
 
 static void omxRowVectorize(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
@@ -2208,7 +2202,7 @@ static void omxRealEigenvalues(FitContext *fc, omxMatrix** matList, int numArgs,
 {
 	omxMatrix* B = matList[0];
 
-	if(B->cols != B->rows) stop("Non-square matrix '%s' in eigenvalue decomposition", B->name());
+	if(B->cols != B->rows) mxThrow("Non-square matrix '%s' in eigenvalue decomposition", B->name());
 
 	if(result->rows != B->rows || result->cols != 1)
 		omxResizeMatrix(result, B->rows, 1);
@@ -2226,7 +2220,7 @@ static void omxRealEigenvectors(FitContext *fc, omxMatrix** matList, int numArgs
 {
 	omxMatrix* B = matList[0];
 
-	if(B->cols != B->rows) stop("Non-square matrix '%s' in eigenvalue decomposition", B->name());
+	if(B->cols != B->rows) mxThrow("Non-square matrix '%s' in eigenvalue decomposition", B->name());
 
 	omxResizeMatrix(result, B->rows, B->cols);
 
@@ -2243,7 +2237,7 @@ static void omxImaginaryEigenvalues(FitContext *fc, omxMatrix** matList, int num
 {
 	omxMatrix* B = matList[0];
 
-	if(B->cols != B->rows) stop("Non-square matrix '%s' in eigenvalue decomposition", B->name());
+	if(B->cols != B->rows) mxThrow("Non-square matrix '%s' in eigenvalue decomposition", B->name());
 
 	if(result->rows != B->rows || result->cols != 1)
 		omxResizeMatrix(result, B->rows, 1);
@@ -2261,7 +2255,7 @@ static void omxImaginaryEigenvectors(FitContext *fc, omxMatrix** matList, int nu
 {
 	omxMatrix* B = matList[0];
 
-	if(B->cols != B->rows) stop("Non-square matrix '%s' in eigenvalue decomposition", B->name());
+	if(B->cols != B->rows) mxThrow("Non-square matrix '%s' in eigenvalue decomposition", B->name());
 
 	omxResizeMatrix(result, B->rows, B->cols);
 
@@ -2453,14 +2447,14 @@ static void omxCholesky(FitContext *fc, omxMatrix** matList, int numArgs, omxMat
 {
 	omxMatrix* inMat = matList[0];
 	if(inMat->rows != inMat->cols) {
-		stop("Cholesky decomposition of non-square matrix '%s' is not defined", inMat->name());
+		mxThrow("Cholesky decomposition of non-square matrix '%s' is not defined", inMat->name());
 	}
 	omxCopyMatrix(result, inMat);
 	EigenMatrixAdaptor Ei(result);
 
 	Eigen::LLT< Eigen::Ref<Eigen::MatrixXd>, Eigen::Upper > sc(Ei);
 	if (sc.info() != Eigen::Success) {
-		stop("Cholesky factor of '%s' failed", inMat->name());
+		mxThrow("Cholesky factor of '%s' failed", inMat->name());
 	}
 	Ei.triangularView<Eigen::StrictlyLower>().setZero();
 }
@@ -2552,7 +2546,7 @@ static void omxExponential(FitContext *fc, omxMatrix** matList, int numArgs, omx
 	}
 
 	omxMatrix* inMat = matList[0];
-	if (inMat->rows != inMat->cols) stop("omxExponential requires a symmetric matrix");
+	if (inMat->rows != inMat->cols) mxThrow("omxExponential requires a symmetric matrix");
 	omxEnsureColumnMajor(inMat);
 	omxResizeMatrix(result, inMat->rows, inMat->cols);
 	result->colMajor = true;
@@ -2563,7 +2557,7 @@ static void omxExponential(FitContext *fc, omxMatrix** matList, int numArgs, omx
 static void mxMatrixLog(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
 {
 	omxMatrix* inMat = matList[0];
-	if (inMat->rows != inMat->cols) stop("logm requires a symmetric matrix");
+	if (inMat->rows != inMat->cols) mxThrow("logm requires a symmetric matrix");
 	omxEnsureColumnMajor(inMat);
 	omxResizeMatrix(result, inMat->rows, inMat->cols);
 	result->colMajor = true;
@@ -2707,25 +2701,39 @@ void partitionCovarianceSet(Eigen::MatrixBase<T1> &gcov,
 template <typename T> 
 void buildFilterVec(omxMatrix *origCov, omxMatrix *newCov, std::vector<T> &filter)
 {
-	if (origCov->rows != origCov->cols) stop("'%s' must be square", origCov->name());
-	if (origCov->rows != int(origCov->rownames.size())) stop("'%s' must have dimnames", origCov->name());
-	if (newCov->rows != newCov->cols) stop("'%s' must be square", newCov->name());
-	if (newCov->rows != int(newCov->rownames.size())) stop("'%s' must have dimnames", newCov->name());
-	for (int r1=0; r1 < int(newCov->rownames.size()); ++r1) {
-		bool found = false;
-		for (int r2=0; r2 < int(origCov->rownames.size()); ++r2) {
-			if (strEQ(newCov->rownames[r1], origCov->rownames[r2])) {
-				if (filter[r2]) {
-					omxRaiseErrorf("Cannot filter row '%s' in '%s' more than once",
-						       newCov->rownames[r1], origCov->name());
+	if (origCov->rows != origCov->cols) mxThrow("'%s' must be square", origCov->name());
+	if (newCov->rows != newCov->cols) mxThrow("'%s' must be square", newCov->name());
+
+	if (newCov->sameSize(origCov)) {
+		EigenMatrixAdaptor EorigCov(origCov);
+		EigenMatrixAdaptor EnewCov(newCov);
+		Eigen::Array<bool, Eigen::Dynamic, Eigen::Dynamic> NotMatch =
+			EorigCov.array() != EnewCov.array();
+		Eigen::Array<bool, Eigen::Dynamic, 1> mask =
+			NotMatch.rowwise().maxCoeff() || NotMatch.colwise().maxCoeff().transpose();
+		std::copy(&mask.coeffRef(0), &mask.coeffRef(mask.size()), filter.begin());
+	} else {
+		if (origCov->rows != int(origCov->rownames.size()))
+			mxThrow("'%s' must have dimnames", origCov->name());
+		if (newCov->rows != int(newCov->rownames.size()))
+			mxThrow("'%s' must have dimnames", newCov->name());
+
+		for (int r1=0; r1 < int(newCov->rownames.size()); ++r1) {
+			bool found = false;
+			for (int r2=0; r2 < int(origCov->rownames.size()); ++r2) {
+				if (strEQ(newCov->rownames[r1], origCov->rownames[r2])) {
+					if (filter[r2]) {
+						omxRaiseErrorf("Cannot filter row '%s' in '%s' more than once",
+													 newCov->rownames[r1], origCov->name());
+					}
+					filter[r2] = true;
+					found = true;
+					break;
 				}
-				filter[r2] = true;
-				found = true;
-				break;
 			}
+			if (!found) omxRaiseErrorf("Cannot find row '%s' in '%s'",
+																 newCov->rownames[r1], origCov->name());
 		}
-		if (!found) omxRaiseErrorf("Cannot find row '%s' in '%s'",
-				     newCov->rownames[r1], origCov->name());
 	}
 }
 
@@ -2734,7 +2742,6 @@ static void pearsonSelCov(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	omxMatrix *origCov = matList[0];
 	omxMatrix *newCov = matList[1];
 	EigenMatrixAdaptor EorigCov(origCov);
-	EigenMatrixAdaptor EnewCov(newCov);
 
 	omxResizeMatrix(result, origCov->rows, origCov->cols);
 	EigenMatrixAdaptor Eresult(result);
@@ -2744,9 +2751,22 @@ static void pearsonSelCov(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 	buildFilterVec(origCov, newCov, filter);
 	if (isErrorRaised()) return;
 
-	Eigen::MatrixXd v11(EnewCov.rows(), EnewCov.cols());
-	Eigen::MatrixXd v12(EnewCov.rows(), EorigCov.cols() - EnewCov.cols());
-	Eigen::MatrixXd v22(EorigCov.rows() - EnewCov.rows(), EorigCov.cols() - EnewCov.cols());
+	EigenMatrixAdaptor EnewCov(newCov);
+	Eigen::MatrixXd nc;
+	if (newCov->sameSize(origCov)) {
+		subsetCovariance(EnewCov, [&filter](int x)->bool{ return filter[x]; },
+										 std::accumulate(filter.begin(), filter.end(), 0), nc);
+	} else {
+		nc = EnewCov;
+	}
+	if (nc.rows() == 0) {
+		Eresult.derived() = EorigCov;
+		return;
+	}
+
+	Eigen::MatrixXd v11(nc.rows(), nc.cols());
+	Eigen::MatrixXd v12(nc.rows(), EorigCov.cols() - nc.cols());
+	Eigen::MatrixXd v22(EorigCov.rows() - nc.rows(), EorigCov.cols() - nc.cols());
 	partitionCovariance(EorigCov, [&](int xx){ return filter[xx]; },
 			    v11, v12, v22);
 
@@ -2756,11 +2776,11 @@ static void pearsonSelCov(FitContext *fc, omxMatrix** matList, int numArgs, omxM
 		return;
 	}
 	iv11 = iv11.selfadjointView<Eigen::Lower>();
-	Eigen::MatrixXd n12 = EnewCov * iv11 * v12;
-	Eigen::MatrixXd n22 = v22 - v12.transpose() * (iv11 - iv11 * EnewCov * iv11) * v12;
+	Eigen::MatrixXd n12 = nc * iv11 * v12;
+	Eigen::MatrixXd n22 = v22 - v12.transpose() * (iv11 - iv11 * nc * iv11) * v12;
 	
 	partitionCovarianceSet(Eresult, [&](int xx){ return filter[xx]; },
-			       EnewCov, n12, n22);
+			       nc, n12, n22);
 }
 
 static void pearsonSelMean(FitContext *fc, omxMatrix** matList, int numArgs, omxMatrix* result)
@@ -2768,13 +2788,12 @@ static void pearsonSelMean(FitContext *fc, omxMatrix** matList, int numArgs, omx
 	omxMatrix *origCov = matList[0];
 	omxMatrix *newCov = matList[1];
 	omxMatrix *origMean = matList[2];
-	if (origMean->cols > 1) stop("'%s' must be a column vector", origMean->name());
+	if (origMean->cols > 1) mxThrow("'%s' must be a column vector", origMean->name());
 	if (origMean->rows != origCov->rows) {
-		stop("'%s' of dimension %d must have same dimension as '%s' (%d)",
+		mxThrow("'%s' of dimension %d must have same dimension as '%s' (%d)",
 			 origMean->name(), origMean->rows, origCov->name(), origCov->rows);
 	}
 	EigenMatrixAdaptor EorigCov(origCov);
-	EigenMatrixAdaptor EnewCov(newCov);
 	EigenVectorAdaptor EorigMean(origMean);
 
 	omxResizeMatrix(result, EorigMean.size(), 1);
@@ -2785,9 +2804,22 @@ static void pearsonSelMean(FitContext *fc, omxMatrix** matList, int numArgs, omx
 	buildFilterVec(origCov, newCov, filter);
 	if (isErrorRaised()) return;
 
-	Eigen::MatrixXd v11(EnewCov.rows(), EnewCov.cols());
-	Eigen::MatrixXd v12(EnewCov.rows(), EorigCov.cols() - EnewCov.cols());
-	Eigen::MatrixXd v22(EorigCov.rows() - EnewCov.rows(), EorigCov.cols() - EnewCov.cols());
+	EigenMatrixAdaptor EnewCov(newCov);
+	Eigen::MatrixXd nc;
+	if (newCov->sameSize(origCov)) {
+		subsetCovariance(EnewCov, [&filter](int x)->bool{ return filter[x]; },
+										 std::accumulate(filter.begin(), filter.end(), 0), nc);
+	} else {
+		nc = EnewCov;
+	}
+	if (nc.rows() == 0) {
+		Eresult.derived() = EorigMean;
+		return;
+	}
+
+	Eigen::MatrixXd v11(nc.rows(), nc.cols());
+	Eigen::MatrixXd v12(nc.rows(), EorigCov.cols() - nc.cols());
+	Eigen::MatrixXd v22(EorigCov.rows() - nc.rows(), EorigCov.cols() - nc.cols());
 	partitionCovariance(EorigCov, [&](int xx){ return filter[xx]; },
 			    v11, v12, v22);
 
@@ -2800,7 +2832,7 @@ static void pearsonSelMean(FitContext *fc, omxMatrix** matList, int numArgs, omx
 	
 	Eigen::VectorXd obsMean;
 	subsetVector(EorigMean, [&](int xx){ return filter[xx]; },
-		     EnewCov.rows(), obsMean);
+		     nc.rows(), obsMean);
 
 	Eigen::VectorXd adj = v12.transpose() * iv11 * obsMean;
 	for (int v1=0, a1=0; v1 < EorigMean.rows(); ++v1) {

@@ -272,7 +272,7 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 	super::initFromFrontend(state, rObj);
 
 	/*if (state->conListX.size()) {
-		stop("%s: cannot proceed with constraints (%d constraints found)",
+		mxThrow("%s: cannot proceed with constraints (%d constraints found)",
 			name, int(state->conListX.size()));
 	}*/
 
@@ -282,7 +282,7 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("iterations")));
 	numIter = INTEGER(slotValue)[0];
-	if (numIter < 2) stop("stepSize must be 2 or greater");
+	if (numIter < 2) mxThrow("stepSize must be 2 or greater");
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("parallel")));
 	parallel = Rf_asLogical(slotValue);
@@ -300,7 +300,7 @@ void omxComputeNumericDeriv::initFromFrontend(omxState *state, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("stepSize")));
 	stepSize = GRADIENT_FUDGE_FACTOR(3.0) * REAL(slotValue)[0];
-	if (stepSize <= 0) stop("stepSize must be positive");
+	if (stepSize <= 0) mxThrow("stepSize must be positive");
 
 	knownHessian = NULL;
 	{
@@ -359,7 +359,12 @@ void omxComputeNumericDeriv::omxCalcFinalConstraintJacobian(FitContext* fc, int 
 	
 	fc->constraintFunVals = resulttmp;
 	fc->constraintJacobian = jactmp;
-	fc->setEstFromOptimizer(optima);
+	/* Subsequent code assumes that fc->est is set to the optimium
+	  point. If there is more than 1 thread then the top-level fc->est
+	  is unchanged, but if there is only 1 thread then the last
+	  parameter in fc->est is offset due to numeric differentiation.
+	  Hence, we set it back to its optimum value: */
+	fc->est[npar-1L] = optima.coeff(npar-1L);
 	return;
 }
 
@@ -378,7 +383,7 @@ void omxComputeNumericDeriv::computeImpl(FitContext *fc)
 
 	int nf = fc->calcNumFree();
 	if (numParams != 0 && numParams != nf) {
-		stop("%s: number of parameters changed from %d to %d",
+		mxThrow("%s: number of parameters changed from %d to %d",
 			 name, numParams, nf);
 	}
 

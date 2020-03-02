@@ -1,4 +1,4 @@
-0fb8e09481846540afeafdffe20d9ff1 *DESCRIPTION
+d11092151bd7d65105ba49a11f4dfe20 *DESCRIPTION
 5eb3044e3e2162b9aacc3f5f1e8e6dd6 *NAMESPACE
 4b2f07b8c720e28f066d353686750d66 *NEWS.md
 3deba0f330b305e51b8a59f0b4755010 *R/0ClassUnion.R
@@ -27,14 +27,14 @@ bd4ee2d426737bfde5a9cea087dd504b *R/MxData.R
 3daeeeea5819f8fdae75ba1743b3d2d8 *R/MxDependencies.R
 62960036c41b26507b19ee3569b2b98f *R/MxDetectCores.R
 727af7adf0c7d002b0054cc5473c18cb *R/MxErrorHandling.R
-7d5a40f42b00d0af51318dbc9bed2960 *R/MxEval.R
+d5b6bfd0ac0d0699c9429f33c3dcf5ab *R/MxEval.R
 a3969dda427363692e4221bdf555e586 *R/MxExpectation.R
 612f1135f3def9f859f70b65766ecf80 *R/MxExpectationBA81.R
 008aa5addcf1ec2436dae6e157c1b931 *R/MxExpectationGREML.R
 e07d3e90ab73494010f334a615432e4d *R/MxExpectationHiddenMarkov.R
 f913866545bbeea5b41b43d38232ffab *R/MxExpectationLISREL.R
 74f18f3c0ff1f0e699db6146a18df4ab *R/MxExpectationMixture.R
-e6aa5bcfa430a88a8dfc882635a3f50e *R/MxExpectationNormal.R
+7985ecdb40f2278b4046904d16767fed *R/MxExpectationNormal.R
 cbdd1da6ddc0f2e781d2f1ba052b7f07 *R/MxExpectationRAM.R
 e9b9307b18b77ba90bb75a4a2d4cbcc2 *R/MxExpectationStateSpace.R
 cd3b333846141b570a10f5dbfd6e5f73 *R/MxExponential.R
@@ -46,7 +46,7 @@ d8d9aa96463154e0c64fe6ae8e258baa *R/MxFitFunctionGREML.R
 96cad2e9a1ec97ffd36a9171d01bef0d *R/MxFitFunctionML.R
 f56ecc1f1470a40b64ad7833ba63768a *R/MxFitFunctionMultigroup.R
 3714d95b7872d27740d8cf5cf150e344 *R/MxFitFunctionR.R
-2e09de033d77a8097e83a4c6cf141cb3 *R/MxFitFunctionRow.R
+ca439c720a7b31af46616de9bc4403ea *R/MxFitFunctionRow.R
 e60c2c342cf9343e1e78a689c7261e28 *R/MxFitFunctionWLS.R
 3f27af94be46ac201ae1d55a7e2cf7ce *R/MxFlatModel.R
 4343d7a8b8326752018d40732e2bcf55 *R/MxFlatSearchReplace.R
@@ -93,7 +93,7 @@ bcd6f112d7c844890fc0d8505417f166 *R/MxThreshold.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 adc2c1b73a94ce9d0a1cf341de3a8735 *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-713ef33fd0e2ce6a0aeb46f983e545a4 *R/MxVersion.R
+2d1ac7d70a21bc3b16a07a8e50635971 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 bd1b62fc130af72e5297aa110bc80fcc *R/OriginalMx.R
 9a96eb6827dc9d723426280c1bcb0981 *R/SdiagMatrix.R
@@ -217,7 +217,7 @@ e0eceb54cf755c6738e35e6ecdf7137f *demo/UnivariateTwinAnalysis_MatrixRaw.R
 b1ca076b523cbd853eb351157e98cf71 *demo/data/BivariateHeterogeneity2.csv
 e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 52168875a6d4e1e645611a544c656244 *demo/omxConstrainMLThresholds.R
-871507080f0eb20150894bc1b24354bf *inst/CITATION
+0fb7599536d9ecc97e38370bacc502a3 *inst/CITATION
 1d775fa097d35e3b32e0b4d8d4289f48 *inst/WORDLIST
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
@@ -571,7 +571,7 @@ d83c22856001893ec48bdfb1a8cca301 *inst/models/passing/defvaralgebra.R
 bed7cae65a1d849a9333bee373cf9226 *inst/models/passing/evalOnGrid.R
 0af4f4b52f594585b3cf1ce0bace6f7b *inst/models/passing/exoPredWLS.R
 1bfe23f176dcc55b788043653f6b5afb *inst/models/passing/exoPredWLS2.R
-46f85d00097bbd9fd2c222be0d53a2a9 *inst/models/passing/fm-example2-2.R
+0847201283e8e1a72268b2893dd6184d *inst/models/passing/fm-example2-2.R
 d8f8b74fcb46383e447c6f499199db3f *inst/models/passing/heck-thomas-2015ch4.R
 e9310cdc00a4da4bc7fdb940d00e0cd1 *inst/models/passing/ifa-allna.R
 cbaa7a4836b572d3773cf6a1d1e12821 *inst/models/passing/ifa-drm-mg.R
@@ -644,7 +644,7 @@ f19bb951733d172e533b855120f50d2e *inst/mx-scripts/univACE.mx
 d41d8cd98f00b204e9800998ecf8427e *inst/no-npsol
 5f7392518bfd4cc9415b2d5d0a627a09 *inst/tools/OpenMx.supp
 81a6f0961e30be8f5f3415d009d6b704 *inst/tools/OpenMxInstaller.R
-42544f46ccb14b1e53ea4bd22dce06df *inst/tools/docTestGenerator.sh
+d275e816c86ff1f5294a1031a028465a *inst/tools/docTestGenerator.sh
 e7d8684d627e7ad2631e03d8537e13e1 *inst/tools/dummyFunctions.R
 e560932a200021b8c4f92183364d6717 *inst/tools/failTestModels.R
 c1e6202c2fc8486cd0881aecdcc212b9 *inst/tools/findBuildNum.sh
@@ -656,9 +656,9 @@ e9e938cf51710190241f62922bf45af9 *inst/tools/mk-r-libs-user-dir
 9dadbfab3c0b1705a391daf9e79f126c *inst/tools/mxParser.py
 bb97c0293f7adc6c8b2a4ca5dfbd826d *inst/tools/parallelTestModels.R
 a67b119bc3b882fcb4210a4564c1604c *inst/tools/regressionTesting.sh
-582c8d0a6a635128c50895fa4079d365 *inst/tools/rprofTestModels.R
+142cb0f0ffc6518a843626f4870cd369 *inst/tools/rprofTestModels.R
 9b71161de6119e2cc20c6f57a782b08d *inst/tools/sphinxToR.py
-50951102856a8d9c2a816c4bf6e951c8 *inst/tools/testDocs.R
+96701ba624eb8161b7f06d5aa3f9bb4b *inst/tools/testDocs.R
 199429c323e2f7333234a141d9f4e878 *inst/tools/testModels.R
 12f3a0021ca497e2cd620778691ebe83 *inst/tools/testNightlyPPML.R
 0aee5f43cc991ca34b211deda4cc3710 *inst/tools/updateCopyright.sh
@@ -1058,7 +1058,7 @@ bc4b39ee72e4aeef67c9bfe43ba62eb2 *src/omxImportFrontendState.cpp
 c9b2aa5058a8632069c5490ac9b043cf *src/omxMLFitFunction.cpp
 8d3c2a4891d72da8b7d6ddb08d6d7b44 *src/omxMatrix.cpp
 f3bf59a1207dbdf661d7fe02f1a07d74 *src/omxMatrix.h
-75473dbdf6824583010b6664329f7fee *src/omxNLopt.cpp
+cee21da5dc70c3501897d9b7ea47472d *src/omxNLopt.cpp
 fbb0eadf99a870291b8491a9fc28ecff *src/omxNLopt.h
 1e314e254b34d9dae53a049ff43b13d0 *src/omxNPSOLSpecific.cpp
 8b271513514cb0110539303bb753d637 *src/omxNPSOLSpecific.h
@@ -1086,6 +1086,7 @@ a1b38a84f46dccdf10798308557a1277 *src/sadmvn.f
 9bb6bbe1a0d3400a0e8dde4c0b5f5dd7 *src/ssMLFit.cpp
 e2f945871653acef7489996ca2f000c0 *src/stop.c
 5ffb5b12859ca741e577cf728d2c7973 *tests/testthat.R
+fe44cc6417e719c03f74bbb74ed19ca8 *tests/testthat/test-268.R
 eeac9346b8a9f620b747642d3cadebdf *tests/testthat/test-ACELRTCI20160808.R
 9240288c7c81bc6705cc074a1bb06d25 *tests/testthat/test-AlgebraComputePassing.R
 ab072a8c8f07518c9438bd555a9d583e *tests/testthat/test-ConstantSubst.R
@@ -1117,7 +1118,6 @@ f6c012e96c75127cdc6b8c9a710e52c4 *tools/boot-regression
 350c97e0114b780d6bd4e1b3a33a8043 *tools/covr.R
 1d7d0b44ffd4cc198417b9b6d174df8f *tools/ifa-regression
 f3ed712dace4d1c5a8fdb19718c4f263 *tools/mr1991-regression
-c7daaef798ff6f68abaad6fa8422a08e *tools/revdep.R
 35e7332a008c7baf21e5099b55e13b6f *tools/rp-regression
 79cae32dbd2bbff3a0feeebd2b3a63d9 *tools/ss-regression
 23176767b28fd781a63cedd301a854bc *tools/test

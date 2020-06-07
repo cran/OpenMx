@@ -4,7 +4,9 @@
 \name{imxDataTypes}
 \alias{imxDataTypes}
 \title{Valid types of data that can be contained by MxData}
-\format{An object of class \code{character} of length 4.}
+\format{
+An object of class \code{character} of length 4.
+}
 \usage{
 imxDataTypes
 }

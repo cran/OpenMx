@@ -4,7 +4,9 @@
 \name{imxConstraintRelations}
 \alias{imxConstraintRelations}
 \title{imxConstraintRelations}
-\format{An object of class \code{character} of length 3.}
+\format{
+An object of class \code{character} of length 3.
+}
 \usage{
 imxConstraintRelations
 }

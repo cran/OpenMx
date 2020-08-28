@@ -21,7 +21,8 @@ mxComputeLoadData(
   cacheSize = 100L,
   checkpointMetadata = TRUE,
   na.strings = c("NA"),
-  observed = NULL
+  observed = NULL,
+  rowFilter = c()
 )
 }
 \arguments{
@@ -57,9 +58,11 @@ scan through the data. Only used when byrow=FALSE.}
 \item{na.strings}{character vector. A vector of strings that denote a missing value.}
 
 \item{observed}{data frame. The reservoir of data for \code{method='data.frame'}.}
+
+\item{rowFilter}{logical vector. Whether to skip the source row.}
 }
 \description{
-THIS INTERFACE IS EXPERIMENTAL AND SUBJECT TO CHANGE.
+\lifecycle{experimental}
 }
 \details{
 The purpose of this compute step is to help quickly perform many

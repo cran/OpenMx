@@ -10,6 +10,7 @@ imxGenericModelBuilder(
   name,
   manifestVars,
   latentVars,
+  productVars,
   submodels,
   remove,
   independent
@@ -25,6 +26,8 @@ imxGenericModelBuilder(
 \item{manifestVars}{manifestVars}
 
 \item{latentVars}{latentVars}
+
+\item{productVars}{productVars}
 
 \item{submodels}{submodels}
 

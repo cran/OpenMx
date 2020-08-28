@@ -15,9 +15,7 @@ mxComputeTryCatch(plan, ..., freeSet = NA_character_)
 \item{freeSet}{names of matrices containing free variables}
 }
 \description{
-THIS IS EXPERIMENTAL AND MAY HAVE BUGS.
-}
-\details{
+\lifecycle{experimental}
 Any error will be recorded in a subsequent checkpoint. After
 execution, the context will be reset to continue computation as if
 no errors has occurred.

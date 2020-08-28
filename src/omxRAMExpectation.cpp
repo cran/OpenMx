@@ -113,10 +113,13 @@ void omxRAMExpectation::compute(FitContext *fc, const char *what, const char *ho
 	}
 
 	oro->CalculateRAMCovarianceAndMeans(fc);
+
+	super::compute(fc, what, how);
 }
 
 void omxRAMExpectation::invalidateCache()
 {
+  super::invalidateCache();
 	if (rram) {
 		delete rram;
 		rram = 0;
@@ -157,7 +160,8 @@ void omxRAMExpectation::populateAttr(SEXP robj)
 	if (oro->rram) {
 		rram->exportInternalState(dbg);
 	} else {
-		oro->CalculateRAMCovarianceAndMeans(0);
+    // This code should be shared with all normal expectations TODO
+    compute(0, 0, 0);
 		EigenMatrixAdaptor Ecov(oro->cov);
 		out.add("covariance", Rcpp::wrap(Ecov));
 		if (oro->means) {
@@ -167,6 +171,7 @@ void omxRAMExpectation::populateAttr(SEXP robj)
 		if (hasProductNodes) {
 			dbg.add("polyRep", Rcpp::wrap(pcalc.getPolyRep()));
 		}
+    populateNormalAttr(robj, out);
 	}
 
 	Rf_setAttrib(robj, Rf_install("output"), out.asR());
@@ -195,16 +200,16 @@ void omxRAMExpectation::CalculateRAMCovarianceAndMeans(FitContext *fc)
 	if (F->rows == 0) return;
 
 	if (slope) omxRecompute(slope, fc);
-	    
+
 	if(cov == NULL && means == NULL) {
 		return; // We're not populating anything, so why bother running the calculation?
 	}
-	
+
 	EigenMatrixAdaptor Ecov(cov);
 	pcalc.cov(fc, Ecov);
 
 	if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(cov, "....RAM: Model-implied Covariance Matrix:");}
-	
+
 	if (M) {
 		EigenVectorAdaptor Emean(means);
 		pcalc.mean(fc, Emean);
@@ -235,7 +240,7 @@ static void recordNonzeroCoeff(omxMatrix *m, std::vector<coeffLoc> &vec, bool lo
 }
 
 omxRAMExpectation::omxRAMExpectation(omxState *st, int num)
-	: super(st, num), slope(0)
+	: super(st, num), studiedF(false), numExoPred(0), slope(0), rram(0)
 {
 	if (st->isClone()) {
 		omxRAMExpectation *ram = (omxRAMExpectation *)st->getParent(this);
@@ -248,18 +253,20 @@ omxRAMExpectation::omxRAMExpectation(omxState *st, int num)
 	}
 }
 
-void omxRAMExpectation::init() {
-	if(OMX_DEBUG) { mxLog("Initializing RAM expectation."); }
-	
+void omxRAMExpectation::init()
+{
+	loadDataColFromR();
+	loadThresholdFromR();
+
 	int l, k;
 
 	omxRAMExpectation *RAMexp = this;
 	RAMexp->rram = 0;
-	
+
 	auto oo=this;
 
 	oo->canDuplicate = true;
-	
+
 	ProtectedSEXP Rverbose(R_do_slot(rObj, Rf_install("verbose")));
 	RAMexp->verbose = Rf_asInteger(Rverbose) + OMX_DEBUG;
 
@@ -340,7 +347,7 @@ void omxRAMExpectation::init() {
 				mxLog("%s: join col %d against %s using between matrix %s",
 				      oo->name, foreignKey, fex->name, bmat->name());
 			}
-				
+
 			RAMexp->between.push_back(bmat);
 		}
 	}
@@ -357,17 +364,16 @@ void omxRAMExpectation::init() {
 	isProductNode.assign(A->cols, false);
 	if (R_has_slot(rObj, Rf_install("isProductNode"))) {
 		ProtectedSEXP RprodNode(R_do_slot(rObj, Rf_install("isProductNode")));
-		if (Rf_length(RprodNode)) {
-			if (Rf_length(RprodNode) != A->cols) {
-				mxThrow("isProductNode must be same dimension as A matrix");
-			}
-			for (int px = 0; px < A->cols; ++px) {
-				if (INTEGER(RprodNode)[px]) {
-					isProductNode[px] = true;
-					hasProductNodes = true;
-				}
-			}
-		}
+    // PPML can transform a model such that RprodNode length does
+    // not match A->cols
+    if (Rf_length(RprodNode) == A->cols) {
+      for (int px = 0; px < A->cols; ++px) {
+        if (INTEGER(RprodNode)[px]) {
+          isProductNode[px] = true;
+          hasProductNodes = true;
+        }
+      }
+    }
 	}
 
 	if(OMX_DEBUG) { mxLog("Generating internals for computation."); }
@@ -410,7 +416,14 @@ void omxRAMExpectation::init() {
 		pcalc.setAlgo(0, hasProductNodes, useSparse);
 
 		currentState->restoreParam(estSave);
-	}
+	} else {
+    auto pex = (omxRAMExpectation*) currentState->getParent(this);
+    if (pex->slope) {
+      numExoPred = pex->numExoPred;
+      exoDataColIndex = pex->exoDataColIndex;
+      addSlopeMatrix();
+    }
+  }
 }
 
 void omxRAMExpectation::studyExoPred()
@@ -425,8 +438,7 @@ void omxRAMExpectation::studyExoPred()
 	EigenMatrixAdaptor eS(S);
 	hasVariance = eS.diagonal().array().abs().matrix();
 
-	int found = 0;
-	std::vector<int> exoDataCol(S->rows, -1);
+  exoDataColIndex.resize(S->rows, -1);
 	int mNum = ~M->matrixNumber;
 	for (int k=0; k < int(data->defVars.size()); ++k) {
 		omxDefinitionVar &dv = data->defVars[k];
@@ -441,8 +453,8 @@ void omxRAMExpectation::studyExoPred()
 			if (!toManifest && !latentName) continue;
 			if (latentName) mxThrow("%s: latent exogenous variables are not supported (%s -> %s)", name,
 						 S->colnames[dv.col], latentName);
-			exoDataCol[dv.col] = dv.column;
-			found += 1;
+			exoDataColIndex[dv.col] = dv.column;
+			numExoPred += 1;
 			dv.loadData(currentState, 0.);
 			if (OMX_DEBUG + verbose >= 1) {
 				mxLog("%s: set defvar '%s' for latent '%s' to exogenous mode",
@@ -454,21 +466,26 @@ void omxRAMExpectation::studyExoPred()
 
 	currentState->restoreParam(estSave);
 
-	if (!found) return;
+  addSlopeMatrix();
+}
 
-	slope = omxInitMatrix(F->rows, found, currentState);
+void omxRAMExpectation::addSlopeMatrix()
+{
+	if (!numExoPred) return;
+
+	slope = omxInitMatrix(F->rows, numExoPred, currentState);
 	EigenMatrixAdaptor eSl(slope);
 	eSl.setZero();
 
 	for (int cx=0, ex=0; cx < S->rows; ++cx) {
-		if (exoDataCol[cx] == -1) continue;
-		auto &rc = data->rawCol( exoDataCol[cx] );
+		if (exoDataColIndex[cx] == -1) continue;
+		auto &rc = data->rawCol( exoDataColIndex[cx] );
 		if (rc.type != COLUMNDATA_NUMERIC) {
 			omxRaiseErrorf("%s: exogenous predictor '%s' must be type numeric (not '%s')",
 				       name, rc.name, rc.typeName());
 			continue;
 		}
-		exoDataColumns.push_back(exoDataCol[cx]);
+		exoDataColumns.push_back(exoDataColIndex[cx]);
 		for (int rx=0, dx=0; rx < S->rows; ++rx) {
 			if (!latentFilter[rx]) continue;
 			slope->addPopulate(A, rx, cx, dx, ex);
@@ -476,11 +493,16 @@ void omxRAMExpectation::studyExoPred()
 		}
 		ex += 1;
 	}
+}
+
+void omxRAMExpectation::connectToData()
+{
+  super::connectToData();
 
 	exoPredMean.resize(exoDataColumns.size());
 	for (int cx=0; cx < int(exoDataColumns.size()); ++cx) {
 		auto &e1 = data->rawCol( exoDataColumns[cx] );
-		Eigen::Map< Eigen::VectorXd > vec(e1.ptr.realData, data->numRawRows());
+		Eigen::Map< Eigen::VectorXd > vec(e1.d(), data->numRawRows());
 		exoPredMean[cx] = vec.mean();
 	}
 }
@@ -508,12 +530,18 @@ void omxRAMExpectation::studyF()
 			dataCols[dx] = newDest;
 			if (origThresholdInfo.size()) {
 				omxThresholdColumn adj = origThresholdInfo[dest];
-				adj.dColumn = dx;
+				adj.dataColumn = newDest;
 				thresholds.push_back(adj);
 			}
 			dx += 1;
 		}
 	}
+  // ensure we don't try to use the wrong stuff
+  origDataColumnNames.clear();
+  origThresholdInfo.clear();
+  studiedF = true;
+  //mxLog("studyF: dataColumns permuted to (%d):", int(dataColNames.size()));
+  //for (auto &dc : dataColNames) mxLog("%s", dc);
 }
 
 omxMatrix* omxRAMExpectation::getComponent(const char* component)
@@ -533,7 +561,7 @@ omxMatrix* omxRAMExpectation::getComponent(const char* component)
 	} else if(strEQ("pvec", component)) {
 		// Once implemented, change compute function and return pvec
 	}
-	
+
 	return retval;
 }
 
@@ -566,7 +594,7 @@ void omxRAMExpectation::analyzeDefVars(FitContext *fc)
 		dvInfluenceMean.assign(numDefVars, M? true : false);
 		if (verbose >= 1) mxLog("%s: defvar effect on mean unknown", name);
 	}
-		
+
 	hasVariance.resize(S->rows);
 	if (S->isSimple()) {
 		omxRecompute(S, fc);
@@ -1227,7 +1255,7 @@ namespace RelationalRAMExpectation {
 						      hasMean, hasVar);
 					}
 				}
-				
+
 				if (hasMean || hasVar) {
 					for (auto it : fromDv) {
 						omxRAMExpectation *dvHome =
@@ -1967,7 +1995,7 @@ namespace RelationalRAMExpectation {
 		for (std::vector<independentGroup*>::iterator it = group.begin() ; it != group.end(); ++it) {
 			delete *it;
 		}
-  
+
 		omxFreeMatrix(smallCol);
 	}
 

@@ -14,13 +14,14 @@
  *  limitations under the License.
  *
  */
- 
+
 #ifndef _OMXSADMVNWRAPPER_H
 #define _OMXSADMVNWRAPPER_H
 
 #include "omxData.h"
 #include "Connectedness.h"
 #include <limits>
+#include <functional>
 #include "matrix.h"
 #include "Compute.h"
 
@@ -39,12 +40,14 @@ void F77_SUB(sadmvn)(int*, double*, double*, int*, double*, int*,
 }
 #endif
 
-void omxSadmvnWrapper(FitContext *fc, int numVars, 
+void omxSadmvnWrapper(FitContext *fc, int numVars,
 	double *corList, double *lThresh, double *uThresh, int *Infin, double *likelihood, int *inform);
 
 using namespace UndirectedGraph;
 
 class OrdinalLikelihood { // rename to mvn cdf ? TODO
+public:
+	typedef std::function<double(int r, int c)> TFn;
  private:
 	struct block {
 		OrdinalLikelihood *ol;
@@ -118,28 +121,26 @@ class OrdinalLikelihood { // rename to mvn cdf ? TODO
 	std::vector<block> blocks;
 	Eigen::VectorXi dataColumns;
 	omxData *data;
-	omxMatrix *thresholdMat;
+	TFn getThreshold;
 	std::vector< omxThresholdColumn > *colInfoPtr;
 	Eigen::ArrayXi ordColumns;
  public:
 	std::vector<int> itemToThresholdCol;
-	omxMatrix *thresholdsMat;
 	std::vector<int> numThresholds;
 
 	OrdinalLikelihood()
 	{
 		data = 0;
-		thresholdMat = 0;
 		colInfoPtr = 0;
 	}
 
 	template <typename T>
-	void attach(const Eigen::MatrixBase<T> &dc, omxData *_data, omxMatrix *tMat,
+	void attach(const Eigen::MatrixBase<T> &dc, omxData *_data, TFn _getThreshold,
 		    std::vector< omxThresholdColumn > &colInfo)
 	{
 		dataColumns = dc;
 		this->data = _data;
-		this->thresholdMat = tMat;
+		getThreshold = _getThreshold;
 		this->colInfoPtr = &colInfo;
 	}
 
@@ -343,25 +344,23 @@ void OrdinalLikelihood::block::loadRow(int row)
 {
 	std::vector< omxThresholdColumn > &colInfo = *ol->colInfoPtr;
 	Eigen::ArrayXi &ordColumns = ol->ordColumns;
-	EigenMatrixAdaptor tMat(ol->thresholdMat);
 	for (int ox=0, vx=0; ox < ordColumns.size(); ++ox) {
 		if (!varMask[ox]) continue;
 		int j = ordColumns[ox];
 		int var = ol->dataColumns[j];
-		int pick = omxIntDataElement(ol->data, row, var) - 1;
+		int pick = omxIntDataElement(ol->data, row, var);
 		double sd = ol->stddev[ox];
-		int tcol = colInfo[j].column;
 		if (pick == 0) {
 			lThresh[vx] = -std::numeric_limits<double>::infinity();
-			uThresh[vx] = (tMat(pick, tcol) - mean[vx]) / sd;
+			uThresh[vx] = (ol->getThreshold(pick, j) - mean[vx]) / sd;
 			Infin[vx] = 0;
 		} else if (pick == colInfo[j].numThresholds) {
-			lThresh[vx] = (tMat(pick-1, tcol) - mean[vx]) / sd;
+			lThresh[vx] = (ol->getThreshold(pick-1, j) - mean[vx]) / sd;
 			uThresh[vx] = std::numeric_limits<double>::infinity();
 			Infin[vx] = 1;
 		} else {
-			lThresh[vx] = (tMat(pick-1, tcol) - mean[vx]) / sd;
-			uThresh[vx] = (tMat(pick, tcol) - mean[vx]) / sd;
+			lThresh[vx] = (ol->getThreshold(pick-1, j) - mean[vx]) / sd;
+			uThresh[vx] = (ol->getThreshold(pick, j) - mean[vx]) / sd;
 			Infin[vx] = 2;
 		}
 		vx += 1;
@@ -429,7 +428,12 @@ bool _dtmvnorm_marginal(FitContext *fc, double prob, const Eigen::MatrixBase<T1>
 	using Eigen::MatrixXd;
 
 	for (int dx=0; dx < xn.size(); dx++) {
-		if (!(lower[nn] <= xn[dx] && xn[dx] <= upper[nn])) mxThrow("xn out of range");
+		if (!(lower[nn] <= xn[dx] && xn[dx] <= upper[nn])) {
+      mxPrintMat("xn", xn);
+      mxPrintMat("lower", lower);
+      mxPrintMat("upper", upper);
+      mxThrow("xn[%d] out of range (nn=%d)", dx, nn);
+    }
 	}
 
 	if (sigma.rows() == 1) {
@@ -445,7 +449,7 @@ bool _dtmvnorm_marginal(FitContext *fc, double prob, const Eigen::MatrixBase<T1>
 
 	MatrixXd AA = sigma;
 	if (InvertSymmetricPosDef(AA, 'L')) return false;
-	
+
 	MatrixXd A_1;
 	struct subset1 {
 		int nn;
@@ -494,18 +498,18 @@ bool _dtmvnorm_marginal(FitContext *fc, double prob, const Eigen::MatrixBase<T1>
 
 /*
 # Computation of the bivariate marginal density F_{q,r}(x_q, x_r) (q != r)
-# of truncated multivariate normal distribution 
+# of truncated multivariate normal distribution
 # following the works of Tallis (1961), Leppard and Tallis (1989)
 #
 # References:
-# Tallis (1961): 
+# Tallis (1961):
 #   "The Moment Generating Function of the Truncated Multi-normal Distribution"
-# Leppard and Tallis (1989): 
+# Leppard and Tallis (1989):
 #   "Evaluation of the Mean and Covariance of the Truncated Multinormal"
-# Manjunath B G and Stefan Wilhelm (2009): 
+# Manjunath B G and Stefan Wilhelm (2009):
 #   "Moments Calculation for the Doubly Truncated Multivariate Normal Distribution"
 #
-# (n-2) Integral, d.h. zweidimensionale Randdichte in Dimension q und r, 
+# (n-2) Integral, d.h. zweidimensionale Randdichte in Dimension q und r,
 # da (n-2) Dimensionen rausintegriert werden.
 # vgl. Tallis (1961), S.224 und Code Leppard (1989), S.550
 #
@@ -545,7 +549,7 @@ bool _dtmvnorm_marginal2(FitContext *fc, double alpha, const Eigen::MatrixBase<T
 		ol.setZeroMean();
 		alpha = ol.likelihood(fc, lower, upper);
 	}
-	
+
 	struct subset1 {
 		int qq, rr;
 		bool flip;
@@ -607,10 +611,10 @@ bool _dtmvnorm_marginal2(FitContext *fc, double alpha, const Eigen::MatrixBase<T
 		RSRQ = (RR(ii, rr) - RR(ii, qq) * RR(qq, rr)) / sqrt(RSRQ);
 
 		double denom = sqrt((1 - RR(ii, qq)*RR(ii, qq)) * (1 - RSRQ*RSRQ));
-		
+
 		// lower integration bound
 		AQR.col(m2) = ((lowerStd[ii] - BSQR * xqStd.array() - BSRQ * xrStd.array()) / denom);
-		
+
 		// upper integration bound
 		BQR.col(m2) = ((upperStd[ii] - BSQR * xqStd.array() - BSRQ * xrStd.array()) / denom);
 
@@ -622,7 +626,7 @@ bool _dtmvnorm_marginal2(FitContext *fc, double alpha, const Eigen::MatrixBase<T
 
 		m2 += 1;
 	}
-	
+
 	for (int ii=0; ii < xq.size(); ++ii) {
 		if (RQR.rows() == 1) {
 			ol.setStandardNormal(1);
@@ -682,7 +686,7 @@ bool _mtmvnorm(FitContext *fc, double prob, const Eigen::MatrixBase<T1> &sigma,
 		}
 	}
 	F2 = F2.selfadjointView<Eigen::Upper>();
-	
+
 	F_a.array() *= lower.array();
 	F_b.array() *= upper.array();
 	for (int kx=0; kx < kk; ++kx) {
@@ -714,4 +718,4 @@ bool _mtmvnorm(FitContext *fc, double prob, const Eigen::MatrixBase<T1> &sigma,
 	return true;
 }
 
-#endif 
+#endif

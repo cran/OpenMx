@@ -205,9 +205,9 @@ void BA81Expect::refreshPatternLikelihood(bool hasFreeLatent)
 	}
 }
 
-void BA81Expect::prep()
+void BA81Expect::connectToData()
 {
-	if (ready) return;
+  setConnectedToData(true);
 
 	// complain about non-integral rowWeights (EAP can't work) TODO
 	if (data->hasFreq()) {
@@ -215,15 +215,76 @@ void BA81Expect::prep()
 	}
 	grp.buildRowMult();
 	freqSum = grp.getWeightSum();
-	ready = true;
+
+  auto state = this;
+	auto &colMap = getDataColumns();
+	const int numItems = state->itemParam->cols;
+	int maxAbilities = state->grp.itemDims;
+
+	for (int cx=0; cx < int(colMap.size()); ++cx) {
+		int var = colMap[cx];
+		data->assertColumnIsData(var, OMXDATA_ORDINAL);
+	}
+
+  state->grp.dataColumns.clear();
+	for (int cx = 0; cx < numItems; cx++) {
+		int *col = omxIntDataColumnUnsafe(data, colMap[cx]);
+		state->grp.dataColumns.push_back(col);
+	}
+
+	// TODO the max outcome should be available from omxData
+	for (int rx=0; rx < data->nrows(); rx++) {
+		int cols = 0;
+		for (int cx = 0; cx < numItems; cx++) {
+			const int *col = state->grp.dataColumns[cx];
+			int pick = col[rx];
+			if (pick == NA_INTEGER) continue;
+			++cols;
+			const int no = state->grp.itemOutcomes[cx];
+			if (pick >= no) {
+				mxThrow("Data for item '%s' has at least %d outcomes, not %d",
+					 state->itemParam->colnames[cx], pick, no);
+			}
+		}
+		if (cols == 0) {
+			mxThrow("Row %d has all NAs", 1+rx);
+		}
+	}
+
+	if (state->_latentMeanOut && state->_latentMeanOut->rows * state->_latentMeanOut->cols != maxAbilities) {
+		mxThrow("The mean matrix '%s' must be a row or column vector of size %d",
+			 state->_latentMeanOut->name(), maxAbilities);
+	}
+
+	if (state->_latentCovOut && (state->_latentCovOut->rows != maxAbilities ||
+				    state->_latentCovOut->cols != maxAbilities)) {
+		mxThrow("The cov matrix '%s' must be %dx%d",
+			 state->_latentCovOut->name(), maxAbilities, maxAbilities);
+	}
+
+	state->grp.setLatentDistribution(state->_latentMeanOut? state->_latentMeanOut->data : NULL,
+					 state->_latentCovOut? state->_latentCovOut->data : NULL);
+
+	{
+		EigenArrayAdaptor Eparam(state->itemParam);
+		Eigen::Map< Eigen::VectorXd > meanVec(state->grp.mean, maxAbilities);
+		Eigen::Map< Eigen::MatrixXd > covMat(state->grp.cov, maxAbilities, maxAbilities);
+		state->grp.quad.setStructure(state->grp.qwidth, state->grp.qpoints,
+																 Eparam, meanVec, covMat, state->grp.twotier);
+	}
+	grp.quad.setupOutcomes(grp);
+
+	state->grp.buildRowSkip();
+
+  latentParamVersion = getLatentVersion(state) - 1; //? TODO
 }
 
 void BA81Expect::compute(FitContext *fc, const char *what, const char *how)
 {
+	super::compute(fc, what, how);
+
 	omxExpectation *oo = this;
 	BA81Expect *state = (BA81Expect *) oo;
-
-	prep();
 
 	if (what) {
 		if (strcmp(what, "latentDistribution")==0 && how && strcmp(how, "copy")==0) {
@@ -395,12 +456,12 @@ void getMatrixDims(SEXP r_theta, int *rows, int *cols)
 omxExpectation *omxInitExpectationBA81(omxState *st, int num)
 { return new BA81Expect(st, num); }
 
-void BA81Expect::init() {
+void BA81Expect::init()
+{
+	loadDataColFromR();
+
 	SEXP tmp;
-	
-	if(OMX_DEBUG) {
-		mxLog("Initializing %s.", name);
-	}
+
 	if (!Glibrpf_model) {
 #if USE_EXTERNAL_LIBRPF
 		get_librpf_t get_librpf = (get_librpf_t) R_GetCCallable("rpf", "get_librpf_model_GPL");
@@ -411,7 +472,7 @@ void BA81Expect::init() {
 		Glibrpf_model = librpf_model;
 #endif
 	}
-	
+
 	BA81Expect *state = this;
 
 	// These two constants should be as identical as possible
@@ -503,8 +564,12 @@ void BA81Expect::init() {
 	}
 	}
 
+	{ScopedProtect p1(tmp, R_do_slot(rObj, Rf_install("minItemsPerScore")));
+	state->grp.setMinItemsPerScore(Rf_asInteger(tmp));
+	}
+
 	canDuplicate = false;
-	
+
 	// TODO: Exactly identical rows do not contribute any information.
 	// The sorting algorithm ought to remove them so we get better cache behavior.
 	// The following summary stats would be cheaper to calculate too.
@@ -539,72 +604,6 @@ void BA81Expect::init() {
 		rowMap[rx] = rx;
 	}
 
-	prep();
-
-	auto colMap = getDataColumns();
-
-	for (int cx = 0; cx < numItems; cx++) {
-		int *col = omxIntDataColumnUnsafe(data, colMap[cx]);
-		state->grp.dataColumns.push_back(col);
-	}
-
-	// sanity check data
-	for (int cx = 0; cx < numItems; cx++) {
-		if (!omxDataColumnIsFactor(data, colMap[cx])) {
-			data->omxPrintData("diagnostic", 3);
-			omxRaiseErrorf("%s: column %d is not a factor", name, int(1 + colMap[cx]));
-			return;
-		}
-	}
-
-	// TODO the max outcome should be available from omxData
-	for (int rx=0; rx < data->nrows(); rx++) {
-		int cols = 0;
-		for (int cx = 0; cx < numItems; cx++) {
-			const int *col = state->grp.dataColumns[cx];
-			int pick = col[rx];
-			if (pick == NA_INTEGER) continue;
-			++cols;
-			const int no = state->grp.itemOutcomes[cx];
-			if (pick > no) {
-				mxThrow("Data for item '%s' has at least %d outcomes, not %d",
-					 state->itemParam->colnames[cx], pick, no);
-			}
-		}
-		if (cols == 0) {
-			mxThrow("Row %d has all NAs", 1+rx);
-		}
-	}
-
-	if (state->_latentMeanOut && state->_latentMeanOut->rows * state->_latentMeanOut->cols != maxAbilities) {
-		mxThrow("The mean matrix '%s' must be a row or column vector of size %d",
-			 state->_latentMeanOut->name(), maxAbilities);
-	}
-
-	if (state->_latentCovOut && (state->_latentCovOut->rows != maxAbilities ||
-				    state->_latentCovOut->cols != maxAbilities)) {
-		mxThrow("The cov matrix '%s' must be %dx%d",
-			 state->_latentCovOut->name(), maxAbilities, maxAbilities);
-	}
-
-	state->grp.setLatentDistribution(state->_latentMeanOut? state->_latentMeanOut->data : NULL,
-					 state->_latentCovOut? state->_latentCovOut->data : NULL);
-
-	{
-		EigenArrayAdaptor Eparam(state->itemParam);
-		Eigen::Map< Eigen::VectorXd > meanVec(state->grp.mean, maxAbilities);
-		Eigen::Map< Eigen::MatrixXd > covMat(state->grp.cov, maxAbilities, maxAbilities);
-		state->grp.quad.setStructure(state->grp.qwidth, state->grp.qpoints,
-																 Eparam, meanVec, covMat, state->grp.twotier);
-	}
-	grp.quad.setupOutcomes(grp);
-
-	{ScopedProtect p1(tmp, R_do_slot(rObj, Rf_install("minItemsPerScore")));
-	state->grp.setMinItemsPerScore(Rf_asInteger(tmp));
-	}
-
-	state->grp.buildRowSkip();
-
 	if (isErrorRaised()) return;
 
 	{ScopedProtect p1(tmp, R_do_slot(rObj, Rf_install("debugInternal")));
@@ -624,7 +623,7 @@ void BA81Expect::init() {
 
 void BA81Expect::invalidateCache()
 {
-	ready = false;
+	setConnectedToData(false);
 }
 
 const char *BA81Expect::getLatentIncompatible(BA81Expect *other)
@@ -637,4 +636,3 @@ const char *BA81Expect::getLatentIncompatible(BA81Expect *other)
 	if (grp.qwidth != other->grp.qwidth) return "qwidth";
 	return 0;
 }
-

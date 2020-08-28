@@ -4,9 +4,9 @@
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,7 +22,7 @@
 # Revision History
 #   Mon Feb 20 13:03:21 Central Standard Time 2012 -- Michael Hunter added means
 #   Sat Apr 07 19:48:33 Central Daylight Time 2012 -- Michael Hunter added lots of error checking
-# 
+#
 
 
 #--------------------------------------------------------------------
@@ -43,9 +43,7 @@ setClass(Class = "MxExpectationLISREL",
 		KA = "MxCharOrNumber",
 		AL = "MxCharOrNumber",
 		numStats = "numeric",
-		thresholds = "MxCharOrNumber",
 		dims = "character",
-		threshnames = "character",
 		depth = "integer", # speed up I-A inverse in RAM; speed up I-B inverse in LISREL
 		verbose = "integer"),
 	contains = "BaseExpectationNormal")
@@ -55,7 +53,7 @@ setClass(Class = "MxExpectationLISREL",
 # **DONE**
 setMethod("initialize", "MxExpectationLISREL",
 	function(.Object, LX, LY, BE, GA, PH, PS, TD, TE, TH, TX, TY, KA, AL,
-		 dims, thresholds, threshnames, verbose,
+		 dims, thresholds, discrete, verbose,
      expectedCovariance, expectedMean, data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@LX <- LX
@@ -75,6 +73,9 @@ setMethod("initialize", "MxExpectationLISREL",
 		.Object@data <- data
 		.Object@dims <- dims
 		.Object@thresholds <- thresholds
+		.Object@threshnames <- NA_character_
+		.Object@discrete <- discrete
+    .Object@.discreteCheckCount <- TRUE
     .Object@expectedCovariance <- expectedCovariance
     .Object@expectedMean <- expectedMean
 		return(.Object)
@@ -132,8 +133,9 @@ setMethod("genericExpConvertEntities", "MxExpectationLISREL",
 
 #--------------------------------------------------------------------
 # **DONE**
-setMethod("qualifyNames", signature("MxExpectationLISREL"), 
+setMethod("qualifyNames", signature("MxExpectationLISREL"),
 	function(.Object, modelname, namespace) {
+    .Object <- callNextMethod()
 		.Object@name <- imxIdentifier(modelname, .Object@name)
 		.Object@LX <- imxConvertIdentifier(.Object@LX, modelname, namespace)
 		.Object@LY <- imxConvertIdentifier(.Object@LY, modelname, namespace)
@@ -149,8 +151,7 @@ setMethod("qualifyNames", signature("MxExpectationLISREL"),
 		.Object@KA <- imxConvertIdentifier(.Object@KA, modelname, namespace)
 		.Object@AL <- imxConvertIdentifier(.Object@AL, modelname, namespace)
 		.Object@data <- imxConvertIdentifier(.Object@data, modelname, namespace)
-		.Object@thresholds <- sapply(.Object@thresholds, imxConvertIdentifier, modelname, namespace)
-    callNextMethod(.Object, modelname, namespace)
+    .Object
 	}
 )
 
@@ -175,16 +176,16 @@ checkLISRELmeansHelper <- function(Lam, Mean, Latent, matrixname, lamname, model
 	meanDimnames <- dimnames(Mean)
 	if(is.null(meanDimnames)){
 		msg <- paste("The", matrixname, "matrix associated",
-		"with the LISREL expectation function in model", 
+		"with the LISREL expectation function in model",
 		omxQuotes(modelname), "does not contain dimnames.")
-		stop(msg, call. = FALSE)	
+		stop(msg, call. = FALSE)
 	}
 	#Check if means are a column vector
 	meanRownames <- meanDimnames[[1]]
 	meanColnames <- meanDimnames[[2]]
 	if (!is.null(meanColnames) && length(meanColnames) > 1) {
 		msg <- paste("The", matrixname, "matrix associated",
-		"with the LISREL expectation function in model", 
+		"with the LISREL expectation function in model",
 		omxQuotes(modelname), "is not an N x 1 matrix.")
 		stop(msg, call. = FALSE)
 	}
@@ -192,7 +193,7 @@ checkLISRELmeansHelper <- function(Lam, Mean, Latent, matrixname, lamname, model
 	if (!all(dimnames(Lam)[[checkInd]] == meanRownames)) {
 		msg <- paste("The", checkStg, "names of the", lamname, "matrix",
 			"and the row names of the", matrixname, "matrix",
-			"in model", 
+			"in model",
 			omxQuotes(modelname), "do not contain identical",
 			"names.")
 		stop(msg, call. = FALSE)
@@ -232,9 +233,9 @@ checkLISRELmeans <- function(Lam, ManMean, LatMean, X, modelname){
 #--------------------------------------------------------------------
 # **DONE**
 # Note: Lots of error checking is done in this method
-setMethod("genericExpFunConvert", signature("MxExpectationLISREL"), 
+setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 	function(.Object, flatModel, model, labelsData, dependencies) {
-		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]	
+		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
 		name <- .Object@name
 		lxMatrix <- .Object@LX
 		lyMatrix <- .Object@LY
@@ -307,7 +308,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 		.Object@KA <- imxLocateIndex(flatModel, kaMatrix, name)
 		.Object@AL <- imxLocateIndex(flatModel, alMatrix, name)
 		.Object@data <- as.integer(imxLocateIndex(flatModel, data, name))
-		
+
 		#
 		# Check the data has row and column names as appropriate
 		verifyObservedNames(mxDataObject@observed, mxDataObject@means, mxDataObject@type, flatModel, modelname, "LISREL")
@@ -343,7 +344,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 					omxQuotes(modelname), "does not contain colnames")
 				stop(msg, call. = FALSE)
 			}
-			# Check its means (TY, AL) 
+			# Check its means (TY, AL)
 			if(!single.na(mxDataObject@means) || mxDataObject@type == "raw") {
 				checkLISRELmeans(
 					Lam=lyMatrix,
@@ -461,7 +462,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 			.Object@dataColumnNames <- translatedNames
 			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
 			verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
-			.Object@thresholds <- imxLocateIndex(flatModel, threshName, name)
 			if (length(mxDataObject@observed) == 0) {
 				.Object@data <- as.integer(NA)
 			}
@@ -488,10 +488,11 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 # **DONE**
 setMethod("genericExpDependencies", signature("MxExpectationLISREL"),
 	function(.Object, dependencies) {
-	sources <- c(.Object@LX, .Object@LY, .Object@BE, .Object@GA, 
-		.Object@PH, .Object@PS, .Object@TD, .Object@TE, 
-		.Object@TH, .Object@TX, .Object@TY, .Object@KA, 
-		.Object@AL, .Object@thresholds)
+    dependencies <- callNextMethod()
+	sources <- c(.Object@LX, .Object@LY, .Object@BE, .Object@GA,
+		.Object@PH, .Object@PS, .Object@TD, .Object@TE,
+		.Object@TH, .Object@TX, .Object@TY, .Object@KA,
+		.Object@AL)
 	sources <- sources[!is.na(sources)]
   sink <- .Object@name
   sink <- c(sink, .Object@expectedCovariance, .Object@expectedMean)
@@ -505,6 +506,7 @@ setMethod("genericExpDependencies", signature("MxExpectationLISREL"),
 # **DONE**
 setMethod("genericExpRename", signature("MxExpectationLISREL"),
 	function(.Object, oldname, newname) {
+    .Object <- callNextMethod()
 		.Object@LX <- renameReference(.Object@LX, oldname, newname)
 		.Object@LY <- renameReference(.Object@LY, oldname, newname)
 		.Object@BE <- renameReference(.Object@BE, oldname, newname)
@@ -519,7 +521,6 @@ setMethod("genericExpRename", signature("MxExpectationLISREL"),
 		.Object@KA <- renameReference(.Object@KA, oldname, newname)
 		.Object@AL <- renameReference(.Object@AL, oldname, newname)
 		.Object@data <- renameReference(.Object@data, oldname, newname)
-		.Object@thresholds <- sapply(.Object@thresholds, renameReference, oldname, newname)		
     callNextMethod(.Object, oldname, newname)
 	}
 )
@@ -539,9 +540,13 @@ checkLISRELargument <- function(x, xname) {
 
 #--------------------------------------------------------------------
 # **DONE**
-mxExpectationLISREL <- function(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA, TE=NA, TH=NA, TX = NA, TY = NA, KA = NA, AL = NA, dimnames = NA, thresholds = NA, threshnames = dimnames, verbose=0L,
-                                ..., expectedCovariance=NULL, expectedMean=NULL) {
+mxExpectationLISREL <- function(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA, TE=NA, TH=NA, TX = NA, TY = NA, KA = NA, AL = NA, dimnames = NA, thresholds = NA, threshnames = deprecated(), verbose=0L,
+                                ..., expectedCovariance=NULL, expectedMean=NULL,
+                                discrete = as.character(NA)) {
 	prohibitDotdotdot(list(...))
+  if (lifecycle::is_present(threshnames)) {
+    deprecate_warn("2.18", "mxExpectationLISREL(threshnames = )")
+  }
 	LX <- checkLISRELargument(LX, "LX")
 	LY <- checkLISRELargument(LY, "LY")
 	BE <- checkLISRELargument(BE, "BE")
@@ -555,7 +560,7 @@ mxExpectationLISREL <- function(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA,
 	TY <- checkLISRELargument(TY, "TY")
 	KA <- checkLISRELargument(KA, "KA")
 	AL <- checkLISRELargument(AL, "AL")
-	
+
 	if (single.na(thresholds)) thresholds <- as.character(NA)
 	if (single.na(dimnames)) dimnames <- as.character(NA)
 	if (!is.vector(dimnames) || typeof(dimnames) != 'character') {
@@ -570,8 +575,7 @@ mxExpectationLISREL <- function(LX=NA, LY=NA, BE=NA, GA=NA, PH=NA, PS=NA, TD=NA,
 	if (length(dimnames) > 1 && any(is.na(dimnames))) {
 		stop("NA values are not allowed for dimnames vector")
 	}
-	threshnames <- checkThreshnames(threshnames)
-	return(new("MxExpectationLISREL", LX, LY, BE, GA, PH, PS, TD, TE, TH, TX, TY, KA, AL, dimnames, thresholds, threshnames, as.integer(verbose), expectedCovariance, expectedMean))
+	return(new("MxExpectationLISREL", LX, LY, BE, GA, PH, PS, TD, TE, TH, TX, TY, KA, AL, dimnames, thresholds, discrete, as.integer(verbose), expectedCovariance, expectedMean))
 }
 
 
@@ -612,11 +616,16 @@ displayExpectationLISREL <- function(expectation) {
 		cat("$dims : NA \n")
 	} else {
 		cat("$dims :", omxQuotes(expectation@dims), '\n')
-	}		
+	}
 	if (single.na(expectation@thresholds)) {
 		cat("$thresholds : NA \n")
 	} else {
 		cat("$thresholds :", omxQuotes(expectation@thresholds), '\n')
+	}
+	if (single.na(expectation@discrete)) {
+		cat("$discrete : NA \n")
+	} else {
+		cat("$discrete :", omxQuotes(expectation@discrete), '\n')
 	}
 	invisible(expectation)
 }
@@ -624,15 +633,15 @@ displayExpectationLISREL <- function(expectation) {
 
 #--------------------------------------------------------------------
 # **DONE**
-setMethod("print", "MxExpectationLISREL", function(x,...) { 
-	displayExpectationLISREL(x) 
+setMethod("print", "MxExpectationLISREL", function(x,...) {
+	displayExpectationLISREL(x)
 })
 
 
 #--------------------------------------------------------------------
 # **DONE**
-setMethod("show", "MxExpectationLISREL", function(object) { 
-	displayExpectationLISREL(object) 
+setMethod("show", "MxExpectationLISREL", function(object) {
+	displayExpectationLISREL(object)
 })
 
 
@@ -648,7 +657,7 @@ extractNAname <- function(name, subname){
 
 setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 	  function(.Object, model, what, defvar.row=1, subname=model@name) {
-		  ret <- list()
+		  ret <- callNextMethod()
 		  LXname <- extractNAname(.Object@LX, subname)
 		  LYname <- extractNAname(.Object@LY, subname)
 		  BEname <- extractNAname(.Object@BE, subname)
@@ -734,13 +743,6 @@ setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 			  }
 			  ret[['means']] <- mean
 		  }
-		  if ('thresholds' %in% what) {
-			  thrname <- extractNAname(.Object@thresholds, subname)
-			  if(!single.na(thrname)){
-				  thr <- mxEvalByName(thrname, model, compute=TRUE, defvar.row=defvar.row)
-			  } else {thr <- matrix( , 0, 0)}
-			  ret[['thresholds']] <- thr
-		  }
 		  zcomp <- sapply(ret, function(x){prod(dim(x))}) == 0
 		  zcomp <- zcomp[!(names(zcomp) %in% c('thresholds', 'means'))]
 		  if(any(zcomp)){
@@ -787,7 +789,7 @@ setMethod("genericGenerateData", signature("MxExpectationLISREL"),
 #			}
 #			mxDataObject <- flatModel@datasets[[flatObjective@data]]
 #			if (mxDataObject@type != 'raw') {
-#				msg <- paste("The dataset associated with the RAM objective", 
+#				msg <- paste("The dataset associated with the RAM objective",
 #					"in model", omxQuotes(modelname), "is not raw data.")
 #				stop(msg, call. = FALSE)
 #			}
@@ -810,7 +812,7 @@ generateLISRELDepth <- function(flatModel, aMatrixName, modeloptions) {
 	if (is.null(modeloptions[['RAM Inverse Optimization']]) &&
 		identical(getOption('mxOptions')[['RAM Inverse Optimization']], "No")) {
 		return(as.integer(NA))
-	}	
+	}
 	maxdepth <- modeloptions[['RAM Max Depth']]
 	if (is.null(maxdepth) || (length(maxdepth) != 1) ||
 		is.na(maxdepth) || !is.numeric(maxdepth) || maxdepth < 0) {
@@ -848,19 +850,19 @@ generateLISRELDepth <- function(flatModel, aMatrixName, modeloptions) {
 #	}
 #	fMatrix <- job[[fMatrixName]]
 #	if (is.null(fMatrix)) {
-#		stop(paste("Unknown F matrix name", 
+#		stop(paste("Unknown F matrix name",
 #			omxQuotes(simplifyName(fMatrixName, modelname)),
 #			"detected in the objective function",
 #			"of model", omxQuotes(modelname)), call. = FALSE)
 #	}
 #	dims <- flatObjective@dims
-#	if (!is.null(dimnames(fMatrix)) && !single.na(dims) && 
+#	if (!is.null(dimnames(fMatrix)) && !single.na(dims) &&
 #		!identical(dimnames(fMatrix)[[2]], dims)) {
 #		msg <- paste("The F matrix associated",
-#			"with the RAM objective in model", 
+#			"with the RAM objective in model",
 #			omxQuotes(modelname), "contains dimnames and",
 #			"the objective function has specified dimnames")
-#		stop(msg, call.=FALSE)		
+#		stop(msg, call.=FALSE)
 #	}
 #	if (is.null(dimnames(fMatrix)) && !single.na(dims)) {
 #		fMatrixFlat <- flatJob[[fMatrixName]]
@@ -873,10 +875,10 @@ generateLISRELDepth <- function(flatModel, aMatrixName, modeloptions) {
 #	if (!is.null(dimnames(mMatrix)) && !single.na(dims) &&
 #		!identical(dimnames(mMatrix), list(NULL, dims))) {
 #		msg <- paste("The M matrix associated",
-#			"with the RAM objective in model", 
+#			"with the RAM objective in model",
 #			omxQuotes(modelname), "contains dimnames and",
 #			"the objective function has specified dimnames")
-#		stop(msg, call.=FALSE)	
+#		stop(msg, call.=FALSE)
 #	}
 #	if (is.null(dimnames(mMatrix)) && !single.na(dims)) {
 #		mMatrixFlat <- flatJob[[mMatrixName]]

@@ -640,8 +640,7 @@ setMethod("initialize", "MxComputeTryCatch",
 
 ##' Execute a sub-compute plan, catching errors
 ##'
-##' THIS IS EXPERIMENTAL AND MAY HAVE BUGS.
-##' 
+##' \lifecycle{experimental}
 ##' Any error will be recorded in a subsequent checkpoint. After
 ##' execution, the context will be reset to continue computation as if
 ##' no errors has occurred.
@@ -1297,8 +1296,8 @@ setMethod("initialize", "MxComputeEM",
 ##'
 ##' Ramsay (1975) was recommended in Bock, Gibbons, & Muraki (1988).
 ##'
-##' @param expectation a vector of expectation names (DEPRECATED)
-##' @param predict what to predict from the observed data (DEPRECATED)
+##' @param expectation a vector of expectation names \lifecycle{deprecated}
+##' @param predict what to predict from the observed data \lifecycle{deprecated}
 ##' @param mstep a compute plan to optimize the completed data model
 ##' @param observedFit the name of the observed data fit function (defaults to "fitfunction")
 ##' @param ...  Not used.  Forces remaining arguments to be specified by name.
@@ -2200,13 +2199,14 @@ setClass(Class = "MxComputeLoadData",
 		 skip.rows = "integer",
 		 skip.cols = "integer",
 		 na.strings = "character",
-		 observed = "MxOptionalDataFrame"
+		 observed = "MxOptionalDataFrame",
+     rowFilter = "MxOptionalLogical"
 	 ))
 
 setMethod("initialize", "MxComputeLoadData",
 	function(.Object, dest, column, path, originalDataIsIndexOne,
 		 row.names, col.names, skip.rows, skip.cols, byrow, verbose,
-		 cacheSize, method, checkpointMetadata, na.strings, observed) {
+		 cacheSize, method, checkpointMetadata, na.strings, observed, rowFilter) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- NA_character_
@@ -2225,6 +2225,7 @@ setMethod("initialize", "MxComputeLoadData",
 		  .Object@skip.cols <- skip.cols
 		  .Object@na.strings <- na.strings
 		  .Object@observed <- observed
+      .Object@rowFilter <- rowFilter
 		  .Object
 	  })
 
@@ -2244,7 +2245,7 @@ setMethod("convertForBackend", signature("MxComputeLoadData"),
 
 ##' Load columns into an MxData object
 ##'
-##' THIS INTERFACE IS EXPERIMENTAL AND SUBJECT TO CHANGE.
+##' \lifecycle{experimental}
 ##'
 ##' The purpose of this compute step is to help quickly perform many
 ##' similar analyses. For example, if we are given a sample of people
@@ -2292,6 +2293,7 @@ setMethod("convertForBackend", signature("MxComputeLoadData"),
 ##' @param checkpointMetadata logical. Whether to add per record metadata to the checkpoint
 ##' @param na.strings character vector. A vector of strings that denote a missing value.
 ##' @param observed data frame. The reservoir of data for \code{method='data.frame'}.
+##' @param rowFilter logical vector. Whether to skip the source row.
 ##' @aliases
 ##' MxComputeLoadData-class
 ##' @seealso
@@ -2302,14 +2304,15 @@ mxComputeLoadData <- function(dest, column, method=c('csv', 'data.frame'), ..., 
 			      skip.rows=0, skip.cols=0,
 			      verbose=0L,
 			      cacheSize=100L, checkpointMetadata=TRUE, na.strings=c('NA'),
-			      observed=NULL) {
+			      observed=NULL, rowFilter=c()) {
   prohibitDotdotdot(list(...))
 	if (cacheSize < 1L) stop("cacheSize must be a positive integer")
 	new("MxComputeLoadData", dest, column, path, originalDataIsIndexOne,
 		as.integer(row.names), as.integer(col.names),
 		as.integer(skip.rows), as.integer(skip.cols), byrow,
 		as.integer(verbose), as.integer(cacheSize), method,
-		as.logical(checkpointMetadata), as.character(na.strings), observed)
+		as.logical(checkpointMetadata), as.character(na.strings), observed,
+    as.logical(rowFilter))
 }
 
 #----------------------------------------------------

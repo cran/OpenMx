@@ -34,18 +34,21 @@ struct omxNormalExpectation : public omxExpectation {
 	virtual omxMatrix *getComponent(const char*);
 };
 
-void omxNormalExpectation::compute(FitContext *fc, const char *, const char *) {
+void omxNormalExpectation::compute(FitContext *fc, const char *what, const char *how)
+{
 	omxNormalExpectation* one = this;
 
 	omxRecompute(one->cov, fc);
 	if(one->means != NULL)
 	    omxRecompute(one->means, fc);
-	if (one->thresholdsMat) omxRecompute(one->thresholdsMat, fc);
+
+	super::compute(fc, what, how);
 }
 
 void omxNormalExpectation::populateAttr(SEXP algebra) {
-    if(OMX_DEBUG) { mxLog("Populating Normal Attributes."); }
+  if(OMX_DEBUG) { mxLog("Populating Normal Attributes."); }
 
+  {
 	omxRecompute(cov, NULL);
 	if(means != NULL) omxRecompute(means, NULL);
 
@@ -59,7 +62,7 @@ void omxNormalExpectation::populateAttr(SEXP algebra) {
 	Rf_setAttrib(algebra, Rf_install("ExpCov"), expCovExt);
 	}
 
-	
+
 	if (means != NULL) {
 		SEXP expMeanExt;
 		ScopedProtect p1(expMeanExt, Rf_allocMatrix(REALSXP, means->rows, means->cols));
@@ -76,6 +79,11 @@ void omxNormalExpectation::populateAttr(SEXP algebra) {
 
 	ProtectedSEXP RnumStats(Rf_ScalarReal(omxDataDF(data)));
 	Rf_setAttrib(algebra, Rf_install("numStats"), RnumStats);
+  }
+
+	MxRList out;
+  populateNormalAttr(algebra, out);
+	Rf_setAttrib(algebra, Rf_install("output"), out.asR());
 }
 
 omxExpectation *omxInitNormalExpectation(omxState *st, int num)
@@ -83,10 +91,11 @@ omxExpectation *omxInitNormalExpectation(omxState *st, int num)
 
 void omxNormalExpectation::init()
 {
-    if(OMX_DEBUG) { mxLog("Initializing Normal expectation."); }
+	loadDataColFromR();
+	loadThresholdFromR();
 
     omxNormalExpectation *one = this;
-	
+
 	/* Set up expectation structures */
 	if(OMX_DEBUG) { mxLog("Processing cov."); }
 	one->cov = omxNewMatrixFromSlot(rObj, currentState, "covariance");
@@ -110,6 +119,6 @@ omxMatrix* omxNormalExpectation::getComponent(const char* component){
 		// Once implemented, change compute function and return pvec
 	}
 	if (retval) omxRecompute(retval, NULL);
-	
+
 	return retval;
 }

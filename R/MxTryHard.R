@@ -47,6 +47,7 @@ mxTryHard <- function(
 	else if( !(0 %in% OKstatuscodes) ){OKstatuscodes <- c(OKstatuscodes,0)}
 	#if( !("MxModel" %in% class(model)) ){stop("argument 'model' must be an object of class 'MxModel'")}
 	if(initialTolerance<0){stop("value for argument 'initialTolerance' cannot be negative")}
+  warnModelCreatedByOldVersion(model)
 	if (omxHasDefaultComputePlan(model)) {
 		model@compute <- NULL
 	}
@@ -109,7 +110,10 @@ mxTryHard <- function(
 	modelAtStartValues <- suppressWarnings(try(runWithCounter(model, 0, silent, F)))
 	if(class(modelAtStartValues) != "try-error"){ 
 		fitvalAtStarts <- modelAtStartValues@fitfunction@result[1]
-		if(is.finite(fitvalAtStarts)){lowestminsofar <- fitvalAtStarts}
+		#If there are MxConstraints, we don't know if they're satisfied at the start values,
+		#so we don't want to treat the fit at the start values as the lowest so far,
+		#since an uphill step may be necessary to get to feasibility:
+		if(is.finite(fitvalAtStarts) && lackOfConstraints){lowestminsofar <- fitvalAtStarts}
 	}
 	model@compute <- inputCompute
 	rm(modelAtStartValues, inputCompute)
@@ -444,6 +448,7 @@ imxJiggle <- function(params, lbounds, ubounds, dsn, loc, scale){
 
 
 mxJiggle <- function(model, classic=FALSE, dsn=c("runif","rnorm","rcauchy"), loc=1, scale=0.25){
+  warnModelCreatedByOldVersion(model)
 	dsn <- match.arg(dsn, c("runif","rnorm","rcauchy"))
 	loc <- as.numeric(loc[1])
 	scale <- as.numeric(scale[1])
@@ -522,6 +527,14 @@ THFrankenmodel <- function(finalfit,bestfit,defaultComputePlan,Hesslater,SElater
 	bestfit@output$independentTime <- bestfit@output$independentTime + finalfit@output$independentTime
 	bestfit@output$wallTime <- bestfit@output$wallTime + finalfit@output$wallTime
 	bestfit@output$cpuTime <- bestfit@output$cpuTime + finalfit@output$cpuTime
+	needednames <- names(finalfit@output)[which(!(names(finalfit@output) %in% names(bestfit@output)))]
+	#Whether or not output elements having to do with CIs, SEs, or Hessians should be returned is governed
+	#by user-provided arguments to mxTryHard(); those elements are handled by code above:
+	needednames <- needednames[
+		!(needednames %in% c(
+			"confidenceIntervals","confidenceIntervalCodes","calculatedHessian","hessian","standardErrors","infoDefinite","conditionNumber","vcov"))
+	]
+	bestfit@output[needednames] <- finalfit@output[needednames]
 	bestfit@.modifiedSinceRun <- FALSE
 	return(bestfit)
 }

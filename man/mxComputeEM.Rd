@@ -22,9 +22,9 @@ mxComputeEM(
 )
 }
 \arguments{
-\item{expectation}{a vector of expectation names (DEPRECATED)}
+\item{expectation}{a vector of expectation names \lifecycle{deprecated}}
 
-\item{predict}{what to predict from the observed data (DEPRECATED)}
+\item{predict}{what to predict from the observed data \lifecycle{deprecated}}
 
 \item{mstep}{a compute plan to optimize the completed data model}
 

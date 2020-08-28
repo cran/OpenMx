@@ -18,15 +18,6 @@ This function tests whether the correct error message is thrown.
 Arguments \sQuote{expression} and \sQuote{message} give the expression
 that generates the error and the message that is supposed to be generated, respectively.
 }
-\examples{
-A <- mxMatrix('Full', 1, 1, labels = 'data.foo', free = TRUE, name = 'A')
-model <- mxModel('model', A)
-omxCheckError(mxRun(model), 
-paste("The definition variable 'data.foo'",
-	"has been assigned to a",
-	"free parameter in matrix 'A'"))
-omxCheckCloseEnough(matrix(3, 3, 3), matrix(4, 3, 3), epsilon = 2)
-}
 \references{
 The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
 }

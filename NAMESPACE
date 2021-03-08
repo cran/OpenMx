@@ -7,12 +7,15 @@ importFrom(Matrix, nearPD)
 importFrom(utils, .DollarNames, installed.packages, packageVersion, read.table)
 importFrom(stats, cov, dnorm, na.fail, na.omit, optim, optimize, quantile,
 	   pchisq, pnorm, qchisq, qnorm, rnorm, runif, uniroot, var, sd)
-importFrom("stats", "AIC", "coef", "rcauchy", simulate, "p.adjust", "p.adjust.methods", "vcov")
+importFrom("stats", "coef", "rcauchy", simulate, "p.adjust", "p.adjust.methods", "vcov")
 importFrom("stats", "binomial", "glm", "median", "plogis", 'qlogis', "predict")
 importFrom("stats", "pnbinom", "ppois")
 importFrom("stats", "rWishart")
 importFrom("stats", "logLik")
+importFrom("stats", "lm")
+importFrom("stats", "AIC")
 importFrom("lifecycle", "deprecate_soft", "deprecate_warn", "deprecated")
+importFrom("utils", "head")
 
 useDynLib(OpenMx, .registration=TRUE)
 
@@ -27,7 +30,7 @@ exportPattern("^imx.+")
 
 # matrix algebra functions exported by the library
 export(tr, "%&%", "%^%", rvectorize, cvectorize, vech, vechs, 'vechs<-',
-	diag2vec, vec2diag, eigenvec, eigenval, ieigenvec, 
+	diag2vec, vec2diag, eigenvec, eigenval, ieigenvec,
 	ieigenval, vech2full, vechs2full, logm, expm, p2z, logp2z, lgamma1p, as.statusCode)
 
 # export S4 classes in the OpenMx library
@@ -44,7 +47,6 @@ S3method(print, summary.mxmodel)
 S3method(print, result.mxCompareMatrix)
 S3method(print, result.mxPower)
 S3method(logLik, MxModel)
-S3method(AIC, MxModel)
 S3method(coef, MxModel)
 S3method(summary, MxModel)
 S3method(anova, MxModel)
@@ -52,12 +54,14 @@ S3method(simulate, MxModel)
 S3method(confint, MxModel)
 S3method(vcov, MxModel)
 S3method(predict, MxModel)
+S3method(as.data.frame, MxCompare)
 
 # Export S3 .DollarNames functions
 S3method(.DollarNames, MxModel)  # MxModel has a unique .DollarNames function
 S3method(.DollarNames, MxMatrix, imxDefaultGetSlotDisplayNames)
 S3method(.DollarNames, MxAlgebra, imxDefaultGetSlotDisplayNames)
 S3method(.DollarNames, MxCompute, imxDefaultGetSlotDisplayNames)
+S3method(.DollarNames, MxCompare) # MxCompare has a unique .DollarNames function
 S3method(.DollarNames, MxData, imxDefaultGetSlotDisplayNames)
 S3method(.DollarNames, MxBaseExpectation, imxDefaultGetSlotDisplayNames)
 S3method(.DollarNames, MxBaseFitFunction, imxDefaultGetSlotDisplayNames)

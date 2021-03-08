@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -580,7 +580,7 @@ void omxLISRELExpectation::init()
 	} else LISobj->means  = 	NULL;
 	//TODO: Adjust means processing to allow only Xs or only Ys
 
-	if (currentState->isClone()) {
+	if (!currentState->isTopState()) {
     auto pex = (omxLISRELExpectation*) currentState->getParent(this);
     if (pex->slope) {
       numExoPred = pex->numExoPred;
@@ -615,7 +615,9 @@ void omxLISRELExpectation::getExogenousPredictors(std::vector<int> &out)
 
 void omxLISRELExpectation::studyExoPred() // compare with similar function for RAM
 {
-	if (data->defVars.size() == 0 || !TY || !TY->isSimple() || !PS->isSimple()) return;
+	if (data->defVars.size() == 0 || !TY ||
+      TY->isAlgebra() || TY->populateDependsOnDefinitionVariables() ||
+      PS->isAlgebra() || PS->populateDependsOnDefinitionVariables()) return;
 
 	Eigen::VectorXd estSave;
 	currentState->setFakeParam(estSave);

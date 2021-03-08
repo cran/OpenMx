@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013-2019 by the individuals mentioned in the source code history
+ *  Copyright 2013-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 #define _OMX_COMPUTE_H_
 
 #include "omxDefines.h"
+#include <map>
 #include <Eigen/SparseCore>
 #include "glue.h"
 #include "omxState.h"
+#include "autoTune.h"
 
 // See R/MxRunHelperFunctions.R optimizerMessages
 // Also see the NPSOL manual, section 6 "Error Indicators and Warnings"
@@ -84,7 +86,9 @@ struct HessianBlock {
 };
 
 struct CIobjective {
-	ConfidenceInterval *CI;
+	const ConfidenceInterval *CI;
+	const bool constrained;
+	const bool lowerBound;  // otherwise doing upper bound
 
 	enum Diagnostic {
 		DIAG_SUCCESS=1,
@@ -95,17 +99,24 @@ struct CIobjective {
 		DIAG_BOXED
 	};
 
-	virtual bool gradientKnown() { return false; };
-	virtual void gradient(FitContext *fc, double *gradOut) {};
+  void setGrad(FitContext *fc);
+
+  CIobjective(const ConfidenceInterval *_CI, bool _constrained, bool _lower)
+    : CI(_CI), constrained(_constrained), lowerBound(_lower) {}
+  virtual std::unique_ptr<CIobjective> clone() const = 0;
 	virtual void evalIneq(FitContext *fc, omxMatrix *fitMat, double *out) {};
 	virtual void evalEq(FitContext *fc, omxMatrix *fitMat, double *out) {};
 	virtual void evalFit(omxFitFunction *ff, int want, FitContext *fc);
 	virtual void checkSolution(FitContext *fc);
 	virtual Diagnostic getDiag() = 0;
+  virtual bool hasAnalyticJac() { return false; }
+	virtual void ineqAnalyticJac(FitContext *fc, omxMatrix *fitMat, MatrixStoreFn out) {}
+	virtual void eqAnalyticJac(FitContext *fc, omxMatrix *fitMat, MatrixStoreFn out) {}
 };
 
 // The idea of FitContext is to eventually enable fitting from
-// multiple starting values in parallel.
+// multiple starting values in parallel. There is one FitContext
+// per thread.
 
 class FitContext {
 	static omxFitFunction *RFitFunction;
@@ -131,41 +142,47 @@ class FitContext {
 	void analyzeHessian();
 	void analyzeHessianBlock(HessianBlock *hb);
 	void testMerge();
+  void createChildren1();
 
 	std::string IterationError;
 	double ordinalRelativeError;
 	int computeCount;
 	ComputeInform inform;
 	double previousReportFit;
+  int _numFree;
+  Eigen::ArrayXd curFree;  // length=numFree
+  std::unique_ptr<CIobjective> disabledCiobj;
+  void toggleCIObjective();
 
  public:
 	FreeVarGroup *varGroup;
 	omxState *state;
 	omxState *getParentState() const { return parent->state; };
 	bool isClone() const;
-	size_t numParam;               // change to int type TODO
+	int numParam;
+  int getNumFree() const { return _numFree; }
 	std::vector<int> mapToParent;
 	double mac;
 	double fit;
 	FitStatisticUnits fitUnits;
 	int skippedRows;
-	double *est;
-	Eigen::Map< Eigen::VectorXd > getEst() {
-		Eigen::Map< Eigen::VectorXd > vec(est, numParam);
-		return vec;
-	}
-	std::vector<bool> profiledOut;
-	int calcNumFree() {
-		std::vector<bool> &po = profiledOut;
-		return numParam - std::count(po.begin(), po.end(), true);
-	};
-	std::vector<bool> haveGrad;
-	Eigen::VectorXd gradZ;
-	void initGrad(int pars) { // should dimension to numParam always? TODO
-		haveGrad.assign(pars, false);
+  std::map< const char *, int, cstrCmp > freeToIndexMap;
+  std::vector<int> freeToParamMap;  // length=numFree
+	std::vector<bool> profiledOutZ;
+	void calcNumFree();
+  Eigen::ArrayXd est;  // length=numParam
+  const Eigen::ArrayXd &getCurrentFree() {
+    if (numParam == getNumFree()) return est;
+    curFree.resize(getNumFree());
+    copyEstToOptimizer(curFree);
+    return curFree;
+  }
+  std::unique_ptr<class AutoTune<class JacobianGadget>> numericalGradTool;
+	Eigen::VectorXd gradZ;  // length=numFree
+	void initGrad() {
+    int pars = getNumFree();
 		gradZ = Eigen::VectorXd::Zero(pars);
 	};
-	void initGrad() { initGrad(numParam); };
 	int infoDefinite;
 	double infoCondNum;
 	Eigen::MatrixXd hess;
@@ -177,39 +194,34 @@ class FitContext {
 	int iterations;
 	int wanted;
 	std::vector< class FitContext* > childList;
-	
+
 	//Outputs from gradient-based optimizers:
 	Eigen::VectorXd constraintFunVals;
 	Eigen::MatrixXd constraintJacobian;
 	Eigen::VectorXd LagrMultipliers;
 	Eigen::VectorXi constraintStates;
 	Eigen::MatrixXd LagrHessian;
-	
+
 	//Constraint-related:
-	void solEqBFun(bool wantAJ, int verbose);
-	void myineqFun(bool wantAJ, int verbose, int ineqType, bool CSOLNP_HACK);
-	bool isUsingAnalyticJacobian(){ return state->usingAnalyticJacobian; }
-	Eigen::MatrixXd analyticEqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an equality constraint
-	Eigen::MatrixXd analyticIneqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an inequality constraint
-	Eigen::VectorXd equality;
-	Eigen::VectorXd inequality;
-	void allConstraintsF(bool wantAJ, int verbose, int ineqType, bool CSOLNP_HACK, bool maskInactive);
+  bool isUnconstrained();
+  bool isEffectivelyUnconstrained();
 	Eigen::MatrixXd vcov; //<--Repeated-sampling covariance matrix of the MLEs.
-	int redundantEqualities;
 
 	// for confidence intervals
-	CIobjective *ciobj;
+  std::unique_ptr<CIobjective> ciobj;
+  void withoutCIobjective(std::function<void()> fn);
 
 	FitContext(omxState *_state);
 	FitContext(FitContext *parent, FreeVarGroup *group);
 	bool openmpUser;  // whether some fitfunction/expectation uses OpenMP
-	void createChildren(omxMatrix *alg);
+  bool permitParallel; // whether openmpUser is permitted
+  void createChildren(omxMatrix *alg=0, bool permitParallel=false);
+  int numOptimizerThreads() { return (childList.size() && !openmpUser)? childList.size() : 1; }
 	void destroyChildren();
 	void calcStderrs();
 	void ensureParamWithinBox(bool nudge);
 	void copyParamToModel();
 	void copyParamToModelClean();
-	double *take(int want);
 	omxMatrix *lookupDuplicate(omxMatrix* element);
 	void maybeCopyParamToModel(omxState* os);
 	void updateParent();
@@ -238,7 +250,7 @@ class FitContext {
 		mxThrow("%s: reference fit is not finite", fitMat->name());
 	};
 	~FitContext();
-	
+
 	// deriv related
 	void clearHessian();
 	void negateHessian();
@@ -284,94 +296,62 @@ class FitContext {
 
 	// profiledOut parameters are not subject to optimization
 	template<typename T> void copyEstToOptimizer(T &out) {
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			out[px] = est[vx];
-			++px;
+		for (int vx=0; vx < getNumFree(); ++vx) {
+			out[vx] = est[ freeToParamMap[vx] ];
 		}
 	};
 	template<typename T> void copyGradToOptimizer(T &out) {
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			out[px] = haveGrad[vx]? gradZ[vx] : NA_REAL;
-			++px;
+		for (int vx=0; vx < getNumFree(); ++vx) {
+			out[vx] = gradZ[vx];
 		}
 	};
 	template<typename T> void copyGradFromOptimizer(const T &in) {
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			gradZ[vx] = in[px];
-			haveGrad[vx] = true;
-			++px;
+		for (int vx=0; vx < getNumFree(); ++vx) {
+			gradZ[vx] = in[vx];
 		}
 	};
+	void setParamFromOptimizer(int px, double v1) {
+    est[ freeToParamMap[px] ] = v1;
+		copyParamToModel(); // could be smarter TODO
+	}
 	template<typename T> void setEstFromOptimizer(const T &in) {
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			est[vx] = in[px];
-			++px;
+		for (int vx=0; vx < getNumFree(); ++vx) {
+			est[ freeToParamMap[vx] ] = in[vx];
 		}
 		copyParamToModel();
 	};
+	template<typename T> void setEstFromOptimizerClean(const T &in) {
+		for (int vx=0; vx < getNumFree(); ++vx) {
+			est[ freeToParamMap[vx] ] = in[vx];
+		}
+		copyParamToModelClean();
+	};
 	template<typename T1, typename T2>
 	void setEstGradFromOptimizer(const T1 &ein, const T2 &gin) {
-		haveGrad.assign(numParam, true);
-		gradZ.resize(numParam);
-		gradZ.setConstant(NA_REAL);
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			est[vx] = ein[px];
-			gradZ[vx] = gin[px];
-			++px;
-		}
+    setEstFromOptimizer(ein);
+    if (gradZ.size()) copyGradFromOptimizer(gin);
 		copyParamToModel();
 	};
 	template<typename T1, typename T2>
 	void copyBoxConstraintToOptimizer(Eigen::MatrixBase<T1> &lb, Eigen::MatrixBase<T2> &ub)
 	{
-		int px=0;
-		for (size_t vx=0; vx < numParam; ++vx) {
-			if (profiledOut[vx]) continue;
-			lb[px] = varGroup->vars[vx]->lbound;
-			if (!std::isfinite(lb[px])) lb[px] = NEG_INF;
-			ub[px] = varGroup->vars[vx]->ubound;
-			if (!std::isfinite(ub[px])) ub[px] = INF;
-			++px;
+    // lb.size can be larger than numFree (see NPSOL)
+    if (lb.size() < getNumFree()) OOPS;
+		for (int vx=0; vx < getNumFree(); ++vx) {
+      int px = freeToParamMap[vx];
+			lb[vx] = varGroup->vars[px]->lbound;
+			if (!std::isfinite(lb[vx])) lb[vx] = NEG_INF;
+			ub[vx] = varGroup->vars[px]->ubound;
+			if (!std::isfinite(ub[vx])) ub[vx] = INF;
 		}
 	};
+  bool hasActiveBoxConstraint(int skip) const;
 	std::string asProgressReport();
 };
 
 void copyParamToModelInternal(FreeVarGroup *varGroup, omxState *os, double *at);
 
 typedef std::vector< std::pair<int, MxRList*> > LocalComputeResult;
-
-struct allconstraints_functional {
-	FitContext &fc;
-	int verbose;
-	
-	allconstraints_functional(FitContext &_fc, int _verbose) : fc(_fc), verbose(_verbose) {};
-	
-	template <typename T1, typename T2>
-	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result) const {
-		fc.setEstFromOptimizer(x.derived().data());
-		fc.allConstraintsF(false, verbose, omxConstraint::LESS_THAN, false, true);
-		result = fc.constraintFunVals;
-	}
-	
-	template <typename T1, typename T2, typename T3>
-	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result, Eigen::MatrixBase<T3> &jacobian) const {
-		fc.setEstFromOptimizer(x.derived().data());
-		fc.allConstraintsF(true, verbose, omxConstraint::LESS_THAN, false, true);
-		result = fc.constraintFunVals;
-		jacobian = fc.constraintJacobian;
-	}
-};
 
 class omxCompute {
 	int computeId;
@@ -518,6 +498,6 @@ void printSparse(Eigen::SparseMatrixBase<T> &sm) {
 	mxLogBig(buf);
 }
 
-void AddLoadDataProvider(double version, int, class LoadDataProviderBase2 *ldp);
+void AddLoadDataProvider(double version, unsigned int, class LoadDataProviderBase2 *ldp);
 
 #endif

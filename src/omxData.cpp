@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,8 @@
 #include "EnableWarnings.h"
 
 omxData::omxData() : primaryKey(NA_INTEGER), weightCol(NA_INTEGER), currentWeightColumn(0),
-		     freqCol(NA_INTEGER), currentFreqColumn(0), parallel(true),
+                     freqCol(NA_INTEGER), currentFreqColumn(0), numEstimatedEntries(0),
+                     parallel(true),
 		     noExoOptimize(true), modified(false), minVariance(0), warnNPDacov(true),
 		     dataObject(0), dataMat(0), meansMat(0),
 										 numObs(0), _type(0), naAction(NA_PASS), numFactor(0), numNumeric(0),
@@ -180,8 +181,9 @@ static void importDataFrame(SEXP dataLoc, std::vector<ColumnData> &rawCols,
 			cd.setBorrow(INTEGER(rcol));
 			ProtectedSEXP Rlevels(Rf_getAttrib(rcol, R_LevelsSymbol));
 			for (int lx=0; lx < Rf_length(Rlevels); ++lx) {
-				cd.levels.push_back(R_CHAR(STRING_ELT(Rlevels, lx)));
+				cd.levelNames.push_back(R_CHAR(STRING_ELT(Rlevels, lx)));
 			}
+      cd.setMaxValueFromLevels();
 			numFactor++;
 		} else if (Rf_isInteger(rcol)) {
 			if(debug+OMX_DEBUG) {mxLog("Column[%d] %s is integer.", j, colname);}
@@ -259,44 +261,46 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 
 	{ScopedProtect pdl(dataLoc, R_do_slot(dataObj, Rf_install("observed")));
 
-	if (Rf_isFrame(dataLoc)) {
-		auto &rd = unfiltered;
-		rd.rows = Rf_length(VECTOR_ELT(dataLoc, 0));
-		importDataFrame(dataLoc, rd.rawCols, od->numNumeric, od->numFactor);
-		cols = int(rd.rawCols.size());
-		for (int cx=0; cx < cols; ++cx) {
-			rawColMap.emplace(rd.rawCols[cx].name, cx);
-		}
+    if (dataLoc == R_NilValue) {
+      // OK, probably observedStats only
+    } else if (Rf_isFrame(dataLoc)) {
+      auto &rd = unfiltered;
+      rd.rows = Rf_length(VECTOR_ELT(dataLoc, 0));
+      importDataFrame(dataLoc, rd.rawCols, od->numNumeric, od->numFactor);
+      cols = int(rd.rawCols.size());
+      for (int cx=0; cx < cols; ++cx) {
+        rawColMap.emplace(rd.rawCols[cx].name, cx);
+      }
 
-		if (hasPrimaryKey()) {
-			int kt = rd.rawCols[primaryKey].type;
-			if (kt != COLUMNDATA_INTEGER &&
-					kt != COLUMNDATA_ORDERED_FACTOR && kt != COLUMNDATA_UNORDERED_FACTOR) {
-				mxThrow("%s: primary key must be an integer or factor column in raw observed data", name);
-			}
-		}
+      if (hasPrimaryKey()) {
+        int kt = rd.rawCols[primaryKey].type;
+        if (kt != COLUMNDATA_INTEGER &&
+            kt != COLUMNDATA_ORDERED_FACTOR && kt != COLUMNDATA_UNORDERED_FACTOR) {
+          mxThrow("%s: primary key must be an integer or factor column in raw observed data", name);
+        }
+      }
 
-		if (hasWeight() && rd.rawCols[weightCol].type != COLUMNDATA_NUMERIC) {
-			mxThrow("%s: weight must be a numeric column in raw observed data", name);
-		}
+      if (hasWeight() && rd.rawCols[weightCol].type != COLUMNDATA_NUMERIC) {
+        mxThrow("%s: weight must be a numeric column in raw observed data", name);
+      }
 
-		if (hasFreq() && rd.rawCols[freqCol].type != COLUMNDATA_INTEGER) {
-			mxThrow("%s: frequency must be an integer column in raw observed data", name);
-		}
-	} else {
-		if(OMX_DEBUG) {mxLog("Data contains a matrix.");}
-		od->dataMat = omxNewMatrixFromRPrimitive0(dataLoc, state, 0, 0);
+      if (hasFreq() && rd.rawCols[freqCol].type != COLUMNDATA_INTEGER) {
+        mxThrow("%s: frequency must be an integer column in raw observed data", name);
+      }
+    } else {
+      if(OMX_DEBUG) {mxLog("Data contains a matrix.");}
+      od->dataMat = omxNewMatrixFromRPrimitive0(dataLoc, state, 0, 0);
 
-		if (od->dataMat->colMajor && strEQ(od->_type, "raw")) {
-			omxToggleRowColumnMajor(od->dataMat);
-		}
-		od->cols = od->dataMat->cols;
-		unfiltered.rows = od->dataMat->rows;
-		od->numNumeric = od->cols;
+      if (od->dataMat->colMajor && strEQ(od->_type, "raw")) {
+        omxToggleRowColumnMajor(od->dataMat);
+      }
+      od->cols = od->dataMat->cols;
+      unfiltered.rows = od->dataMat->rows;
+      od->numNumeric = od->cols;
 
-		// Raw data is already stored like a data frame
-		if (strEQ(_type, "raw")) convertToDataFrame();
-	}
+      // Raw data is already stored like a data frame
+      if (strEQ(_type, "raw")) convertToDataFrame();
+    }
 	}
 
 	if (!strEQ(_type, "raw") && (hasPrimaryKey() || hasWeight() || hasFreq())) {
@@ -351,17 +355,20 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 				o1.fullWeight = omxNewMatrixFromRPrimitive(VECTOR_ELT(RobsStats, ax), state, 0, 0);
 			} else if (strEQ(key, "thresholds")) {
 				o1.thresholdMat = omxNewMatrixFromRPrimitive(VECTOR_ELT(RobsStats, ax), state, 0, 0);
+			} else if (strEQ(key, "numEstimatedEntries")) {
+        // ignore, just diagnostic output
 			} else {
 				Rf_warning("%s: observedStats key '%s' ignored", name, key);
 			}
 		}
+    if (oss && !oss->covMat) oss = 0;
 	}
 	if (oss) {
 		auto &o1 = *oss;
-		if (int(o1.covMat->colnames.size()) != o1.covMat->cols)
-			mxThrow("%s: observedStats$cov must have colnames", name);
 		if (o1.thresholdMat) o1.numOrdinal = o1.thresholdMat->cols;
 		if (!o1.covMat) mxThrow("%s: observedStats must include a covariance matrix", name);
+		if (int(o1.covMat->colnames.size()) != o1.covMat->cols)
+			mxThrow("%s: observedStats$cov must have colnames", name);
 		if (o1.numOrdinal) {
 			if (int(o1.thresholdMat->colnames.size()) != o1.thresholdMat->cols)
 				mxThrow("%s: observedStats$thresholds must have colnames", name);
@@ -444,6 +451,7 @@ void omxData::prep()
 			if (dest.d()) continue;
 			filterCount += 1;
       dest.setMinValue(src.getMinValue());
+      dest.setMaxValue(src.getMaxValueUnsafe());
 			switch (src.type) {
 			case COLUMNDATA_ORDERED_FACTOR:
 			case COLUMNDATA_UNORDERED_FACTOR:
@@ -461,7 +469,8 @@ void omxData::prep()
 					dest.d()[dx++] = src.d()[sx];
 				}
 				break;
-			default: mxThrow("unknown type %d", src.type);
+			default: ;
+        // continue is fine here
 			}
 		}
 		if (verbose >= 1) mxLog("omit: filtered %d columns", filterCount);
@@ -496,6 +505,14 @@ void omxData::prep()
 
 	currentWeightColumn = getWeightColumn();
 	currentFreqColumn = getOriginalFreqColumn();
+
+  if (OMX_DEBUG) {
+    for (auto &col : filtered.rawCols) {
+      // This check is too strict. It is legitimate to for the
+      // data.frame to contain non-data columns.
+      if (!col.i()) OOPS;
+    }
+  }
 
 	if (verbose >= 2) omxPrintData("prep", 10);
 }
@@ -653,13 +670,6 @@ double *omxDoubleDataColumn(omxData *od, int col)
 	else return cd.d();
 }
 
-int omxDataGetNumFactorLevels(omxData *od, int col)
-{
-	ColumnData &cd = od->rawCol(col);
-	if (cd.levels.size() == 0) mxThrow("omxDataGetNumFactorLevels attempt on non-factor");
-	return cd.levels.size();
-}
-
 int omxIntDataElement(omxData *od, int row, int col) {
 	if(od->dataMat != NULL) {
 		return (int) omxMatrixElement(od->dataMat, row, col);
@@ -696,9 +706,9 @@ bool omxDataColumnIsKey(omxData *od, int col)
 	return cd.type != COLUMNDATA_NUMERIC;
 }
 
-void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool warn)
+void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool isUnfiltered)
 {
-  //mxLog("omxData::RawData::assertColumnIsData(%d, %d, %d)", col, dt, warn);
+  //mxLog("omxData::RawData::assertColumnIsData(%d, %d, %d)", col, dt, isUnfiltered);
 	if (col < 0 || col >= int(rawCols.size())) {
 		mxThrow("Column %d requested but only %d columns of data",
 						col, int(rawCols.size()));
@@ -707,13 +717,13 @@ void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool warn)
 	switch (cd.type) {
 	case COLUMNDATA_ORDERED_FACTOR:
 		if (dt == OMXDATA_ORDINAL || dt == OMXDATA_COUNT) {
-      if (!warn) cd.setZeroMinValue(rows);
+      if (!isUnfiltered) cd.setZeroMinValue(rows);
       return;
     }
 		mxThrow("Don't know how to interpret factor column '%s' as numeric.\n"
 						"You may want to specify thresholds for your model like this: "
 						"mxThreshold(vars='%s', nThresh=%d)",
-						cd.name, cd.name, int(cd.levels.size() - 1));
+						cd.name, cd.name, cd.getNumThresholds());
 	case COLUMNDATA_NUMERIC:{
 		if (dt == OMXDATA_REAL) return;
     if (dt == OMXDATA_ORDINAL) {
@@ -724,22 +734,20 @@ void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool warn)
 		double *realData = cd.d();
     int *intData = new int[rows];
 		for (int rx=0; rx < rows; ++rx) {
-			if (realData[rx] == NA_REAL) {
-				intData[rx] = NA_INTEGER;
-			} else {
-				intData[rx] = realData[rx];
-			}
+      intData[rx] = cast_with_NA(realData[rx]);
 		}
     cd.setOwn(intData);
     cd.setMinValue(0);
+    cd.verifyMinValue(rows);
+    if (!isUnfiltered) cd.setMaxValueFromData(rows);
     break;}
 	case COLUMNDATA_UNORDERED_FACTOR:
 		if (dt == OMXDATA_ORDINAL) {
-			if (warn && ++Global->dataTypeWarningCount < 5) {
+			if (isUnfiltered && ++Global->dataTypeWarningCount < 5) {
 				Rf_warning("Column '%s' must be an ordered factor. "
 									 "Please use mxFactor()", cd.name);
 			}
-      if (!warn) cd.setZeroMinValue(rows);
+      if (!isUnfiltered) cd.setZeroMinValue(rows);
 		} else if (dt == OMXDATA_COUNT) {
 			mxThrow("Don't know how to interpret unordered factor '%s' as a count", cd.name);
 		} else {
@@ -747,7 +755,11 @@ void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool warn)
 		}
 		break;
 	case COLUMNDATA_INTEGER:{
-		if (dt == OMXDATA_COUNT) return;
+		if (dt == OMXDATA_COUNT) {
+      cd.verifyMinValue(rows);
+      if (!isUnfiltered) cd.setMaxValueFromData(rows);
+      return;
+    }
 		if (dt == OMXDATA_ORDINAL) {
 			mxThrow("Don't know how to interpret integer column '%s' as ordinal. "
 							"Please use mxFactor()", cd.name);
@@ -757,11 +769,7 @@ void omxData::RawData::assertColumnIsData(int col, OmxDataType dt, bool warn)
 		int *intData = cd.i();
     double *realData = new double[rows];
 		for (int rx=0; rx < rows; ++rx) {
-			if (intData[rx] == NA_INTEGER) {
-				realData[rx] = NA_REAL;
-			} else {
-				realData[rx] = intData[rx];
-			}
+      realData[rx] = cast_with_NA(intData[rx]);
 		}
     cd.setOwn(realData);
 		return;}
@@ -839,9 +847,29 @@ ColumnData ColumnData::clone() const
   ColumnData ret(name);
   ret.type = type;
   ret.setBorrow(ptr);
-  ret.levels = levels;
+  ret.levelNames = levelNames;
   ret.minValue = minValue;
+  ret.maxValue = maxValue;
   return ret;
+}
+
+void ColumnData::verifyMinValue(int nrows)
+{
+  int m0 = std::numeric_limits<int>::max();
+  for (int *it=i(); it < i()+nrows; ++it) {
+    if (*it == NA_INTEGER) continue;
+    if (*it < m0) m0 = *it;
+  }
+  if (m0 != minValue) {
+    mxThrow("column %s: minimum value is %d not %d", name, m0, minValue);
+  }
+}
+
+void ColumnData::setMaxValueFromData(int nrows)
+{
+  // NA_INTEGER is negative so can ignore
+  auto it = std::max_element(i(), i() + nrows);
+  maxValue = *it;
 }
 
 void ColumnData::setZeroMinValue(int rows)
@@ -849,6 +877,7 @@ void ColumnData::setZeroMinValue(int rows)
   if (minValue == 0) return;
   if (type == COLUMNDATA_NUMERIC)
     mxThrow("ColumnData::setZeroMinValue not implemented for numeric data");
+  if (minValue != 1) OOPS;
   int *oldIntData = i();
   int *id = new int[rows];
   for (int xx=0; xx < rows; ++xx) {
@@ -860,6 +889,8 @@ void ColumnData::setZeroMinValue(int rows)
   }
   setOwn(id);
   minValue = 0;
+  if (maxValue == NA_INTEGER) OOPS;
+  maxValue -= 1;
 }
 
 void omxData::RawData::operator=(const RawData &other)
@@ -888,14 +919,14 @@ void omxDataKeysCompatible(omxData *upper, omxData *lower, int foreignKey)
 			 lcd.name, lower->name, ColumnDataTypeToString(lcd.type));
 	}
 	if (ucd.type == COLUMNDATA_ORDERED_FACTOR || ucd.type == COLUMNDATA_UNORDERED_FACTOR) {
-		if (ucd.levels.size() != lcd.levels.size()) {
+		if (ucd.getMaxValue() != lcd.getMaxValue()) {
 			mxThrow("Primary key '%s' in %s has a different number of factor"
 				 " levels compared to foreign key '%s' in %s",
 				 ucd.name, upper->name, lcd.name, lower->name);
 		}
-		for (int lx=0; lx < int(ucd.levels.size()); ++lx) {
-			auto &ul = ucd.levels[lx];
-			auto &ll = lcd.levels[lx];
+		for (int lx=0; lx < int(ucd.levelNames.size()); ++lx) {
+			auto &ul = ucd.levelNames[lx];
+			auto &ll = lcd.levelNames[lx];
 			if (ul == ll) continue;
 			mxThrow("Primary key '%s' in %s has different factor levels ('%s' != '%s')"
 				 " compared to foreign key '%s' in %s",
@@ -1265,7 +1296,7 @@ void obsSummaryStats::permute(omxData *data)
 	if (int(covMat->colnames.size()) != covMat->cols) mxThrow("%s: cannot permute without cov dimnames", data->name);
 	for (int cx=0; cx < int(covMat->colnames.size()); ++cx) {
 		auto it = dataMap.find(covMat->colnames[cx]);
-		if (it == dataMap.end()) mxThrow("oops");
+		if (it == dataMap.end()) OOPS;
 		invDataColumns[cx] = it->second;
 		//mxLog("%d %s", cx, omxDataColumnName(data, dc[cx]));
 	}
@@ -1358,9 +1389,23 @@ void obsSummaryStats::log()
 	if (covMat) omxPrint(covMat, "cov");
 	if (slopeMat) omxPrint(slopeMat, "slope");
 	if (meansMat) omxPrint(meansMat, "mean");
-	if (acovMat) omxPrint(acovMat, "acov");
+	if (acovMat) {
+    EigenMatrixAdaptor Eacov(acovMat);
+    if (Eacov.cols() < 30) {
+      mxPrintMat("acov", Eacov);
+    } else {
+      mxPrintMat("acov (topleft)", Eacov.block(0,0,30,30));
+    }
+  }
 	if (fullWeight) {
-		if (acovMat != fullWeight) omxPrint(fullWeight, "full");
+		if (acovMat != fullWeight) {
+      EigenMatrixAdaptor Efw(fullWeight);
+      if (Efw.cols() < 30) {
+        mxPrintMat("full", Efw);
+      } else {
+        mxPrintMat("full (topleft)", Efw.block(0,0,30,30));
+      }
+    }
 		else mxLog("fullWeight == acov");
 	}
 	for (auto &th : thresholdCols) { th.log(); }
@@ -1406,6 +1451,7 @@ void omxData::reportResults(MxRList &out)
 	if (o1.slopeMat) out.add("slope", o1.slopeMat->asR());
 	if (o1.fullWeight) out.add("fullWeight", o1.fullWeight->asR());
 	if (o1.thresholdMat) out.add("thresholds", o1.thresholdMat->asR());
+  out.add("numEstimatedEntries", Rcpp::wrap(numEstimatedEntries));
 }
 
 template <typename T>
@@ -1663,17 +1709,20 @@ struct ProbitRegression : NewtonRaphsonObjective {
 			 const Eigen::Ref<const Eigen::ArrayXd> _rowMult,
 									 std::vector<int> &_index,
 									 std::vector< Eigen::Ref<Eigen::VectorXd> > &predCols);
-	void setResponse(ColumnData &_r, WLSVarData &pv, int yy);
-	virtual double getFit() { return fit; }
-	virtual const char *paramIndexToName(int px)
+	void setResponse(ColumnData &_r, int yy);
+	virtual double getFit() override { return fit; }
+	virtual const char *paramIndexToName(int px) override
 	{ return pnames[px].c_str(); }
 	void evaluate0();
 	void calcScores();
-	virtual void evaluateFit();
-	virtual void evaluateDerivs(int want);
-	virtual double *getParamVec() { return param.data(); }
-	virtual double *getGrad() { return grad.data(); }
-	virtual void setSearchDir(Eigen::Ref<Eigen::VectorXd> searchDir);
+	virtual void evaluateFit() override;
+	virtual void evaluateDerivs(int want) override;
+	virtual void getParamVec(Eigen::Ref<Eigen::VectorXd> out) override
+  { out = param;  }
+  virtual void setParamVec(const Eigen::Ref<const Eigen::VectorXd> in) override
+  { param = in; }
+	virtual double *getGrad() override { return grad.data(); }
+	virtual void setSearchDir(Eigen::Ref<Eigen::VectorXd> searchDir) override;
 };
 
 ProbitRegression::
@@ -1695,10 +1744,10 @@ ProbitRegression(omxData *_d,
 	}
 }
 
-void ProbitRegression::setResponse(ColumnData &_r, WLSVarData &pv, int yy)
+void ProbitRegression::setResponse(ColumnData &_r, int yy)
 {
 	response = &_r;
-	numThr = response->levels.size()-1;
+	numThr = response->getNumThresholds();
 
 	Eigen::Map< Eigen::VectorXi > ycolFull(response->i(), data.nrows());
 	ycol.resize(pred.rows());
@@ -1710,15 +1759,17 @@ void ProbitRegression::setResponse(ColumnData &_r, WLSVarData &pv, int yy)
 	}
 	Eigen::VectorXi ycolF(ycol.size() - naCount);
 	subsetVector(ycol, notMissingF, ycolF);
-	Eigen::VectorXd tab(response->levels.size());
+	Eigen::VectorXd tab(response->getNumOutcomes());
 	tabulate(ycolF, rowMult.derived(), tab);
 	if ((tab.array()==0).any()) {
 		int x,y;
 		tab.minCoeff(&x,&y);
-		mxThrow("%s: variable '%s' has a zero frequency category '%s'.\n"
-			 "Eliminate this level in your mxFactor() or combine categories in some other way.\n"
-			 "Do not pass go. Do not collect $200.",
-			 data.name, response->name, response->levels[x].c_str());
+    std::string outcome = string_snprintf("%d", 1+x);
+    if (response->levelNames.size()) outcome = response->levelNames[x];
+		mxThrow("%s: variable '%s' has a zero frequency outcome '%s'.\n"
+            "Eliminate this level in your mxFactor() or combine categories in some other way.\n"
+            "Do not pass go. Do not collect $200.",
+            data.name, response->name, outcome.c_str());
 	}
 	Eigen::VectorXd prop = (tab.cast<double>() / double(tab.sum())).
 		segment(0, numThr);
@@ -1768,7 +1819,7 @@ void regressOrdinalThresholds(const Eigen::MatrixBase<T3> &ycol,
 {
 	zi.derived().resize(ycol.size(), 2);
 
-	int numThr = oc.levels.size() - 1;
+	int numThr = oc.getNumThresholds();
 	Eigen::VectorXd th(2 + numThr);  // pass in as argument TODO
 	th.segment(1, numThr) = ov.theta.segment(0, numThr);
 	th[0] = NEG_INF;
@@ -1797,10 +1848,10 @@ void regressOrdinalThresholds(const Eigen::MatrixBase<T3> &ycol,
 
 void ProbitRegression::evaluate0()
 {
-	Eigen::VectorXd th(1 + response->levels.size());
+	Eigen::VectorXd th(1+response->getNumOutcomes());
 	th.segment(1, numThr) = param.segment(0, numThr);
 	th[0] = -std::numeric_limits<double>::infinity();
-	th[response->levels.size()] = std::numeric_limits<double>::infinity();
+	th[response->getNumOutcomes()] = std::numeric_limits<double>::infinity();
 
 	for (int rx=0; rx < ycol.size(); ++rx) {
 		if (ycol[rx] == NA_INTEGER) {
@@ -1954,7 +2005,7 @@ struct PolyserialCor : NewtonRaphsonObjective {
 
 		regressOrdinalThresholds(ycol, pred2, oc, ov, zi);
 
-		numThr = oc.levels.size() - 1;
+		numThr = oc.getNumThresholds();
 
 		int naCount=0;
 		auto notMissingF = [&](int rx){ return ycol[rx] != NA_INTEGER; };
@@ -1977,9 +2028,9 @@ struct PolyserialCor : NewtonRaphsonObjective {
 		if (data.verbose >= 3) mxLog("starting ps rho = %f", rho);
 		param = atanh(rho);
 	}
-	virtual double getFit() { return fit; };
-	virtual const char *paramIndexToName(int px) { return "rho"; }
-	virtual void evaluateFit()
+	virtual double getFit() override { return fit; };
+	virtual const char *paramIndexToName(int px) override { return "rho"; }
+	virtual void evaluateFit() override
 	{
 		double rho = tanh(param);
 		double R = sqrt(1 - rho * rho);
@@ -1992,9 +2043,12 @@ struct PolyserialCor : NewtonRaphsonObjective {
 		}
 		fit = -(pr.log() * rowMult).sum();
 	}
-	virtual double *getParamVec() { return &param; };
-	virtual double *getGrad() { return &grad; };
-	virtual void evaluateDerivs(int want)
+	virtual void getParamVec(Eigen::Ref<Eigen::VectorXd> out) override
+  { out[0] = param; }
+  virtual void setParamVec(const Eigen::Ref<const Eigen::VectorXd> in) override
+  { param = in[0]; }
+	virtual double *getGrad() override { return &grad; };
+	virtual void evaluateDerivs(int want) override
 	{
 		if (want & FF_COMPUTE_FIT) evaluateFit();
 
@@ -2011,7 +2065,7 @@ struct PolyserialCor : NewtonRaphsonObjective {
 		double cosh_x = cosh(param);
 		grad = -dx_rho * 1./(cosh_x * cosh_x);
 	}
-	virtual void setSearchDir(Eigen::Ref<Eigen::VectorXd> searchDir)
+	virtual void setSearchDir(Eigen::Ref<Eigen::VectorXd> searchDir) override
 	{
 		// Can fix Hessian at 1.0 because only 1 parameter.
 		// Line search takes care of scaling.
@@ -2064,7 +2118,6 @@ struct PolyserialCor : NewtonRaphsonObjective {
 };
 
 struct PolychoricCor : NewtonRaphsonObjective {
-	typedef UnconstrainedObjective super;
 	double totalWeight;
 	const Eigen::Ref<const Eigen::ArrayXd> rowMult;
 	std::vector<int> &index;
@@ -2104,8 +2157,8 @@ struct PolychoricCor : NewtonRaphsonObjective {
 		lbound.setConstant(NEG_INF);
 		ubound.resize(1);
 		ubound.setConstant(INF);
-		numThr1 = c1.levels.size()-1;
-		numThr2 = c2.levels.size()-1;
+		numThr1 = c1.getNumThresholds();
+		numThr2 = c2.getNumThresholds();
 		th1.resize(2 + numThr1);
 		th1.segment(1, numThr1) = v1.theta.segment(0, numThr1);
 		th1[0] = NEG_INF;
@@ -2148,7 +2201,7 @@ struct PolychoricCor : NewtonRaphsonObjective {
 			regressOrdinalThresholds(y1.matrix(), pred1, c1, v1, z1);
 			regressOrdinalThresholds(y2.matrix(), pred2, c2, v2, z2);
 		} else {
-			obsTable.resize(c1.levels.size(), c2.levels.size());
+			obsTable.resize(c1.getNumOutcomes(), c2.getNumOutcomes());
 			obsTable.setZero();
 			pr.resize(obsTable.size());
 			den.resize(obsTable.size());
@@ -2158,7 +2211,10 @@ struct PolychoricCor : NewtonRaphsonObjective {
 		}
 	}
 
-	virtual double *getParamVec() { return &param; };
+	virtual void getParamVec(Eigen::Ref<Eigen::VectorXd> out) override
+  { out[0] = param; }
+  virtual void setParamVec(const Eigen::Ref<const Eigen::VectorXd> in) override
+  { param = in[0]; }
 	virtual double *getGrad() { return &grad; };
 	virtual const char *paramIndexToName(int px) { return "rho"; };
 	virtual double getFit() { return fit; };
@@ -2440,7 +2496,7 @@ bool omxData::regenObsStats(const std::vector<const char *> &dc, const char *wls
 			EigenMatrixAdaptor Eth(o1.thresholdMat);
 			for (int tx=0; tx <= o1.thresholdMat->rows; ++tx) {
 				if (tx < o1.thresholdMat->rows && std::isfinite(Eth(tx,cx))) continue;
-				int nthr = int(rc.levels.size()) - 1;
+				int nthr = rc.getNumThresholds();
 				if (tx != nthr) {
 					if (verbose >= 1) {
 						mxLog("%s: threshold '%s' implies %d levels but data has %d levels",
@@ -2497,7 +2553,10 @@ bool omxData::regenObsStats(const std::vector<const char *> &dc, const char *wls
 	}
 	//omxPrint(o1.covMat, "cov");
 
-	if (verbose >= 1) mxLog("%s: pre-existing observedStats looks good", name);
+	if (verbose >= 1) {
+    mxLog("%s: pre-existing observedStats looks good", name);
+    if (verbose >= 2) o1.log();
+  }
 
 	return false;
 }
@@ -2693,7 +2752,7 @@ struct sampleStats {
 			copyScores(o1.SC_VAR, pv.contOffset, olsr.scores.array(), 1+pred.size());
 		} else {
 			ProbitRegression pr(&data, o1, rowMult, index, pred);
-			pr.setResponse(cd, pv, yy);
+			pr.setResponse(cd, yy);
 			if (pred.size()) {
 				NewtonRaphsonOptimizer nro("nr", 100, eps, verbose);
 				nro(pr);
@@ -3022,11 +3081,7 @@ void omxData::_prepObsStats(omxState *state, const std::vector<const char *> &dc
 			totalThr += 1;  // mean
 			numContinuous += 1;
 		} else {
-			if (cd.type != COLUMNDATA_ORDERED_FACTOR) {
-				mxThrow("%s: variable '%s' must be an ordered factor but is of type %s",
-					 name, cd.name, ColumnDataTypeToString(cd.type));
-			}
-			int numThr = cd.levels.size() - 1;
+			int numThr = cd.getNumThresholds();
 
 			omxThresholdColumn tc;
 			tc.dataColumn = yy;
@@ -3109,6 +3164,8 @@ void omxData::estimateObservedStats()
 	}
 
 	{
+		EigenMatrixAdaptor Ecov(o1.covMat);
+    numEstimatedEntries += triangleLoc1(Ecov.rows()) - Ecov.array().isFinite().count();
 		sampleStats ss(this, dc, exoOrder, o1);
 		int numThr = parallel? Global->numThreads : 1;
 		//int numThr = 1;
@@ -3159,7 +3216,7 @@ void omxData::estimateObservedStats()
 	for (int yy=0; yy < numCols; ++yy) {
 		ColumnData &cd = rawCol( rawColMap[dc[yy]] );
 		std::vector<bool> mask(A11_size, false);
-		int numThr = cd.type == COLUMNDATA_NUMERIC? 1 : cd.levels.size() - 1;
+		int numThr = cd.type == COLUMNDATA_NUMERIC? 1 : cd.getNumThresholds();
 		for (int tx=0; tx < numThr; ++tx) mask[thStart[yy] + tx] = true;
 		for (int px=0; px < o1.exoFree.cols(); ++px) {
 			if (o1.exoFree(yy,px)) mask[totalThr + exoOrder(yy,px)] = true;
@@ -3300,6 +3357,7 @@ void omxData::invalidateColumnsCache(const std::vector< int > &columns)
 		o1.partial = true;
 	}
 	if (fail) invalidateCache();
+  //else mxThrow("partial!");
 }
 
 void omxData::evalAlgebras(FitContext *fc)

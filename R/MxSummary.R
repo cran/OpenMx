@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -245,6 +245,7 @@ fitStatistics <- function(model, useSubmodels, retval) {
 	}
 	
 	retval$fitUnits <- model@output$fitUnits
+	retval$fit <- if(retval$fitUnits == '-2lnL'){ retval[['Minus2LogLikelihood']] } else if(retval$fitUnits == "r'Wr") {retval[['Chi']]}
 	
 	fi <- computeFitStatistics(likelihood, DoF, chi, chiDoF,
 		retval[['numObs']], independence, indDoF, saturated, satDoF)
@@ -986,17 +987,15 @@ logLik.MxModel <- function(object, ...) {
 	moreModels <- list(...)
 	assertModelFreshlyRun(model)
 	ll <- NA
-	if (length(model@output) && !is.null(model@output$Minus2LogLikelihood) && 
+	if (length(model@output) && !is.null(model@output$fit) && 
 			!is.null(model@output$fitUnits) ) {
 		if(model@output$fitUnits=="-2lnL"){
-			ll <- -0.5*model@output$Minus2LogLikelihood
-			#TODO: this doesn't count "implicit" free parameters that are "profiled out":
-			attr(ll, "df") <- length(model@output$estimate)
+			ll <- -0.5*model@output$fit
 		} else if(model@output$fitUnits=="r'Wr") {
-			ll <- model@output$chi
-			attr(ll, "df") <- model@output$chiDoF
-			# TODO is this right?
+			ll <- -0.5*model@output$chi
 		}
+		#TODO: this doesn't count "implicit" free parameters that are "profiled out":
+		attr(ll, "df") <- length(model@output$estimate)
 	} else {
 		attr(ll,"df") <- NA
 	}
@@ -1013,39 +1012,6 @@ logLik.MxModel <- function(object, ...) {
 		ll
 	}
 }
-
-AIC.MxModel <- function(object, ..., k=2){
-	model <- object
-	if( length(model@output) && !is.null(model@output$Minus2LogLikelihood) && 
-			!is.null(model@output$fitUnits) && model@output$fitUnits=="r'Wr" ){
-		aicMult <- 1
-	} else {
-		aicMult <- -2
-	}
-	# Copied from AIC.default
-	# Modified by using logLik instead of -2*logLik for WLS
-	# because logLik on a WLS model returns the Chi-Squared value
-	if (!missing(...)) {
-		lls <- lapply(list(object, ...), logLik)
-		vals <- sapply(lls, function(el) {
-			no <- attr(el, "nobs")
-			c(as.numeric(el), attr(el, "df"), if (is.null(no)) NA_integer_ else no)
-		})
-		val <- data.frame(df = vals[2L, ], ll = vals[1L, ])
-		nos <- na.omit(vals[3L, ])
-		if (length(nos) && any(nos != nos[1L])) 
-			warning("models are not all fitted to the same number of observations")
-		val <- data.frame(df = val$df, AIC = aicMult * val$ll + k * val$df)
-		Call <- match.call()
-		Call$k <- NULL
-		row.names(val) <- as.character(Call[-1L])
-		return(val)
-	} else {
-		lls <- logLik(object)
-		return(aicMult * as.numeric(lls) + k * attr(lls, "df"))
-	}
-}
-
 
 .standardizeParams <- function(x=NULL, model, Apos, Spos, Mpos, give.matrices=FALSE){
   if(is.null(x)){x <- omxGetParameters(model)}

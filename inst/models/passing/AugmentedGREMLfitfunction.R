@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ testmod2 <- mxModel(
 	mxMatrix("Symm",nrow=100,free=F,values=A2,name="A2"),
 	mxAlgebra((A1%x%Va1) + (A2%x%Va2) + (I%x%Ve), name="V"),
 	mxMatrix(type="Full",nrow=1,ncol=1,free=F,values=0.64,name="aug"),
-	mxFitFunctionGREML(aug="aug")
+	mxFitFunctionGREML(aug="aug",autoDerivType="numeric")
 )
 testrun2 <- mxRun(testmod2)
 omxCheckCloseEnough(a=testrun2$output$fit - testrun$output$fit, b=1.28, epsilon=1e-9)

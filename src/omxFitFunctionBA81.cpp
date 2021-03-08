@@ -243,16 +243,16 @@ static void buildItemParamMap(omxFitFunction* oo, FitContext *fc)
 			const int outer_at1 = state->paramMap[cx * state->itemDerivPadSize + p1];
 			if (outer_at1 < 0) continue;
 			const int outer_hb1 = std::lower_bound(hb.vars.begin(), hb.vars.end(), outer_at1) - hb.vars.begin();
-			if (hb.vars[outer_hb1] != outer_at1) mxThrow("oops");
+			if (hb.vars[outer_hb1] != outer_at1) OOPS;
 
 			for (int p2=0; p2 <= p1; p2++) {
 				int at1 = outer_at1;
 				int hb1 = outer_hb1;
 				int at2 = state->paramMap[cx * state->itemDerivPadSize + p2];
 				if (at2 < 0) continue;
-				if (p1 == p2 && at1 != at2) mxThrow("oops");
+				if (p1 == p2 && at1 != at2) OOPS;
 				int hb2 = std::lower_bound(hb.vars.begin(), hb.vars.end(), at2) - hb.vars.begin();
-				if (hb.vars[hb2] != at2) mxThrow("oops");
+				if (hb.vars[hb2] != at2) OOPS;
 
 				if (at1 < at2) std::swap(at1, at2); // outer_at1 unaffected
 				if (hb1 < hb2) std::swap(hb1, hb2); // outer_hb1 unaffected
@@ -381,7 +381,6 @@ ba81ComputeEMFit(omxFitFunction* oo, int want, FitContext *fc)
 
 				if (to < numFreeParams) {
 					if (want & FF_COMPUTE_GRADIENT) {
-						fc->haveGrad[to] = true;
 						fc->gradZ(to) -= Scale * deriv0[ox];
 					}
 				} else {
@@ -780,7 +779,6 @@ static void gradCov(omxFitFunction *oo, FitContext *fc)
 		}
 	}
 	for (size_t d1=0; d1 < numParam; ++d1) {
-		fc->haveGrad[d1] = true;
 		fc->gradZ(d1) += thrGrad[d1];
 	}
 	if (fc->infoB) {
@@ -936,7 +934,6 @@ void BA81FitState::init()
 			       name());
 	}
 
-	oo->gradientAvailable = TRUE;
 	oo->hessianAvailable = TRUE;
 
 	int maxParam = estate->itemParam->rows;

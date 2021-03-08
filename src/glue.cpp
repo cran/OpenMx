@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ SEXP mtmvnorm(SEXP Rsigma, SEXP Rlower, SEXP Rupper)
 	return result.asR();
 }
 
-void omxSadmvnWrapper(FitContext *fc, int numVars, 
+void omxSadmvnWrapper(FitContext *fc, int numVars,
 	double *corList, double *lThresh, double *uThresh, int *Infin, double *likelihood, int *inform)
 {
 	// Eigen::Map< Eigen::ArrayXd > elt(lThresh, numVars);
@@ -250,7 +250,7 @@ void omxSadmvnWrapper(FitContext *fc, int numVars,
    	uThresh[1] = 0;
    	Infin[1] = 0;
    	smallCor[0] = 1.0; smallCor[1] = 0; smallCor[2] = 1.0; */
-   	F77_CALL(sadmvn)(&numVars, lThresh, uThresh, Infin, corList, &MaxPts, 
+   	F77_CALL(sadmvn)(&numVars, lThresh, uThresh, Infin, corList, &MaxPts,
 		&absEps, &relEps, &Error, likelihood, inform, &fortranThreadId);
 
 	if (fc) fc->recordOrdinalRelativeError(Error / *likelihood);
@@ -273,7 +273,7 @@ void omxSadmvnWrapper(FitContext *fc, int numVars,
 			// mxLog("");
 		}
 	}
-} 
+}
 
 static SEXP has_NPSOL()
 { return Rf_ScalarLogical(HAS_NPSOL); }
@@ -374,7 +374,7 @@ void friendlyStringToLogical(const char *key, SEXP rawValue, int *out)
 }
 
 // TODO: make member of omxGlobal class
-static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
+static void readOpts(SEXP options)
 {
 		int numOptions = Rf_length(options);
 		SEXP optionNames;
@@ -384,28 +384,29 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 			SEXP rawValue = VECTOR_ELT(options, i);
 			const char *nextOptionValue = CHAR(Rf_asChar(rawValue));
 			if(matchCaseInsensitive(nextOptionName, "Analytic Gradients")) {
-				friendlyStringToLogical(nextOptionName, rawValue, analyticGradients);
+				friendlyStringToLogical(nextOptionName, rawValue, &Global->analyticGradients);
 			} else if(matchCaseInsensitive(nextOptionName, "loglikelihoodScale")) {
 				Global->llScale = atof(nextOptionValue);
 			} else if(matchCaseInsensitive(nextOptionName, "debug protect stack")) {
 				friendlyStringToLogical(nextOptionName, rawValue, &Global->debugProtectStack);
 			} else if(matchCaseInsensitive(nextOptionName, "Number of Threads")) {
 #ifdef _OPENMP
-				*numThreads = atoi(nextOptionValue);
-				if (*numThreads < 1) {
-					Rf_warning("Computation will be too slow with %d threads; using 1 thread instead", *numThreads);
-					*numThreads = 1;
+				int nt = atoi(nextOptionValue);
+				if (nt < 1) {
+					Rf_warning("Computation will be too slow with %d threads; using 1 thread instead", nt);
+					nt = 1;
 				}
 				char *ont = getenv("OMP_NUM_THREADS");
-				if (ont && *numThreads > atoi(ont)) {
+				if (ont && nt > atoi(ont)) {
 					mxThrow("I'm confused! %d threads requested. "
-									"Either request fewer threads, i.e., %s, in the mxOption() "
+									"Either request fewer threads in the mxOption() "
 									"statement, or submit your batch job with OMP_NUM_THREADS "
-									"environment varible set to %d.  This env variable may be "
+									"environment varible set to %d (instead of %s).  This env variable may be "
 									"controlled by PBS’s -ncpus argument, "
 									"or similar on other batch systems.",
-									*numThreads, ont, *numThreads);
+									nt, nt, ont);
 				}
+        Global->numThreads = nt;
 #endif
 			} else if(matchCaseInsensitive(nextOptionName, "Parallel diagnostics")) {
 				friendlyStringToLogical(nextOptionName, rawValue, &Global->parallelDiag);
@@ -433,6 +434,30 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 				Global->feasibilityTolerance = atof(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "max minutes")) {
 				Global->maxSeconds = nearbyint(atof(nextOptionValue) * 60);
+			} else if (matchCaseInsensitive(nextOptionName, "Default optimizer")) {
+        Global->engine = nameToGradOptEngine(nextOptionValue);
+      } else if (matchCaseInsensitive(nextOptionName, "Gradient algorithm")) {
+        if (rawValue == R_NilValue) {
+          // OK
+        } else if (strEQ(nextOptionValue, "forward")) {
+          Global->gradientAlgo = GradientAlgorithm_Forward;
+        } else if (strEQ(nextOptionValue, "central")) {
+          Global->gradientAlgo = GradientAlgorithm_Central;
+        } else {
+          mxThrow("Gradient algorithm '%s' unknown", nextOptionValue);
+        }
+      } else if (matchCaseInsensitive(nextOptionName, "Gradient iterations")) {
+        if (strEQ(nextOptionValue, "Auto")) {
+          // OK
+        } else {
+          Global->gradientIter = std::max(Rf_asInteger(rawValue), 1);
+        }
+      } else if (matchCaseInsensitive(nextOptionName, "Gradient step size")) {
+        if (strEQ(nextOptionValue, "Auto")) {
+          // OK
+        } else {
+          Global->gradientStepSize = Rf_asReal(rawValue);
+        }
 			} else if (matchCaseInsensitive(nextOptionName, "Optimality tolerance")) {
 				Global->optimalityTolerance = atof(nextOptionValue);
 			} else if (matchCaseInsensitive(nextOptionName, "Major iterations")) {
@@ -453,6 +478,7 @@ static void readOpts(SEXP options, int *numThreads, int *analyticGradients)
 				// ignore
 			}
 		}
+    Global->setDefaultGradientAlgo();
 }
 
 /* Main functions */
@@ -473,7 +499,7 @@ SEXP omxCallAlgebra2(SEXP matList, SEXP algNum, SEXP options) {
 
 	omxState *globalState = new omxState;
 
-	readOpts(options, &Global->numThreads, &Global->analyticGradients);
+	readOpts(options);
 
 	/* Retrieve All Matrices From the MatList */
 
@@ -556,14 +582,14 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	/* Create new omxState for current state storage and initialize it. */
 	omxState *globalState = new omxState;
 
-	readOpts(options, &Global->numThreads, &Global->analyticGradients);
+	readOpts(options);
 #if HAS_NPSOL
 	omxSetNPSOLOpts(options);
 #endif
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	globalState->omxProcessMxDataEntities(data, defvars);
-    
+
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
 	globalState->omxProcessMxExpectationEntities(expectList);
 
@@ -638,6 +664,8 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 		mxThrow("Protection stack too large; report this problem to the OpenMx forum");
 	}
 
+  globalState->hideBadConstraints(fc);
+
 	if (globalState->getWantStage() != FF_COMPUTE_INITIAL_FIT) {
 		mxThrow("globalState->getWantStage() != FF_COMPUTE_INITIAL_FIT");
 	}
@@ -696,8 +724,10 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 				Rf_protect(units = Rf_allocVector(STRSXP, 1));
 				SET_STRING_ELT(units, 0, Rf_mkChar(fitUnitsToName(fc->fitUnits)));
 				result.add("fitUnits", units);
+				if(fc->fitUnits == FIT_UNITS_MINUS2LL){
+					result.add("Minus2LogLikelihood", Rf_ScalarReal(fc->fit));
+				}
 			}
-			result.add("Minus2LogLikelihood", Rf_ScalarReal(fc->fit));
 			result.add("maxRelativeOrdinalError",
 				   Rf_ScalarReal(fc->getOrdinalRelativeError()));
 		}
@@ -708,10 +738,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 		FreeVarGroup *varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
 		int numFree = int(varGroup->vars.size());
 		if (numFree) {
-			SEXP estimate;
-			Rf_protect(estimate = Rf_allocVector(REALSXP, numFree));
-			memcpy(REAL(estimate), fc->est, sizeof(double)*numFree);
-			result.add("estimate", estimate);
+			result.add("estimate", Rcpp::wrap(fc->est));
 
 			if (Global->boundsUpdated) {
 				MxRList bret;
@@ -838,4 +865,3 @@ void R_unload_OpenMx(DllInfo *) {
 #ifdef  __cplusplus
 }
 #endif
-

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -59,14 +59,14 @@ protected:
 
  public:
 	int numDataColumns;
-	SEXP rObj;
+	S4 rObj;
 	const char *name;   // pointer to a static string, no need to allocate or free
 	omxData* data;
 	int numOrdinal;  // number of thresholds with matrix != 0
 	/* Replication of some of the structures from Matrix */
 	unsigned short isComplete;													// Whether or not this expectation has been initialize
 	omxState* currentState;
-	bool isClone() const;
+	bool isTopState() const;
 	int expNum;  // index in omxState's vector
 
 	// omxExpectation should not need to know about free variables.
@@ -78,7 +78,7 @@ protected:
 	omxExpectation(omxState *state, int num) :
 		dataColumnsPtr(0), thresholdsMat(0),
 		discreteSpecPtr(0), _connectedToData(false), discreteMat(0),
-    numDataColumns(0), rObj(0), name(0), data(0), numOrdinal(0),
+    numDataColumns(0), name(0), data(0), numOrdinal(0),
     isComplete(false), currentState(state),
 		expNum(num), freeVarGroup(0), canDuplicate(false), dynamicDataSource(false) {};
 	virtual ~omxExpectation() {};
@@ -227,7 +227,7 @@ void normalToStdVector(omxMatrix *cov, omxMatrix *mean, omxMatrix *slope, T Eth,
 		EigenMatrixAdaptor Eslope(slope);
 		for (int cx=0; cx < Eslope.cols(); ++cx) {
 			for (int rx=0; rx < Eslope.rows(); ++rx) {
-				out[dx++] = Eslope(rx,cx);
+				out[dx++] = Eslope(rx,cx) * sdTmp[rx];
 			}
 		}
 	}

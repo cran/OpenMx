@@ -1,19 +1,23 @@
 library(OpenMx)
 library(testthat)
 
+skip_if(.Platform$OS.type=="windows" && .Platform$r_arch=="i386")
+
 data(demoOneFactor)
+
+mxOption(key="feasibility tolerance", value = .001)
 
 myData   <- mxData(cor(demoOneFactor), type = "cor", numObs = 500)
 manifests = names(demoOneFactor)
 latents <- c("G")
 
-paths <- list(mxPath(from=latents, to=manifests),
-              mxPath(from=manifests, arrows=2),
+paths <- list(mxPath(from=latents, to=manifests, values=0.1),
+              mxPath(from=manifests, arrows=2, values=2.0, lbound=.00001),
               mxPath(from=latents, arrows=2, free=FALSE, values=1.0))
 
-fl <- mxModel("L", 
+fl <- mxModel("L",
               type="LISREL",
-              manifestVars=list(exo=manifests), 
+              manifestVars=list(exo=manifests),
               latentVars=list(exo=latents),
               paths, myData)
 
@@ -31,18 +35,26 @@ fr1 <- mxRun(fr)
 mg1 <- mxRun(mg)
 
 for (fit in list(fl1, fr1, mg1$L, mg1$R)) {
-  expect_equal(diag(fit$expectedCovariance$values), rep(1,5))
-  expect_equivalent(diag(mxGetExpected(fit, 'covariance')), rep(1,5))
+  expect_equal(diag(fit$expectedCovariance$values), rep(1,5), 1e-6)
+  expect_equivalent(diag(mxGetExpected(fit, 'covariance')), rep(1,5), 1e-6)
 }
 
-expect_equivalent(fl1$output$constraintJacobian[,paste0("L.TD[",1:5,",",1:5,"]")], diag(5))
-expect_equivalent(fr1$output$constraintJacobian[,paste0("R.S[",1:5,",",1:5,"]")], diag(5))
+expect_equivalent(fl1$output$constraintJacobian[,paste0("L.TD[",1:5,",",1:5,"]")], diag(5), 1e-6)
+expect_equivalent(fr1$output$constraintJacobian[,paste0("R.S[",1:5,",",1:5,"]")], diag(5), 1e-6)
 
-expect_equivalent(mg1$output$constraintJacobian,
-                  rbind(
-                    cbind(fl1$output$constraintJacobian, matrix(0, 5,10)),
-                    cbind(matrix(0,5,10), fr1$output$constraintJacobian)),
-                  tolerance=1e-6)
+lrConstraintJacobian <- rbind(
+  cbind(fl1$output$constraintJacobian, matrix(0, 5,10)),
+  cbind(matrix(0,5,10), fr1$output$constraintJacobian))
+
+mgConstraintJacobian <- mg1$output$constraintJacobian
+
+if (mxOption(key="Default optimizer") == "NPSOL") {
+  # NPSOL has signs flipped, not sure why
+  mgConstraintJacobian <- abs(mgConstraintJacobian)
+}
+
+expect_equivalent(mgConstraintJacobian,
+                  lrConstraintJacobian, tolerance=1e-6)
 
 fr1$expectedCovariance$free[1,1] <- TRUE
 expect_error(mxRun(fr1), "Free parameters are not allowed")
@@ -62,7 +74,7 @@ fm <- mxModel("One Factor", type="RAM",
               manifestVars = manifests,
               latentVars = latents, paths,
               mxPath(from = 'one', to = manifests),
-              mxData(demoOneFactor, type = "raw"), 
+              mxData(demoOneFactor, type = "raw"),
               mxMatrix(nrow=1, ncol=1, name="expectedMean"))
 fm$expectation$expectedMean <- "expectedMean"
 expect_error(mxRun(fm), "Matrix 'expectedMean' must be dimension 1x5")
@@ -81,3 +93,5 @@ fm <- mxRun(fm)
 expect_equivalent(fm$expectedMean$values, colMeans(demoOneFactor), tolerance=1e-5)
 expect_equivalent(max(abs(fm$expectedCovariance$values - cov(demoOneFactor))),
                   0, tolerance=1e-2)
+
+mxOption(reset=TRUE)

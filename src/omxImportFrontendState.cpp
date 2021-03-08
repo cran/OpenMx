@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ void omxState::omxProcessMxDataEntities(SEXP data, SEXP defvars)
 	int numDefs = Rf_length(defvars);
 	for(int nextDef = 0; nextDef < numDefs; nextDef++) {
 		omxDefinitionVar dvar;
-		
+
 		SEXP itemList;
 		ScopedProtect p1(itemList, VECTOR_ELT(defvars, nextDef));
 		int *ilist = INTEGER(itemList);
@@ -128,6 +128,7 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 				amat->take(initial);
 				omxFreeMatrix(initial);
 			}
+      if (fixed) amat->unshareMemoryWithR();
 			omxFillMatrixFromMxAlgebra(amat, formula, name, dimnames,
 						   verbose, fixed);
 		}
@@ -148,7 +149,7 @@ void omxState::omxCompleteMxFitFunction(SEXP algList, FitContext *fc)
 		if(!s4) continue;
 		omxMatrix *fm = algebraList[index];
 		omxCompleteFitFunction(fm);
-		omxFitFunctionComputeAuto(fm->fitFunction, FF_COMPUTE_INITIAL_FIT, fc);
+		ComputeFit("init", fm, FF_COMPUTE_INITIAL_FIT, fc);
 	}
 }
 
@@ -169,7 +170,7 @@ void omxState::omxProcessMxExpectationEntities(SEXP expList)
 void omxState::omxCompleteMxExpectationEntities()
 {
 	if(OMX_DEBUG) { mxLog("Completing %d Model Expectation(s).", (int) expectationList.size());}
-	
+
 	for(size_t index = 0; index < expectationList.size(); index++) {
 		if (isErrorRaised()) return;
 		omxCompleteExpectation(expectationList[index]);
@@ -440,14 +441,32 @@ void omxState::omxProcessConstraints(SEXP constraints, FitContext *fc)
 				   cname);
 		}
 		omxMatrix *jac = omxMatrixLookupFromState1(nextLoc, this);
-		int lin = INTEGER(VECTOR_ELT(nextVar,4))[0];
-		omxConstraint *constr = new UserConstraint(fc, cname, arg1, arg2, jac, lin);
+		//int lin = INTEGER(VECTOR_ELT(nextVar,4))[0];  // not implemented yet
+		omxConstraint *constr = new UserConstraint(fc, cname, arg1, arg2, jac,
+                                               Rcpp::as<int>(VECTOR_ELT(nextVar,5)));
 		constr->opCode = (omxConstraint::Type) Rf_asInteger(VECTOR_ELT(nextVar, 2));
-		if (OMX_DEBUG) mxLog("constraint '%s' is type %d", constr->name, constr->opCode);
+    constr->strict = Rcpp::as<bool>(VECTOR_ELT(nextVar,6));
+		if (OMX_DEBUG) mxLog("constraint '%s' is type %d strict=%d",
+                              constr->name, constr->opCode, int(constr->strict));
 		constr->prep(fc);
 		conListX.push_back(constr);
 	}
-	usingAnalyticJacobian = false;
-	countNonlinearConstraints(numEqC, numIneqC, false);
-	if(OMX_DEBUG){mxLog("Found %d equality and %d inequality constraints", numEqC, numIneqC);}
+}
+
+void omxState::hideBadConstraints(FitContext *fc)
+{
+  fc->calcNumFree();
+  if (!fc->getNumFree()) return;
+
+  int lastPar = fc->getNumFree() - 1;
+  double saveLastPar = fc->est[lastPar];
+
+  // enable parallel? TODO
+
+  ConstraintVec EqC(fc, "eq",
+                    [](const omxConstraint &con){
+                      return con.opCode == omxConstraint::EQUALITY; });
+  EqC.markUselessConstraints(fc);
+
+	fc->est[lastPar] = saveLastPar;
 }

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -129,6 +129,16 @@ omxCheckError(mxRefModels(testmod),
 							"Reference models for GREML expectation are not implemented")
 
 
+omxCheckError(mxModel(
+	"GREMLtest",
+	mxData(observed=dat, type="raw", sort=F),
+	mxMatrix(type = "Full", nrow = 1, ncol=1, free=T, values = 2, labels = "ve", lbound = 0.0001, name = "Ve"),
+	mxMatrix("Iden",nrow=100,name="I",condenseSlots=T),
+	mxAlgebra(I %x% Ve,name="V"),
+	mxExpectationGREML(V="V",Xvars=list("x"),yvars="y",addOnes=F),
+	mxFitFunctionGREML(autoDerivType="muneric")
+),"'muneric' should be one of 'semiAnalyt' and 'numeric'")
+
 
 testmod <- mxModel(
 	"GREMLtest",
@@ -139,6 +149,19 @@ testmod <- mxModel(
 )
 omxCheckError(mxRun(testmod),
 							"Expected covariance matrix is non-positive-definite at initial values")
+
+
+
+testmod <- mxModel(
+	"GREMLtest",
+	mxData(observed=dat, type="raw", sort=F),
+	mxMatrix(type = "Unit", nrow = 100, ncol=100, name = "V", condenseSlots = T),
+	mxExpectationGREML(V="V",Xvars=list("x"),yvars="y",addOnes=F),
+	mxFitFunctionML()
+)
+omxCheckError(mxRun(testmod),
+							"Expected covariance matrix is non-positive-definite at initial values")
+
 
 
 z <- matrix(-1,100,2)
@@ -155,6 +178,19 @@ testmod <- mxModel(
 )
 omxCheckError(mxRun(testmod),
 	"Cholesky factorization failed at initial values; possibly, the matrix of covariates is rank-deficient")
+
+
+testmod <- mxModel(
+	"GREMLtest",
+	mxData(observed=dat2, type="raw", sort=F),
+	mxMatrix(type = "Full", nrow = 1, ncol=1, free=T, values = 2, labels = "ve", lbound = 0.0001, name = "Ve"),
+	mxMatrix("Iden",nrow=100,name="I",condenseSlots=T),
+	mxAlgebra(I %x% Ve,name="V"),
+	mxExpectationGREML(V="V",Xvars=list(c("x","z1","z2")),yvars="y",addOnes=F),
+	mxFitFunctionML()
+)
+omxCheckError(mxRun(testmod),
+							"Cholesky factorization failed at initial values; possibly, the matrix of covariates is rank-deficient")
 
 
 set.seed(476)
@@ -202,39 +238,7 @@ omxCheckError(
 testmod$fitfunction <- mxFitFunctionGREML(dV=c(ve="I",va1="A1",va2="A2",va3="I"))
 omxCheckError(
 	mxRun(testmod),
-	"Problem in dVnames mapping")
-
-
-testmod <- mxModel(
-	"GREMLtest",
-	mxMatrix(type = "Full", nrow = 1, ncol=1, free=T, values =0.5, labels = "ve", lbound = 0.0001, 
-					 name = "Ve"),
-	mxMatrix(type = "Full", nrow = 1, ncol=1, free=T, values = 0.25, labels = "va1", name = "Va1"),
-	mxMatrix(type = "Full", nrow = 1, ncol=1, free=T, values = 0.25, labels = "va2", name = "Va2"),
-	mxData(observed = dat3, type="raw", sort=FALSE),
-	mxExpectationGREML(V="V",yvars="y", Xvars="x", addOnes=T),
-	mxMatrix("Iden",nrow=100,name="I"),
-	mxMatrix("Symm",nrow=100,free=F,values=A1,name="A1"),
-	mxMatrix("Symm",nrow=100,free=F,values=A2,name="A2"),
-	mxAlgebra((A1%x%Va1) + (A2%x%Va2) + (I%x%Ve), name="V"),
-	mxComputeSequence(steps=list(
-		mxComputeNewtonRaphson(fitfunction="fitfunction"),
-		mxComputeOnce('fitfunction', c('fit','gradient','hessian','ihessian')),
-		mxComputeStandardError(),
-		mxComputeReportDeriv(),
-		mxComputeReportExpectation()
-	)),
-	mxFitFunctionGREML(dV=c(ve="I",va1="A1"))
-)
-omxCheckError(
-	mxRun(testmod),
-	"At least one free parameter has no corresponding element in 'dV'")
-
-
-testmod$compute <- mxComputeDefault()
-omxCheckError(
-	mxRun(testmod),
-	"At least one free parameter has no corresponding element in 'dV'")
+	"length of argument 'dV' is greater than the number of explicit free parameters")
 
 
 
@@ -261,7 +265,7 @@ testmod <- mxModel(
 )
 omxCheckError(
 	mxRun(testmod),
-	"Problem in dVnames mapping")
+	"length of argument 'dV' is greater than the number of explicit free parameters")
 
 
 
@@ -279,7 +283,7 @@ testmod <- mxModel(
 	mxAlgebra((A1%x%Va1) + (A2%x%Va2) + (I%x%Ve), name="V"),
 	mxComputeSequence(steps=list(
 		mxComputeNewtonRaphson(fitfunction="fitfunction"),
-		mxComputeOnce('fitfunction', c('fit','gradient','hessian','ihessian')),
+		mxComputeOnce('fitfunction', c('fit','gradient','hessian')),
 		mxComputeStandardError(),
 		mxComputeReportDeriv(),
 		mxComputeReportExpectation()
@@ -291,7 +295,7 @@ testmod <- mxModel(
 )
 omxCheckError(
 	mxRun(testmod),
-	"matrix referenced by 'augGrad' must have same number of elements as argument 'dV'")
+	"matrix referenced by 'augGrad' must have as many elements as there are explicit free parameters")
 
 
 

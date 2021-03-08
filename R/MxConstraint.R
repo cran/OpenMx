@@ -1,12 +1,12 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,11 +22,13 @@ setClass(Class = "MxConstraint",
 		alg2 = "MxCharOrNumber",
 		relation = "MxCharOrNumber",
 		jac = "MxCharOrNumber",
-		linear = "logical"
+		linear = "logical",
+    strict = "logical",
+    verbose = "integer"
 	))
-	
+
 setMethod("initialize", "MxConstraint",
-	function(.Object, name, formula, jac=character(0)){#, linear=FALSE) {
+          function(.Object, name, formula, jac=character(0), verbose, strict){#, linear=FALSE) {
 		.Object@name <- name
 		.Object@formula <- formula
 		.Object@alg1 <- as.character(NA)
@@ -35,16 +37,18 @@ setMethod("initialize", "MxConstraint",
 		#if(linear && is.null(jac)){stop("linear constraints must be provided with a Jacobian")}
 		.Object@jac <- jac
 		.Object@linear <- FALSE
+    .Object@verbose <- verbose
+    .Object@strict <- strict
 		return(.Object)
-	}
-)
+          }
+    )
 
 mxConstraintFromString <- function(exprString, name = NA,...) {
 	eval(substitute(mxConstraint(tExp, name=name, ...),
 			list(tExp = parse(text=exprString)[[1]])))
 }
 
-mxConstraint <- function(expression, name=NA, ..., jac=character(0)){#, linear=FALSE) {
+mxConstraint <- function(expression, name=NA, ..., jac=character(0), verbose=0L, strict=TRUE){#, linear=FALSE) {
   prohibitDotdotdot(list(...))
 	if (single.na(name)) {
 		name <- imxUntitledName()
@@ -68,7 +72,8 @@ mxConstraint <- function(expression, name=NA, ..., jac=character(0)){#, linear=F
 	}
     algebraErrorChecking(formula[[2]], "mxConstraint")
     algebraErrorChecking(formula[[3]], "mxConstraint")
-	return(new("MxConstraint", name, formula, jac))#, linear))
+	return(new("MxConstraint", name, formula, jac, as.integer(verbose),
+             as.logical(strict)))#, linear))
 }
 
 convertConstraints <- function(flatModel) {
@@ -84,9 +89,9 @@ convertSingleConstraint <- function(constraint, flatModel) {
 		constraint@name)
 	index3 <- match(constraint@relation, imxConstraintRelations)
 	if(is.na(index3)) {
-		clist <- paste(imxConstraintRelations, 
-				collapse = ",")		
-		msg <- paste("The relation for constraint", 
+		clist <- paste(imxConstraintRelations,
+				collapse = ",")
+		msg <- paste("The relation for constraint",
 			omxQuotes(constraint@name),
 			"is not in the following list:",
 			clist)
@@ -94,7 +99,8 @@ convertSingleConstraint <- function(constraint, flatModel) {
 	}
 	index4 <- imxLocateIndex(flatModel, constraint@jac, constraint@name)
 	lin <- FALSE
-	return(list(index1,index2,index3 - 1,index4,lin))
+	return(list(index1,index2,index3 - 1,index4,lin,
+              constraint@verbose, constraint@strict))
 }
 
 ##' imxConstraintRelations

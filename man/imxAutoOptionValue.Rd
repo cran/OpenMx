@@ -19,6 +19,6 @@ Convert "Auto" placeholders in global mxOptions to actual default values.
 This is an internal function exported for documentation purposes.
 Its primary purpose is to convert the on-load value of "Auto"to
 valid values for \link{mxOption}s \sQuote{Gradient step size},
-\sQuote{Gradient iterations}, and 
+\sQuote{Gradient iterations}, and
 \sQuote{Function precision}--respectively, 1.0e-7, 1L, and 1e-14.
 }

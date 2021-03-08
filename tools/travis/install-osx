@@ -4,6 +4,12 @@ set -ve
 
 set +x
 
+rm -f '/usr/local/bin/gfortran'
+
+# Ignore return code
+brew install --force gcc llvm libomp || true
+brew upgrade gcc || true
+
 # Workaround for travis-ci/travis-ci#8973
 python -c "import fcntl; fcntl.fcntl(1, fcntl.F_SETFL, 0)"
 

@@ -1,12 +1,12 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -54,54 +54,67 @@ omxBuildAutoStartModel <- function(model, type=c('ULS', 'DWLS')) {
 }
 
 ##' Automatically set starting values for an MxModel
-##' 
+##'
 ##' @param model The MxModel for which starting values are desired
 ##' @param type The type of starting values to obtain, currently unweighted or diagonally weighted least squares, ULS or DWLS
-##' 
+##'
 ##' @details
 ##' This function automatically picks very good starting values for many models (RAM, LISREL, Normal), including multiple group versions of these.
 ##' It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continuous variables are also acceptable.
-##' It works for model with covariance or raw data.
+##' It works for models with covariance or raw data.
 ##' However, it does not currently work for models with definition variables, state space models, and item factor analysis models.
-##' 
+##'
 ##' The method used to obtain new starting values is quite simple. The user's model is changed to an unweighted least squares (ULS) model. The ULS model is estimated and its final point estimates are returned as the new starting values. Optionally, diagonally weighted least squares (DWLS) can be used instead with the \code{type} argument.
-##' 
+##'
 ##' Please note that ULS is sensitive to the scales of your variables. For example, if you have variables with means of 20 and variances of 0.001, then ULS will "weight" the means 20,000 times more than the variances and might result in zero variance estimates. Likewise if one variable has a variance of 20 and another has a variance of 0.001, the same problem may arise. To avoid this, make sure your variables are scaled accordingly. You could also use \code{type='DWLS'} to have the function use diagonally weighted least squares to obtain starting values.  Of course, using diagonally weighted least squares will take much much longer and will usually not provide better starting values than unweighted least squares.
-##' 
+##'
+##' Also note that if \code{model} contains a \link[=mxExpectationGREML]{GREML expectation}, argument \code{type} is ignored, and the function always uses a form of ULS.
+##'
 ##' @return
 ##' an MxModel with new free parameter values
-##' 
+##'
 ##' @examples
 ##' # Use the frontpage model with negative variances to show better
 ##' # starting values
 ##' library(OpenMx)
 ##' data(demoOneFactor)
-##' 
+##'
 ##' latents  = c("G") # the latent factor
 ##' manifests = names(demoOneFactor) # manifest variables to be modeled
-##' 
-##' m1 <- mxModel("One Factor", type = "RAM", 
-##' 	manifestVars = manifests, latentVars = latents, 
+##'
+##' m1 <- mxModel("One Factor", type = "RAM",
+##' 	manifestVars = manifests, latentVars = latents,
 ##' 	mxPath(from = latents, to = manifests),
 ##' 	mxPath(from = manifests, arrows = 2, values=-.2),
 ##' 	mxPath(from = latents, arrows = 2, free = FALSE, values = 1.0),
 ##' 	mxPath(from = "one", to = manifests),
 ##' 	mxData(demoOneFactor, type = "raw")
 ##' )
-##' 
+##'
 ##' # Starting values imply negative variances!
 ##' mxGetExpected(m1, 'covariance')
-##' 
+##'
 ##' # Use mxAutoStart to get much better starting values
 ##' m1s <- mxAutoStart(m1)
 ##' mxGetExpected(m1s, 'covariance')
 mxAutoStart <- function(model, type=c('ULS', 'DWLS')){
   warnModelCreatedByOldVersion(model)
+	if(is(model$expectation,"MxExpectationGREML")){
+		return(autoStartGREML(model))
+	}
 	type <- match.barg(type)
+	defaultComputePlan <- (is.null(model@compute) || is(model@compute, 'MxComputeDefault'))
+	if(!defaultComputePlan){
+		customPlan <- model@compute
+		model@compute <- NULL
+	}
 	wmodel <- mxRun(omxBuildAutoStartModel(model, type), silent=TRUE)
 	newparams <- coef(wmodel)
 	oldparams <- coef(model)
 	model <- omxSetParameters(model, values=newparams, labels=names(oldparams))
+	if(!defaultComputePlan){
+		model@compute <- customPlan
+	}
 	return(model)
 }
 
@@ -126,6 +139,11 @@ autoStartDataHelper <- function(model, subname=model@name, type){
 		}
 	} else if (origDataType == 'raw') {
 		data <- data[,useVars]
+		# This conditional is for cases when the model has only 1 endogenous variable:
+		if(!is.matrix(data) && !is.data.frame(data)){
+			data <- as.matrix(data)
+			colnames(data) <- useVars
+		}
 		if (type == 'ULS' && !any(sapply(data, is.ordered))) {
 			# special case for ULS, all continuous
 			os <- list(cov=cov(data, use='pair'))
@@ -139,4 +157,59 @@ autoStartDataHelper <- function(model, subname=model@name, type){
 	}
 	list(mdata, mxFitFunctionWLS(type, ifelse(length(exps$means) > 0, 'marginals', 'cumulants'),
 		type != 'ULS'))
+}
+
+
+autoStartGREML <- function(model){
+	if(model$expectation$dataset.is.yX){
+		y <- model$data$observed[,1]
+		X <- model$data$observed[,-1]
+		casesToDrop <- model$expectation$casesToDrop
+	} else{
+		dat <- mxGREMLDataHandler(
+			data=model$data$observed,
+			yvars=model$expectation$yvars,
+			Xvars=model$expectation$Xvars,
+			addOnes=model$expectation$addOnes,
+			blockByPheno=model$expectation$blockByPheno,
+			staggerZeroes=model$expectation$staggerZeroes
+		)
+		y <- dat$yX[,1]
+		X <- dat$yX[,-1]
+		casesToDrop <- dat$casesToDrop
+		rm(dat)
+	}
+	olsresids <- lm(y~X+0)$residuals
+	rm(X,y)
+	Vdim <- nrow(mxEvalByName(model$expectation$V,model,T))
+  # Create variable bindings so CRAN check doesn't complain about mxAlgebra expressions
+  filt <- NULL
+  S <- NULL
+  V <- NULL
+	if(length(olsresids) < Vdim){
+		filt_mtx <- mxMatrix(type="Full",nrow=1,ncol=Vdim,free=F,values=1,name="filt")
+		filt_mtx@values[casesToDrop] <- 0
+		aff <- mxAlgebra( sum((vech(S) - vech(omxSelectRowsAndCols(V,filt)))%^%2), name="algfitfunc")
+	} else{
+		filt_mtx <- mxMatrix(type="Full",nrow=1,ncol=1,free=F,values=1,name="filt")
+		aff <- mxAlgebra( sum((vech(S)-vech(V))%^%2), name="algfitfunc")
+	}
+	tempmod <- mxModel(
+		"tmp",
+		model,
+		aff,
+		filt_mtx,
+		mxMatrix(type="Symm",nrow=length(olsresids),free=F,values=outer(olsresids,olsresids),name="S",condenseSlots=T),
+		mxAlgebraFromString(paste(model$name,model$expectation$V,sep="."),name="V"),
+		mxFitFunctionAlgebra("algfitfunc")
+	)
+	rm(olsresids,aff,filt_mtx)
+	tempmod <- mxOption(tempmod,"Calculate Hessian","No")
+	tempmod <- mxOption(tempmod,"Standard Errors","No")
+	tempmod <- mxRun(tempmod,silent=T)
+	newparams <- coef(tempmod)
+	rm(tempmod)
+	oldparams <- coef(model)
+	model <- omxSetParameters(model, values=newparams, labels=names(oldparams))
+	return(model)
 }

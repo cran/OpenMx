@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ setClass(Class = "MxExpectationRAM",
 setMethod("initialize", "MxExpectationRAM",
 	function(.Object, A, S, F, M, dims, thresholds, threshnames,
            between, verbose, useSparse, expectedCovariance, expectedMean, discrete,
+           selectionVector, expectedFullCovariance, expectedFullMean,
            data = as.integer(NA), name = 'expectation') {
 		.Object@name <- name
 		.Object@A <- A
@@ -53,6 +54,7 @@ setMethod("initialize", "MxExpectationRAM",
 		.Object@thresholds <- thresholds
     .Object@discrete <- discrete
     .Object@.discreteCheckCount <- TRUE
+    .Object@selectionVector <- selectionVector
 		.Object@threshnames <- threshnames
 		.Object@usePPML <- FALSE
 		.Object@UnfilteredExpCov <- matrix()
@@ -68,6 +70,8 @@ setMethod("initialize", "MxExpectationRAM",
     .Object@.useSparse <- useSparse
     .Object@expectedCovariance <- expectedCovariance
     .Object@expectedMean <- expectedMean
+    .Object@expectedFullCovariance <- expectedFullCovariance
+    .Object@expectedFullMean <- expectedFullMean
 		return(.Object)
 	}
 )
@@ -78,7 +82,8 @@ setMethod("genericExpDependencies", signature("MxExpectationRAM"),
 	sources <- c(.Object@A, .Object@S, .Object@F, .Object@M, .Object@thresholds, .Object@between)
 	sources <- sources[!is.na(sources)]
   sink <- .Object@name
-  sink <- c(sink, .Object@expectedCovariance, .Object@expectedMean)
+    sink <- c(sink, .Object@expectedCovariance, .Object@expectedMean,
+              .Object@expectedFullCovariance, .Object@expectedFullMean)
 	dependencies <- imxAddDependency(sources, sink, dependencies)
 	return(dependencies)
 })
@@ -87,26 +92,22 @@ setMethod("qualifyNames", signature("MxExpectationRAM"),
 	function(.Object, modelname, namespace) {
     .Object <- callNextMethod()
 		.Object@name <- imxIdentifier(modelname, .Object@name)
-		.Object@A <- imxConvertIdentifier(.Object@A, modelname, namespace, TRUE)
-		.Object@S <- imxConvertIdentifier(.Object@S, modelname, namespace, TRUE)
-		.Object@F <- imxConvertIdentifier(.Object@F, modelname, namespace, TRUE)
-		.Object@M <- imxConvertIdentifier(.Object@M, modelname, namespace, TRUE)
-		.Object@data <- imxConvertIdentifier(.Object@data, modelname, namespace)
-		.Object@thresholds <- sapply(.Object@thresholds,
-					     imxConvertIdentifier, modelname, namespace)
-		.Object@between <- imxConvertIdentifier(.Object@between, modelname, namespace)
+    for (sl in c('A', 'S', 'F', 'M', 'thresholds', 'between',
+                 'expectedCovariance', 'expectedMean',
+                 'expectedFullCovariance', 'expectedFullMean')) {
+      slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace, TRUE)
+    }
     .Object
 })
 
 setMethod("genericExpRename", signature("MxExpectationRAM"),
 	function(.Object, oldname, newname) {
     .Object <- callNextMethod()
-		.Object@A <- renameReference(.Object@A, oldname, newname)
-		.Object@S <- renameReference(.Object@S, oldname, newname)
-		.Object@F <- renameReference(.Object@F, oldname, newname)
-		.Object@M <- renameReference(.Object@M, oldname, newname)
-		.Object@data <- renameReference(.Object@data, oldname, newname)
-		.Object@thresholds <- sapply(.Object@thresholds, renameReference, oldname, newname)
+    for (sl in c('A', 'S', 'F', 'M', 'thresholds', 'between',
+                 'expectedCovariance', 'expectedMean',
+                 'expectedFullCovariance', 'expectedFullMean')) {
+      slot(.Object, sl) <- renameReference(slot(.Object, sl), oldname, newname)
+    }
     .Object
 })
 
@@ -128,7 +129,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 		}
 		mxDataObject <- flatModel@datasets[[.Object@data]]
 		if (.hasSlot(.Object, "between") && length(.Object@between)) {
-			.Object@between <- sapply(.Object@between, function(bName) {
+			sapply(.Object@between, function(bName) {
 				zMat <- flatModel[[ bName ]]
 				if (is.null(zMat)) {
 					msg <- paste("Level transition matrix", omxQuotes(bName),
@@ -165,7 +166,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 						     omxQuotes(colnames(upperF)[!upperMatch]))
 					stop(msg, call. = FALSE)
 				}
-				imxLocateIndex(flatModel, bName, name)
 			})
 		}
 		checkNumericData(mxDataObject)
@@ -242,6 +242,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 		} else {
 			.Object@thresholds <- as.integer(NA)
 		}
+    .Object@selectionPlan <- prepSelectionPlan(.Object@selectionPlan, translatedNames)
 		if(length(.Object@dims) > nrow(fMatrix) && length(translatedNames) == nrow(fMatrix)){
 			.Object@dims <- translatedNames
 		}
@@ -252,12 +253,10 @@ setMethod("genericNameToNumber", signature("MxExpectationRAM"),
 	  function(.Object, flatModel, model) {
       .Object <- callNextMethod()
 		  name <- .Object@name
-		  data <- .Object@data
-		  .Object@data <- imxLocateIndex(flatModel, data, name)
-		  .Object@A <- imxLocateIndex(flatModel, .Object@A, name)
-		  .Object@S <- imxLocateIndex(flatModel, .Object@S, name)
-		  .Object@F <- imxLocateIndex(flatModel, .Object@F, name)
-		  .Object@M <- imxLocateIndex(flatModel, .Object@M, name)
+    for (sl in c('A', 'S', 'F', 'M', 'between',
+                 'expectedFullCovariance', 'expectedFullMean')) {
+		  slot(.Object,sl) <- imxLocateIndex(flatModel, slot(.Object,sl), name)
+    }
       .Object
 	  })
 
@@ -272,10 +271,37 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 		  S <- mxEvalByName(Sname, model, compute=TRUE, defvar.row=defvar.row)
 		  F <- mxEvalByName(Fname, model, compute=TRUE, defvar.row=defvar.row)
 		  I <- diag(1, nrow=nrow(A))
+      # need to compute covariance when there is Pearson selection
+      ImA <- solve(I-A)
+      origCov <- list()
+      origCov[[1]] <- ImA %*% S %*% t(ImA)
+      if (single.na(.Object@selectionVector)) {
+        cov <- origCov[[1]]
+      } else {
+        selPlan <- .Object@selectionPlan
+        selVec <- mxEvalByName(.Object@selectionVector, model, compute=TRUE, defvar.row=defvar.row)
+        sx <- 1L
+        rx <- 1L
+        curStep <- selPlan[sx,'step']
+        newCov <- list()
+        while (rx <= nrow(selPlan)) {
+          nc <- origCov[[sx]]
+          nc[selPlan[rx,'from'],selPlan[rx,'to']] <- selVec[rx,1]
+          nc[selPlan[rx,'to'],selPlan[rx,'from']] <- selVec[rx,1]
+          if (rx == nrow(selPlan) || (rx < nrow(selPlan) && curStep != selPlan[rx+1,'step'])) {
+            newCov[[sx]] <- nc
+            cov <- mxPearsonSelCov(origCov[[sx]], newCov[[sx]])
+            if (rx < nrow(selPlan)) {
+              sx <- sx + 1
+              origCov[[sx]] <- cov
+              curStep <- selPlan[sx,'step']
+            }
+          }
+          rx <- rx + 1
+        }
+      }
 		  if (any(c('covariance','covariances') %in% what)) {
-			  ImA <- solve(I-A)
-			  cov <- F %*% ImA %*% S %*% t(ImA) %*% t(F)
-			  ret[['covariance']] <- cov
+			  ret[['covariance']] <- F %*% cov %*% t(F)
 		  }
 		  if (any(c('mean','means') %in% what)) {
 				if(single.na(Mname)){
@@ -283,7 +309,13 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
 				} else {
 					Mname <- .modifyDottedName(subname, Mname, sep=".")
 					M <- mxEvalByName(Mname, model, compute=TRUE, defvar.row=defvar.row)
-					mean <- M %*% t(solve(I-A)) %*% t(F)
+					fullMean <- M %*% t(solve(I-A))
+          if (!single.na(.Object@selectionVector)) {
+            for (sx in 1:length(origCov)) {
+              fullMean <- t(mxPearsonSelMean(origCov[[sx]], newCov[[sx]], t(fullMean)))
+            }
+          }
+          mean <- fullMean %*% t(F)
 			  }
 				ret[['means']] <- mean
 			}
@@ -466,7 +498,8 @@ imxSimpleRAMPredicate <- function(model) {
 mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresholds = NA,
                              threshnames = dimnames, ..., between=NULL, verbose=0L, .useSparse=NA,
                              expectedCovariance=NULL, expectedMean=NULL,
-                             discrete = as.character(NA)) {
+                             discrete = as.character(NA), selectionVector = as.character(NA),
+                             expectedFullCovariance=NULL, expectedFullMean=NULL) {
 
 	prohibitDotdotdot(list(...))
 
@@ -508,7 +541,8 @@ mxExpectationRAM <- function(A="A", S="S", F="F", M = NA, dimnames = NA, thresho
 	threshnames <- checkThreshnames(threshnames)
 	return(new("MxExpectationRAM", A, S, F, M, dimnames, thresholds, threshnames,
              between, as.integer(verbose), as.logical(.useSparse),
-             expectedCovariance, expectedMean, discrete))
+             expectedCovariance, expectedMean, discrete, selectionVector,
+             expectedFullCovariance, expectedFullMean))
 }
 
 displayMxExpectationRAM <- function(expectation) {
@@ -554,12 +588,12 @@ setMethod("show", "MxExpectationRAM", function(object) {
 #------------------------------------------------------------------------------
 setMethod("genericGenerateData", signature("MxExpectationRAM"),
 	function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
-		 .backend, nrowsProportion)
+		 .backend, nrowsProportion, silent)
 	{
 	  fellner <- length(model$expectation$between)
 	  if (!fellner) {
 	    return(generateNormalData(model, nrows, subname, empirical, returnModel, use.miss,
-				      .backend, nrowsProportion))
+				      .backend, nrowsProportion, silent))
 	  } else {
 	    if (!use.miss) {
 	      stop("use.miss=FALSE is not implemented for relational models")

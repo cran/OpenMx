@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -77,6 +77,7 @@ class omxMatrix {
 	void setDependsOnDefinitionVariables() { dependsOnDefVarCache = true; };
 	bool dependsOnParameters() const { return dependsOnParametersCache; };
 	bool dependsOnDefinitionVariables() const { return dependsOnDefVarCache; };
+  bool populateDependsOnDefinitionVariables();
 	bool hasPopulateSubstitutions() const { return populate.size(); };
 	void addPopulate(omxMatrix *from, int srcRow, int srcCol, int destRow, int destCol);
 	void transposePopulate();
@@ -201,7 +202,7 @@ struct omxMatrix::dtor {
 typedef std::unique_ptr< omxMatrix, omxMatrix::dtor > omxMatrixPtr;
 
 /* Matrix Creation Functions */
-omxMatrix* omxNewMatrixFromRPrimitive0(SEXP rObject, omxState* state, 
+omxMatrix* omxNewMatrixFromRPrimitive0(SEXP rObject, omxState* state,
        unsigned short hasMatrixNumber, int matrixNumber);
 	omxMatrix* omxNewMatrixFromRPrimitive(SEXP rObject, omxState *state,
 	unsigned short hasMatrixNumber, int matrixNumber); 							// Create an omxMatrix from an R object
@@ -227,7 +228,7 @@ void omxResizeMatrix(omxMatrix *source, int nrows, int ncols);
 	omxMatrix* omxFillMatrixFromRPrimitive(omxMatrix* om, SEXP rObject, omxState *state,
 		unsigned short hasMatrixNumber, int matrixNumber); 								// Populate an omxMatrix from an R object
 	void omxTransposeMatrix(omxMatrix *mat);												// Transpose a matrix in place.
-	void omxToggleRowColumnMajor(omxMatrix *mat);										// Transform row-major into col-major and vice versa 
+	void omxToggleRowColumnMajor(omxMatrix *mat);										// Transform row-major into col-major and vice versa
 
 /* Function wrappers that switch based on inclusion of algebras */
 	void omxPrint(omxMatrix *source, const char* d);
@@ -428,7 +429,7 @@ static OMXINLINE void omxDSYMV(double alpha, omxMatrix* mat,            // resul
 				omxMatrix* vec, double beta, omxMatrix* result) {       // only A is symmetric, and B is a vector
 	if(OMX_DEBUG) {
 		int nVecEl = vec->rows * vec->cols;
-		// mxLog("DSYMV: %c, %d, %f, 0x%x, %d, 0x%x, %d, %f, 0x%x, %d\n", u, (mat->cols),alpha, mat->data, (mat->leading), 
+		// mxLog("DSYMV: %c, %d, %f, 0x%x, %d, 0x%x, %d, %f, 0x%x, %d\n", u, (mat->cols),alpha, mat->data, (mat->leading),
 	                    // vec->data, onei, beta, result->data, onei); //:::DEBUG:::
 		if(mat->cols != nVecEl) {
 			mxThrow("Mismatch in symmetric vector/matrix multiply: %s (%d x %d) * (%d x 1).\n", "symmetric", mat->rows, mat->cols, nVecEl); // :::DEBUG:::
@@ -438,7 +439,7 @@ static OMXINLINE void omxDSYMV(double alpha, omxMatrix* mat,            // resul
 	EigenMatrixAdaptor Emat(mat);
 	EigenVectorAdaptor Evec(vec);
 	EigenVectorAdaptor Eresult(result);
-	
+
 	Eresult.derived() = alpha * (Emat.selfadjointView<Eigen::Upper>() * Evec).array() + beta;
 }
 
@@ -618,7 +619,7 @@ template <typename T> void omxMatrix::loadFromStream(T &st)
 			}
 		}
 		break;
-		
+
 	case 4: //Lower
 		for (int cx=0; cx < cols; ++cx) {
 			for (int rx=cx; rx < rows; ++rx) {

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -385,6 +385,7 @@ insertPathLISREL <- function(path, matrices, variables){
 		from <- allfrom[[i %% length(allfrom) + 1]]
 		to <- allto[[i %% length(allto) + 1]]
 		arrows <- allarrows[[i %% length(allarrows) + 1]]
+    if (arrows == 0) stop("MxPath with arrows==0 is not supported by LISREL") # maybe possible TODO
 		new <- list()
 		new$value <- allvalues[[i %% length(allvalues) + 1]]
 		new$free <- allfree[[i %% length(allfree) + 1]]

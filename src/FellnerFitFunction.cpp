@@ -52,7 +52,7 @@ namespace FellnerFitFunction {
 
 		if (numProfiledOut) ram->forceSingleGroup = true;
 		omxExpectationCompute(fc, expectation, "nothing", "flat");
-		
+
 		if (numProfiledOut == 0) return;
 
 		RelationalRAMExpectation::state &rram = ram->rram->getParent();
@@ -61,7 +61,6 @@ namespace FellnerFitFunction {
 		}
 
 		RelationalRAMExpectation::independentGroup &ig = *rram.group[0];
-		fc->profiledOut.assign(fc->numParam, false);
 
 		olsVarNum.reserve(numProfiledOut);
 		olsDesign.resize(ig.getParent().dataVec.size(), numProfiledOut);
@@ -116,10 +115,11 @@ namespace FellnerFitFunction {
 						weight * (ig.dataColumn.segment(pl.obsStart, a1.numObs()) == rnum).cast<double>();
 				}
 			}
-			if (!found) mxThrow("oops");
+			if (!found) OOPS;
 
-			fc->profiledOut[vx] = true;
+			fc->profiledOutZ[vx] = true;
 		}
+    fc->calcNumFree();
 	}
 
 	template <typename T1>
@@ -155,7 +155,7 @@ namespace FellnerFitFunction {
 
 		if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) {
 			if (fc->isClone()) return;
-			
+
 			setupProfiledParam(fc);
 
 			RelationalRAMExpectation::state *rram   = ram->rram;
@@ -166,7 +166,10 @@ namespace FellnerFitFunction {
 			return;
 		}
 
-		if (!(want & (FF_COMPUTE_FIT))) mxThrow("Not implemented");
+    if (want & FF_COMPUTE_GRADIENT) invalidateGradient(fc);
+
+		if (want & ~(FF_COMPUTE_FIT | FF_COMPUTE_GRADIENT | FF_COMPUTE_FINAL_FIT | FF_COMPUTE_BESTFIT))
+      mxThrow("Not implemented (want=%d)", want);
 
 		double lpOut = NA_REAL;
 		try {

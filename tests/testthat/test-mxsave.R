@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -72,3 +72,17 @@ mxSave(modelOut, chkpt.prefix="z")
 modelRestored <- mxRestore(testModel, chkpt.prefix="z", strict=TRUE)
 omxCheckCloseEnough(coef(modelRestored), coef(modelOut), 1e-5)
 
+# ---------
+
+testModel$compute$steps$CK$vcovFilter <-
+  c("testFish.expCov[1,1]", "testFish.expCov[1,2]")
+modelOut <- mxRun(testModel, checkpoint = TRUE)
+bckpt <- read.table(file.path(dir,"backendChkpt.omx"),
+                    header=TRUE, sep="\t", stringsAsFactors=FALSE, check.names=FALSE)
+bckpt2 <- modelOut$compute$steps$CK$log
+
+expect_equal(length(grep('^V', colnames(bckpt))), 4)
+expect_true(all(!is.na(match(c("VtestFish.expCov[1,1]:testFish.expCov[1,1]",
+                               "VtestFish.expCov[2,2]:testFish.expCov[2,2]"),
+                             colnames(bckpt)))))
+expect_equal(colnames(bckpt), colnames(bckpt2))

@@ -19,7 +19,8 @@ mxComputeCheckpoint(
   status = TRUE,
   standardErrors = FALSE,
   gradient = FALSE,
-  vcov = FALSE
+  vcov = FALSE,
+  vcovFilter = c()
 )
 }
 \arguments{
@@ -50,6 +51,10 @@ mxComputeCheckpoint(
 \item{gradient}{logical. Whether to include the gradients}
 
 \item{vcov}{logical. Whether to include the vcov in half-vectorized order}
+
+\item{vcovFilter}{character vector. Vector of parameters indicating
+which parameter covariances to include. Only the variance is
+included for those parameters not mentioned.}
 }
 \description{
 Captures the current state of the backend. When \code{path} is set, the

@@ -12,13 +12,13 @@ mxComputeGradientDescent(
   fitfunction = "fitfunction",
   verbose = 0L,
   tolerance = NA_real_,
-  useGradient = NULL,
+  useGradient = deprecated(),
   warmStart = NULL,
   nudgeZeroStarts = mxOption(NULL, "Nudge zero starts"),
   maxMajorIter = NULL,
-  gradientAlgo = mxOption(NULL, "Gradient algorithm"),
-  gradientIterations = imxAutoOptionValue("Gradient iterations"),
-  gradientStepSize = imxAutoOptionValue("Gradient step size")
+  gradientAlgo = deprecated(),
+  gradientIterations = deprecated(),
+  gradientStepSize = deprecated()
 )
 }
 \arguments{
@@ -34,7 +34,7 @@ mxComputeGradientDescent(
 
 \item{tolerance}{how close to the optimum is close enough (also known as the optimality tolerance)}
 
-\item{useGradient}{whether to use the analytic gradient (if available)}
+\item{useGradient}{\lifecycle{soft-deprecated}}
 
 \item{warmStart}{a Cholesky factored Hessian to use as the NPSOL Hessian starting value (preconditioner)}
 
@@ -42,11 +42,11 @@ mxComputeGradientDescent(
 
 \item{maxMajorIter}{maximum number of major iterations}
 
-\item{gradientAlgo}{one of c('forward','central')}
+\item{gradientAlgo}{\lifecycle{soft-deprecated}}
 
-\item{gradientIterations}{number of Richardson iterations to use for the gradient}
+\item{gradientIterations}{\lifecycle{soft-deprecated}}
 
-\item{gradientStepSize}{the step size for the gradient}
+\item{gradientStepSize}{\lifecycle{soft-deprecated}}
 }
 \description{
 This optimizer does not require analytic derivatives of the fit
@@ -55,26 +55,9 @@ CSOLNP and SLSQP (from the NLOPT collection).  The OpenMx Team's version of
 OpenMx offers the choice of three optimizers: CSOLNP, SLSQP, and NPSOL.
 }
 \details{
-One option for CSOLNP and SLSQP is
-\code{gradientAlgo}. CSOLNP uses \code{forward} method
-by default, while SLSQP uses \code{central} method. \code{forward} method requires
-1 time \code{gradientIterations} function evaluation per parameter
-per gradient, while \code{central} method requires 2 times
-\code{gradientIterations} function evaluations per parameter 
-per gradient. Users can change the default methods for either of these optimizers.
-NPSOL usually uses the \code{forward} method, but
-adaptively switches to \code{central} under certain circumstances.
-
-CSOLNP uses the value of argument \code{gradientStepSize} as-is, 
-whereas SLSQP internally scales it by a factor of 100. The
-purpose of this transformation is to obtain roughly the same
-accuracy given other differences in numerical procedure.
-NPSOL ignores \code{gradientStepSize}, and instead uses a function
-of \link{mxOption} \dQuote{Function precision} to determine its gradient
-step size.
-
-All three optimizers can use analytic gradients,
-and only NPSOL uses \code{warmStart}.
+All three optimizers can use analytic gradients, and only NPSOL
+uses \code{warmStart}. To customize more options, see
+\link{mxOption}.
 }
 \examples{
 data(demoOneFactor)

@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -171,3 +171,16 @@ omxCheckCloseEnough(testrun5$expectation$bcov,
 										var(dat[-c(42,57),1])*97/98/98,epsilon=10^-5)
 omxCheckCloseEnough(testrun5$output$fit, testrun4$fitfunction$MLfit,1e-2)
 omxCheckEquals(dim(testrun5$V$result),c(100,100))
+
+# Test use of mxAutoStart() :
+testmod_as <- mxAutoStart(testmod)
+omxCheckCloseEnough(coef(testmod_as),coef(testrun)*99/100,0.001)
+
+testmod2_as <- mxAutoStart(testmod2)
+omxCheckCloseEnough(coef(testmod2_as),coef(testrun2)*99/100,0.001)
+
+testmod4_as <- mxAutoStart(testmod4)
+omxCheckCloseEnough(coef(testmod4_as),coef(testrun4)*99/100,0.001)
+
+testmod5_as <- mxAutoStart(testmod5)
+omxCheckCloseEnough(coef(testmod5_as),coef(testrun5),5e-7)

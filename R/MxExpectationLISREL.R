@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ setMethod("initialize", "MxExpectationLISREL",
 		.Object@threshnames <- NA_character_
 		.Object@discrete <- discrete
     .Object@.discreteCheckCount <- TRUE
+    .Object@selectionVector <- NA_character_
     .Object@expectedCovariance <- expectedCovariance
     .Object@expectedMean <- expectedMean
 		return(.Object)
@@ -307,7 +308,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 		.Object@TY <- imxLocateIndex(flatModel, tyMatrix, name)
 		.Object@KA <- imxLocateIndex(flatModel, kaMatrix, name)
 		.Object@AL <- imxLocateIndex(flatModel, alMatrix, name)
-		.Object@data <- as.integer(imxLocateIndex(flatModel, data, name))
 
 		#
 		# Check the data has row and column names as appropriate
@@ -462,9 +462,6 @@ setMethod("genericExpFunConvert", signature("MxExpectationLISREL"),
 			.Object@dataColumnNames <- translatedNames
 			.Object@dataColumns <- generateDataColumns(flatModel, translatedNames, data)
 			verifyThresholds(flatModel, model, labelsData, data, translatedNames, threshName)
-			if (length(mxDataObject@observed) == 0) {
-				.Object@data <- as.integer(NA)
-			}
 			if (single.na(.Object@dims)) {
 				.Object@dims <- translatedNames
 			}
@@ -758,9 +755,9 @@ setMethod("genericGetExpected", signature("MxExpectationLISREL"),
 #------------------------------------------------------------------------------
 setMethod("genericGenerateData", signature("MxExpectationLISREL"),
 	function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
-		   .backend, nrowsProportion) {
+		   .backend, nrowsProportion, silent) {
 		return(generateNormalData(model, nrows, subname, empirical, returnModel, use.miss,
-		   .backend, nrowsProportion))
+		   .backend, nrowsProportion, silent))
 })
 
 

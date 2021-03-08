@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2019 by the individuals mentioned in the source code history
+ * Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ static void recordNonzeroCoeff(omxMatrix *m, std::vector<coeffLoc> &vec, bool lo
 }
 
 omxRAMExpectation::omxRAMExpectation(omxState *st, int num)
-	: super(st, num), studiedF(false), numExoPred(0), slope(0), rram(0)
+	: super(st, num), studiedF(false), openBox(false), numExoPred(0), slope(0), rram(0)
 {
 	if (st->isClone()) {
 		omxRAMExpectation *ram = (omxRAMExpectation *)st->getParent(this);
@@ -380,14 +380,31 @@ void omxRAMExpectation::init()
 
 	cov = omxNewMatrixFromSlotOrAnon(rObj, currentState, "expectedCovariance", l, l);
 	if (!cov->hasMatrixNumber) covOwner = omxMatrixPtr(cov);
-	else connectMatrixToExpectation(cov, this, "covariance");
+	else {
+    connectMatrixToExpectation(cov, this, "covariance");
+    openBox = true;
+  }
+  fullCov = omxNewMatrixFromSlot(rObj, currentState, "expectedFullCovariance");
+  if (fullCov) {
+    connectMatrixToExpectation(fullCov, this, "fullCov");
+    openBox = true;
+  }
 
 	if (M) {
 		means =	omxNewMatrixFromSlotOrAnon(rObj, currentState, "expectedMean", 1, l);
 		if (!means->hasMatrixNumber) meanOwner = omxMatrixPtr(means);
-		else connectMatrixToExpectation(means, this, "mean");
+		else {
+      connectMatrixToExpectation(means, this, "mean");
+      openBox = true;
+    }
+    fullMean = omxNewMatrixFromSlot(rObj, currentState, "expectedFullMean");
+    if (fullMean) {
+      connectMatrixToExpectation(fullMean, this, "fullMean");
+      openBox = true;
+    }
 	} else {
 		RAMexp->means  = 	NULL;
+    fullMean = 0;
 	}
 
 	RAMexp->studyF();
@@ -413,10 +430,18 @@ void omxRAMExpectation::init()
 		sio->S0 = S;
 
 		pcalc.attach(k, l, latentFilter, isProductNode, mio, aio, sio);
+
+    omxMatrix *selVec = omxNewMatrixFromSlot(rObj, currentState, "selectionVector");
+    if (selVec) {
+      DataFrame selPlan(rObj.slot("selectionPlan"));
+      pcalc.attachSelection(selVec, selPlan);
+    }
+    pcalc.attachFullMemory(fullMean, fullCov);
 		pcalc.setAlgo(0, hasProductNodes, useSparse);
 
 		currentState->restoreParam(estSave);
-	} else {
+	}
+  if (!currentState->isTopState()) {
     auto pex = (omxRAMExpectation*) currentState->getParent(this);
     if (pex->slope) {
       numExoPred = pex->numExoPred;
@@ -428,7 +453,34 @@ void omxRAMExpectation::init()
 
 void omxRAMExpectation::studyExoPred()
 {
-	if (data->defVars.size() == 0 || !M || !M->isSimple() || !S->isSimple()) return;
+  if (!currentState->isTopState()) return; // done in init(); defVar already modified
+  // We check each condition separately so we can log the outcome, if requested.
+	if (data->defVars.size() == 0) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: no def vars", name);
+    return;
+  }
+  if (verbose >= 1) mxLog("%s::studyExoPred: found %d def vars",
+                          name, int(data->defVars.size()));
+  if (!M) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: no means", name);
+    return;
+  }
+  if (M->isAlgebra()) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: means model is an algebra", name);
+    return;
+  }
+  if (M->populateDependsOnDefinitionVariables()) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: means model depends on def vars", name);
+    return;
+  }
+  if (S->isAlgebra()) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: S (covariance) is an algebra", name);
+    return;
+  }
+  if (S->populateDependsOnDefinitionVariables()) {
+    if (verbose >= 1) mxLog("%s::studyExoPred: S (covariance) depends on def vars", name);
+    return;
+  }
 
 	Eigen::VectorXd estSave;
 	currentState->setFakeParam(estSave);
@@ -450,7 +502,11 @@ void omxRAMExpectation::studyExoPred()
 				if (latentFilter[cx]) toManifest = true;
 				else latentName = S->colnames[cx];
 			}
-			if (!toManifest && !latentName) continue;
+			if (!toManifest && !latentName) {
+        if (verbose >= 1) mxLog("%s::studyExoPred: def var '%s' has unknown effect",
+                                name, data->columnName(dv.column));
+        continue;
+      }
 			if (latentName) mxThrow("%s: latent exogenous variables are not supported (%s -> %s)", name,
 						 S->colnames[dv.col], latentName);
 			exoDataColIndex[dv.col] = dv.column;
@@ -912,8 +968,8 @@ namespace RelationalRAMExpectation {
 			rowToLayoutMap[ std::make_pair(data, frow) ] = -1;
 		}
 
-		struct addr a1;
-		struct addrSetup as1;
+		class addr a1;
+		class addrSetup as1;
 		as1.clumped = false;
 		a1.ig = 0;
 		as1.parent1 = NA_INTEGER;
@@ -1729,7 +1785,7 @@ namespace RelationalRAMExpectation {
 				std::vector<int> dc(a1.clump);
 				std::sort(dc.begin(), dc.end(), RampartClumpCompare(this));
 				for (size_t cx=0; cx < dc.size(); ++cx) {
-					if (dc[cx] != a1.clump[cx]) mxThrow("oops");
+					if (dc[cx] != a1.clump[cx]) OOPS;
 				}
 			}
 		}
@@ -1898,6 +1954,17 @@ namespace RelationalRAMExpectation {
 		hasProductNodes = false;
 		for (auto *ex : allEx) {
 			omxRAMExpectation *ram1 = (omxRAMExpectation*) ex;
+      if (ram1->isOpenBox()) {
+        if (ex != homeEx) {
+          mxThrow("Expectation '%s' is part of a multilevel model with '%s';"
+                  "introspection of per-level expectations is not possible",
+                  ex->name, homeEx->name);
+        } else {
+          mxThrow("Expectation '%s' is part of a multilevel model;"
+                  "introspection of per-level expectations is not possible",
+                  ex->name);
+        }
+      }
 			hasProductNodes |= ram1->getHasProductNodes();
 			if (!ex->data->hasWeight() && !ex->data->hasFreq()) continue;
 			mxThrow("%s: row frequencies or weights provided in '%s' are not compatible with joins",

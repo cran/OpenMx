@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -12,6 +12,75 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
+
+##' The MxCompare Class
+##' 
+##' @aliases
+##' $,MxCompare-method
+##' [,MxCompare,ANY,ANY,ANY-method
+##' as.data.frame.MxCompare
+##' print,MxCompare-method
+##' show,MxCompare-method
+##' 
+##' @details
+##' This is an internal class structure.  You should not use it directly.
+##' Use \code{\link{mxCompare}} instead.
+setClass(Class =  "MxCompare", 
+	representation = representation(
+		results = 'data.frame',
+		base = 'list',
+		comparison = 'list'
+	)
+)
+
+# Initialize method for the new() function
+setMethod("initialize", "MxCompare",
+	function(.Object, results, base, comparison){
+		.Object@results <- results
+		.Object@base <- base
+		.Object@comparison <- comparison
+		return(.Object)
+	}
+)
+
+cmpMlNames <- c('base', 'comparison', 'ep', 'minus2LL', 'df', 'AIC', 'diffLL', 'diffdf', 'p')
+cmpWlsNames <- c('base', 'comparison', 'ep', 'chisq', 'df', 'AIC', 'SBchisq', 'diffdf', 'p')
+cmpCommonNames <- intersect(cmpMlNames, cmpWlsNames)
+cmpAbstractNames <- c('fit', 'fitUnits', 'diffFit')
+
+displayCompare <- function(obj){
+	rfu <- obj@results[1, c('fitUnits')]
+	pnames <- if(rfu == "r'Wr"){cmpWlsNames} else if(rfu == '-2lnL'){cmpMlNames} else {stop("OpenMx can't handle the fit units you have.")}
+	print(obj@results[, pnames, drop=FALSE])
+}
+setMethod("print", "MxCompare", function(x,...) { displayCompare(x) })
+setMethod("show", "MxCompare", function(object) { displayCompare(object) })
+
+setMethod("$", "MxCompare",
+          function(x, name){x@results[ , name]}
+)
+
+.DollarNames.MxCompare <- function(x, pattern){
+	if(missing(pattern)){
+		pattern <- ''
+	}
+	output <- names(x@results)
+	output <- gsub("(\\w+\\W+.*)", "'\\1'", output)
+	return(grep(pattern, output, value=TRUE))
+}
+
+setMethod("[", "MxCompare",
+	function (x, i, j, drop=if (missing(i)) TRUE else !missing(j) && length(j) == 1){
+		rfu <- x@results[1, c('fitUnits')]
+		pnames <- if(rfu == "r'Wr"){cmpWlsNames} else if(rfu == '-2lnL'){cmpMlNames} else {stop("OpenMx can't handle the fit units you have.")}
+		tmp <- x@results[, c(pnames, setdiff(pnames, cmpCommonNames), cmpAbstractNames), drop=FALSE]
+		tmp[i, j, drop]
+	}
+)
+
+as.data.frame.MxCompare <- function(x, row.names = NULL, optional = FALSE, ...){
+	return(data.frame(x@results, row.names=row.names))
+}
 
 mxCompare <- function(base, comparison, ..., all = FALSE,
 		      boot=FALSE, replications=400, previousRun=NULL, checkHess=FALSE) {
@@ -45,7 +114,7 @@ mxCompare <- function(base, comparison, ..., all = FALSE,
 	if (missing(checkHess)) checkHess <- as.logical(NA)
 	if (missing(boot) && (!missing(replications) || !missing(previousRun))) boot <- TRUE
 	resultsTable <- showFitStatistics(base, comparison, all, boot, replications, previousRun, checkHess)
-	return(resultsTable)
+	return(new("MxCompare", resultsTable, base, comparison))
 }
 
 mxCompareMatrix <- function(models,
@@ -57,14 +126,14 @@ mxCompareMatrix <- function(models,
 	
 	if (missing(checkHess)) checkHess <- as.logical(NA)
 	if (missing(boot) && (!missing(replications) || !missing(previousRun))) boot <- TRUE
-
+	
 	diagpick <- match.arg(diag)
 	offdiagpick <- match.arg(stat)
-
+	
 	resultsTable <- iterateNestedModels(models, boot, replications, previousRun, checkHess)
-
+	
 	if (wholeTable) return(resultsTable)
-
+	
 	modelNames <- sapply(models, function(m) m$name)
 	mat <- matrix(NA, length(models), length(models),
 		      dimnames=list(modelNames, modelNames))
@@ -82,7 +151,7 @@ print.result.mxCompareMatrix <- function(x,...) print(x[,])
 anova.MxModel <- function(object, ...) {
 	args <- list(...)
 	boot <- FALSE
-
+	
 	replications <- 400L
 	ap <- match('replications', names(args))
 	if (!is.na(ap)) {
@@ -98,20 +167,20 @@ anova.MxModel <- function(object, ...) {
 		previousRun <- args[[ap]]
 		args <- args[-ap]
 	}
-
+	
 	checkHess <- as.logical(NA)
 	ap <- match('checkHess', names(args))
 	if (!is.na(ap)) {
 		checkHess <- args[[ap]]
 		args <- args[-ap]
 	}
-
+	
 	ap <- match('boot', names(args))
 	if (!is.na(ap)) {
 		boot <- args[[ap]]
 		args <- args[-ap]
 	}
-
+	
 	comparison <- args
 	if (length(comparison) == 0) {
 		stop(paste("Compare model",omxQuotes(object$name),
@@ -122,17 +191,17 @@ anova.MxModel <- function(object, ...) {
 	}
 	models <- c(list(object), comparison)
 	summaries <- lapply(models, summary)
-	stats <- data.frame(m2ll=unlist(Map(function(x) x$Minus2LogLikelihood, summaries)),
+	stats <- data.frame(fit=unlist(Map(function(x) x$fit, summaries)),
 			    df  =unlist(Map(function(x) x$degreesOfFreedom, summaries)))
-	mo <- with(stats, order(df, m2ll))
+	mo <- with(stats, order(df, fit))
 	models <- models[mo]
 	stats <- stats[mo,]
-
+	
 	bootData <- NULL
 	if (boot) {
 		bootTodo <- list()
 		for (rx in 2:length(models)) {
-			if (stats[rx-1,'m2ll'] >= stats[rx,'m2ll'] ||
+			if (stats[rx-1,'fit'] >= stats[rx,'fit'] ||
 			    stats[rx-1,'df'] >= stats[rx,'df']) next
 			nChar <- as.character(rx)
 			bootTodo[[ nChar ]] <- rx-1
@@ -140,14 +209,14 @@ anova.MxModel <- function(object, ...) {
 		bootData <- setupBootData(models, models, bootTodo, replications, previousRun)
 		bootData <- fillBootData(models, models, bootTodo, bootData, checkHess)
 	}
-
+	
 	result <- list()
-
+	
 	result[[ length(result) + 1L ]] <- 
 		collectBaseStatistics(newEmptyCompareRow(), models[[1]])
-
+	
 	for (i in 2:length(models)) {
-		if (stats[i-1,'m2ll'] > stats[i,'m2ll']) {
+		if ( stats[i-1,'fit'] > stats[i,'fit'] ) {
 			result[[ length(result) + 1L ]] <-
 				collectBaseStatistics(newEmptyCompareRow(), models[[i]])
 			next
@@ -156,11 +225,16 @@ anova.MxModel <- function(object, ...) {
 		result[[ length(result) + 1L ]] <-
 			collectStatistics(newEmptyCompareRow(), models[[i-1]], models[[i]], boot1)
 	}
-
+	
 	ret <- do.call(rbind, result)
 	if (boot) {
 		attr(ret, "bootData") <- bootData
 	}
+	
+	rfu <- ret[1, c('fitUnits')]
+	pnames <- if(rfu == "r'Wr"){cmpWlsNames} else if(rfu == '-2lnL'){cmpMlNames} else {names(ret)}
+	ret <- ret[, pnames, drop=FALSE]
+	
 	ret
 }
 
@@ -174,14 +248,19 @@ newEmptyCompareRow <- function() {
 		   AIC=as.numeric(NA),
 		   diffLL=as.numeric(NA),
 		   diffdf=as.numeric(NA), 
-		   p=as.numeric(NA))
+		   p=as.numeric(NA),
+		   fit=as.numeric(NA),
+		   fitUnits=as.character(NA),
+		   diffFit=as.numeric(NA),
+		   chisq=as.numeric(NA),
+		   SBchisq=as.numeric(NA))
 }
 
 iterateNestedModels <- function(models, boot, replications, previousRun, checkHess) {
 	result <- list()
 	
 	summaries <- lapply(models, summary)
-
+	
 	bd <- NULL
 	if (boot) {
 		bootTodo <- list()
@@ -193,11 +272,11 @@ iterateNestedModels <- function(models, boot, replications, previousRun, checkHe
 				bootTodo[[cxChar]] <- c(bootTodo[[cxChar]], rx)
 			}
 		}
-
+	
 		bd <- setupBootData(models, models, bootTodo, replications, previousRun)
 		bd <- fillBootData(models, models, bootTodo, bd, checkHess)
 	}
-
+	
 	for (rx in seq_along(models)) {
 		for (cx in seq_along(models)) {
 			if (cx == rx) {
@@ -216,7 +295,7 @@ iterateNestedModels <- function(models, boot, replications, previousRun, checkHe
 			}
 		}
 	}
-
+	
 	ret <- do.call(rbind, result)
 	if (boot) {
 		attr(ret, "bootData") <- bd
@@ -225,25 +304,25 @@ iterateNestedModels <- function(models, boot, replications, previousRun, checkHe
 }
 
 assertIsRawData <- function(model) {
-  type <- model$data$type
-  if (type == 'raw') return()
-  stop(paste("Model", omxQuotes(model$name), "contains", omxQuotes(type),
-	     "data. Only type='raw' data is supported by",
-	     "mxPowerSearch(..., method='empirical')"))
+	type <- model$data$type
+	if (type == 'raw') return()
+	stop(paste("Model", omxQuotes(model$name), "contains", omxQuotes(type),
+		"data. Only type='raw' data is supported by",
+		"mxPowerSearch(..., method='empirical')"))
 }
 
 loadDataIntoModel <- function(model, dataList, assertRaw=FALSE) {
-  for (modelName in names(dataList)) {
-    dataobj <- mxData(dataList[[modelName]], type='raw')
-    if (modelName == model$name) {
-      if (assertRaw) assertIsRawData(model)
-      model <- mxModel(model, dataobj)
-    } else {
-      if (assertRaw) assertIsRawData(model[[modelName]])
-      model <- mxModel(model, mxModel(model[[modelName]], dataobj))
-    }
-  }
-  model
+	for (modelName in names(dataList)) {
+		dataobj <- mxData(dataList[[modelName]], type='raw')
+		if (modelName == model$name) {
+			if (assertRaw) assertIsRawData(model)
+			model <- mxModel(model, dataobj)
+		} else {
+			if (assertRaw) assertIsRawData(model[[modelName]])
+			model <- mxModel(model, mxModel(model[[modelName]], dataobj))
+		}
+	}
+	model
 }
 
 setupBootData <- function(nullHyp, comparison, todo,
@@ -384,66 +463,84 @@ showFitStatistics <- function(base, compare, all, boot, replications, previousRu
 				bootTodo[[ciChar]] <- c(bootTodo[[ciChar]], baseIndex)
 			}
 		}
-
+		
 		bootData <- setupBootData(compare, base, bootTodo, replications, previousRun)
 		bootData <- fillBootData(compare, base, bootTodo, bootData, checkHess)
 	}
-
-    statistics <- list()
-    if (all) {
-        for (i in seq_along(base)) {
-            nextBase <- base[[i]]
-            statistics[[length(statistics) + 1]] <-
-		    collectBaseStatistics(newEmptyCompareRow(), nextBase)
-            for (j in seq_along(compare)) {
-                nextCompare <- compare[[j]]
-		boot1 <- extractLRTBootstrapPair(bootData, i, j)
-                statistics[[length(statistics) + 1]] <-
-			collectStatistics(newEmptyCompareRow(), nextBase, nextCompare, boot1)
-            }
-        }
-    }
-    else {
-		if(length(compare)==0){
-	        for (i in seq_along(base)) {
+	
+	statistics <- list()
+	if (all) {
+		for (i in seq_along(base)) {
+			nextBase <- base[[i]]
 			statistics[[length(statistics) + 1]] <-
-				collectBaseStatistics(newEmptyCompareRow(), base[[i]])
-	        }
+			collectBaseStatistics(newEmptyCompareRow(), nextBase)
+			for (j in seq_along(compare)) {
+				nextCompare <- compare[[j]]
+				boot1 <- extractLRTBootstrapPair(bootData, i, j)
+				statistics[[length(statistics) + 1]] <-
+					collectStatistics(newEmptyCompareRow(), nextBase, nextCompare, boot1)
+			}
+		}
+	} else {
+		if(length(compare)==0){
+			for (i in seq_along(base)) {
+				statistics[[length(statistics) + 1]] <-
+					collectBaseStatistics(newEmptyCompareRow(), base[[i]])
+			}
 		} else {
-	        maxLength <- max(length(base), length(compare))
-	        previousBaseIndex <- -1
-	        for (i in 1:maxLength) {
-	            nextBaseIndex <- (i - 1)%%length(base) + 1
-	            nextCompareIndex <- (i - 1)%%length(compare) + 1
-	            nextBase <- base[[nextBaseIndex]]
-	            nextCompare <- compare[[nextCompareIndex]]
-	            if (previousBaseIndex != nextBaseIndex) {
-	                statistics[[length(statistics) + 1]] <-
-				collectBaseStatistics(newEmptyCompareRow(), nextBase)
-	            }
-		    boot1 <- extractLRTBootstrapPair(bootData, nextBaseIndex, nextCompareIndex)
-	            statistics[[length(statistics) + 1]] <-
-			    collectStatistics(newEmptyCompareRow(), nextBase, nextCompare, boot1)
-	            previousBaseIndex <- nextBaseIndex
-	        }
-		}		
-    }
+			maxLength <- max(length(base), length(compare))
+			previousBaseIndex <- -1
+			for (i in 1:maxLength) {
+				nextBaseIndex <- (i - 1)%%length(base) + 1
+				nextCompareIndex <- (i - 1)%%length(compare) + 1
+				nextBase <- base[[nextBaseIndex]]
+				nextCompare <- compare[[nextCompareIndex]]
+				if (previousBaseIndex != nextBaseIndex) {
+					statistics[[length(statistics) + 1]] <-
+						collectBaseStatistics(newEmptyCompareRow(), nextBase)
+				}
+				boot1 <- extractLRTBootstrapPair(bootData, nextBaseIndex, nextCompareIndex)
+				statistics[[length(statistics) + 1]] <-
+					collectStatistics(newEmptyCompareRow(), nextBase, nextCompare, boot1)
+				previousBaseIndex <- nextBaseIndex
+			}
+		}
+	}
 	statistics <- do.call(rbind, statistics)
 	if (boot) {
 		attr(statistics, "bootData") <- bootData
 	}
-    return(statistics)
+	return(statistics)
 }
 
 collectBaseStatistics <- function(row, ref) {
 	refSummary <- summary(ref)
 	row[,'base'] <- refSummary$modelName
-	row[,c('ep','minus2LL','df','AIC')] <-
+	row[,c('ep', 'minus2LL', 'AIC')] <-
 		c(refSummary$estimatedParameters,
 		  refSummary$Minus2LogLikelihood,
-		  refSummary$degreesOfFreedom,
-		  refSummary$AIC.Mx)
+		  AIC(ref))
+	rfu <- ref$output$fitUnits
+	row[, 'fitUnits'] <- rfu
+	row[, 'chisq'] <- ref$output$chi
+	row[, c('fit', 'df')] <- if(rfu == "r'Wr"){
+			c(ref$output$chi, ref$output$chiDoF)
+		} else if(rfu == '-2lnL'){
+			c(refSummary$Minus2LogLikelihood, refSummary$degreesOfFreedom)
+		} else {
+			stop("Can't compare models with these fit units: ", rfu)
+		}
 	row
+}
+
+# Satorra-Bentler Chi-squared fit (Fit Satorra Bentler = FSB)
+fsb <- function(chi0, chi1, df0, df1, chim0, chim1){
+	sb <- (chi0 - chi1)*(df0 - df1) / (df0*chi0/chim0 - df1*chi1/chim1)
+	return(list(chi=sb, df=df0-df1))
+}
+
+fsb_helper <- function(model0, model1){
+	fsb(model0$output$chi, model1$output$chi, model0$output$chiDoF, model1$output$chiDoF, model0$output$chiM, model1$output$chiM)
 }
 
 collectStatistics <- function(otherStats, ref, other, bootPair) {
@@ -492,9 +589,13 @@ collectStatistics1 <- function(otherStats, ref, other, bootPair) {
 	otherStats[,c('diffLL','diffdf')] <-
 		c(otherSummary$Minus2LogLikelihood - refSummary$Minus2LogLikelihood,
 		  otherSummary$degreesOfFreedom - refSummary$degreesOfFreedom)
-
-  diffdf <- otherStats[['diffdf']]
-  diffdf <- diffdf[!is.na(diffdf)]
+	# TODO ? need to adjust DoF for Chi-sq with WLS?  In Theory these should always be the same.
+	otherStats[,c('SBchisq')] <- fsb_helper(other, ref)$chi
+	
+	otherStats[,c('diffFit')] <- if(rfu[[1]] == "r'Wr"){otherStats[,'SBchisq']} else if(rfu[[1]] == '-2lnL'){otherStats[,'diffLL']} else {stop("Unknown fitUnits")}
+	
+	diffdf <- otherStats[['diffdf']]
+	diffdf <- diffdf[!is.na(diffdf)]
 	if (length(diffdf) && any(diffdf < 0)) {
 		msg <- paste("Model", omxQuotes(refSummary$modelName), "has more degrees of freedom than",
 			     otherSummary$modelName, "which means that the models need to be",
@@ -502,7 +603,7 @@ collectStatistics1 <- function(otherStats, ref, other, bootPair) {
 		warning(msg)
 	} else {
 		if (is.null(bootPair)) {
-			otherStats[['p']] <- pchisq(otherStats[['diffLL']], otherStats[['diffdf']], lower.tail=FALSE)
+			otherStats[['p']] <- pchisq(otherStats[['diffFit']], otherStats[['diffdf']], lower.tail=FALSE)
 		} else {
 			baseData <- bootPair[[1]] # null hypothesis
 			cmpData <- bootPair[[2]]
@@ -525,7 +626,7 @@ collectStatistics1 <- function(otherStats, ref, other, bootPair) {
 					       "converged acceptably. Accuracy is much less than the ", nrow(raw),
 					       " replications requested"), call.=FALSE)
 			}
-
+			
 			diffLL <- baseData[mask,'fit'] - cmpData[mask,'fit']
 			otherStats[['p']] <- sum(diffLL > otherStats[['diffLL']]) / sum(mask)
 		}
@@ -624,52 +725,52 @@ mxParametricBootstrap <- function(nullModel, labels,
 }
 
 totalSampleSize <- function(model, default=100L) {
-  sizes <- sapply(extractData(model), function(mxd) {
-    if (mxd@type == 'raw') {
-      nrow(mxd@observed)
-    } else {
-      mxd@numObs
-    }
-  })
-  if (length(sizes) == 0) sizes <- default
-  sum(sizes)
+	sizes <- sapply(extractData(model), function(mxd) {
+		if (mxd@type == 'raw') {
+			nrow(mxd@observed)
+		} else {
+			mxd@numObs
+		}
+	})
+	if (length(sizes) == 0) sizes <- default
+	sum(sizes)
 }
 
 fitPowerModel <- function(rx, result) {
-  # rx is which(is.na(result$reject))[1] - 1L
-  result <- result[!is.na(result$x),]
-  algRle <- rle(result$alg)
-  if (algRle$values[1] == 'init') {
-    # skip outliers from early probe sequence
-    newFirst <- max(1, algRle$lengths[1] - 3L)
-    result <- result[newFirst:nrow(result),]
-  }
-  m1 <- suppressWarnings(glm(reject ~ x, data = result, family = binomial))
-  if (all(!is.na(coef(m1))) && summary(m1)$coefficients['x','Pr(>|z|)'] < .25) {
-    curX <- as.numeric(((rx %% 3) - coef(m1)[1]) / coef(m1)[2])
-    alg <- '2p'
-  } else {
-    m2 <- glm(reject ~ 1, data = result, family = binomial)
-    from <- max(nrow(result)-9, 1)
-    curX <- mean(result$x[from:nrow(result)]) * ifelse(coef(m2)[1] < 0, 1.1, 0.9)
-    alg <- '1p'
-  }
-    # Can only consider one-sided hypotheses
-  if (sign(curX) != sign(result[1,'x'])) curX <- 0
-  list(curX=curX, m1=m1, alg=alg)
+	# rx is which(is.na(result$reject))[1] - 1L
+	result <- result[!is.na(result$x),]
+	algRle <- rle(result$alg)
+	if (algRle$values[1] == 'init') {
+		# skip outliers from early probe sequence
+		newFirst <- max(1, algRle$lengths[1] - 3L)
+		result <- result[newFirst:nrow(result),]
+	}
+	m1 <- suppressWarnings(glm(reject ~ x, data = result, family = binomial))
+	if (all(!is.na(coef(m1))) && summary(m1)$coefficients['x','Pr(>|z|)'] < .25) {
+		curX <- as.numeric(((rx %% 3) - coef(m1)[1]) / coef(m1)[2])
+		alg <- '2p'
+	} else {
+		m2 <- glm(reject ~ 1, data = result, family = binomial)
+		from <- max(nrow(result)-9, 1)
+		curX <- mean(result$x[from:nrow(result)]) * ifelse(coef(m2)[1] < 0, 1.1, 0.9)
+		alg <- '1p'
+	}
+	# Can only consider one-sided hypotheses
+	if (sign(curX) != sign(result[1,'x'])) curX <- 0
+	list(curX=curX, m1=m1, alg=alg)
 }
 
 validateSigLevel <- function(sl) {
-  if (length(sl) > 1) {
-    stop(paste("Can only evaluate one sig.level at a time.",
-	       "To evaluate power across a range of sig.levels",
-	       "you need to call mxPower in a loop and accumulate",
-	       "estimates that way"))
-  } else if (length(sl) == 0) {
-    stop("At what sig.level?")
-  } else if (sl <= 0 || sl >= 1) {
-    stop("sig.level must be between 0 and 1")
-  }
+	if (length(sl) > 1) {
+		stop(paste("Can only evaluate one sig.level at a time.",
+			"To evaluate power across a range of sig.levels",
+			"you need to call mxPower in a loop and accumulate",
+			"estimates that way"))
+	} else if (length(sl) == 0) {
+		stop("At what sig.level?")
+	} else if (sl <= 0 || sl >= 1) {
+		stop("sig.level must be between 0 and 1")
+	}
 }
 
 mxPowerSearch <- function(trueModel, falseModel, n=NULL, sig.level=0.05, ...,

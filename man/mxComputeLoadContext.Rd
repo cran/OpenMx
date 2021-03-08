@@ -34,7 +34,7 @@ mxComputeLoadContext(
 \item{col.names}{character vector. Column names}
 }
 \description{
-THIS INTERFACE IS EXPERIMENTAL AND SUBJECT TO CHANGE.
+\lifecycle{experimental}
 }
 \details{
 Currently, this only supports comma separated value format and no

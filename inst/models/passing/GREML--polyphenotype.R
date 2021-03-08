@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ testmod2 <- mxModel(
            condenseSlots=T)
 )
 testrun2 <- mxRun(testmod2)
+testrun2 <- mxRun(testrun2) #<--Future-proof this test script...
 testrun2summ <- summary(testrun2)
 omxCheckCloseEnough(testrun2$output$estimate, 
                     c(sum(lm1$residuals^2)/lm1$df.residual, sum(lm2$residuals^2)/lm2$df.residual),

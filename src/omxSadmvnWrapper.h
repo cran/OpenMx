@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -201,8 +201,9 @@ public:
 			} else {
 				int opb = Global->maxOrdinalPerBlock;
 				omxRaiseErrorf("Ordinal covariance has dependent block larger than %dx%d. "
-					       "You must increase mxOption maxOrdinalPerBlock",
-					       opb, opb);
+                       "You must increase the maximum block size, "
+                       "e.g. mxOption(m1, key = 'maxOrdinalPerBlock', value=%d)",
+                       opb, opb, cc.getSizeIfConnected(row, col));
 				break;
 			}
 		}

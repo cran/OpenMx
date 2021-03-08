@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017-2019 by the individuals mentioned in the source code history
+ *  Copyright 2017-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 
 #include "Compute.h"
 #include "finiteDifferences.h"
+#include "autoTune.h"
 
+// The GradientOptimizerContext can manage multiple threads
+// in parallel. Per-thread specific data should be located
+// in the FitContext.
 class GradientOptimizerContext {
  private:
 	void copyBounds();
-	int countNumFree();
+	int countNumFree() const { return fc->getNumFree(); }
 
 	// We need to hide this from the optimizer because
 	// some parameters might be profiled out and should
@@ -43,12 +47,6 @@ class GradientOptimizerContext {
 		optName += ")";
 	}
 
-	// Maybe the optimizer should not have information about
-	// how the gradient is approximated?
-	enum GradientAlgorithm gradientAlgo;
-	int gradientIterations;
-	double gradientStepSize;
-
 	bool feasible;
 	void *extraData;
 	omxMatrix *fitMatrix;
@@ -59,16 +57,9 @@ class GradientOptimizerContext {
 	double ControlRho;
 	double ControlTolerance;
 	bool warmStart;
-	bool useGradient;
-	int ineqType;
 
 	Eigen::VectorXd solLB;
 	Eigen::VectorXd solUB;
-
-	// TODO remove, better to pass as a parameter so we can avoid copies
-	Eigen::VectorXd& equality;
-	Eigen::VectorXd& inequality;
-	bool CSOLNP_HACK;
 
 	// NPSOL has bugs and can return the wrong fit & estimates
 	// even when optimization proceeds correctly.
@@ -76,6 +67,12 @@ class GradientOptimizerContext {
 	Eigen::VectorXd est;    //like fc->est but omitting profiled out params
 	Eigen::VectorXd bestEst;
 	Eigen::VectorXd grad;
+  ConstraintVec AllC;
+  ConstraintVec IneqC;
+  ConstraintVec EqC;
+  void evalAllC(double *constrOut, double *jacOut=0) { AllC.eval(fc, constrOut, jacOut); }
+  void evalIneq(double *constrOut, double *jacOut=0) { IneqC.eval(fc, constrOut, jacOut); }
+  void evalEq(double *constrOut, double *jacOut=0) { EqC.eval(fc, constrOut, jacOut); }
 	double eqNorm, ineqNorm;
 
 	// output
@@ -84,16 +81,13 @@ class GradientOptimizerContext {
 	Eigen::MatrixXd hessOut;  // in-out for warmstart
 
 	GradientOptimizerContext(FitContext *fc, int verbose,
-				 enum GradientAlgorithm _gradientAlgo,
-				 int _gradientIterations,
-				 double _gradientStepSize,
-				 omxCompute *owner);
+                           omxCompute *owner);
 	void reset();
 
 	void setupSimpleBounds();          // NLOPT style
-	void setupIneqConstraintBounds();  // CSOLNP style
-	void setupAllBounds();             // NPSOL style
-	
+  void setupAllBounds(); //used with NPSOL.
+  bool isUnconstrained();
+
 	Eigen::VectorXd constraintFunValsOut;
 	Eigen::MatrixXd constraintJacobianOut;
 	Eigen::VectorXd LagrMultipliersOut;
@@ -102,19 +96,12 @@ class GradientOptimizerContext {
 
 	double solFun(double *myPars, int* mode);
 	double recordFit(double *myPars, int* mode);
-	void solEqBFun(bool wantAJ);
-	void myineqFun(bool wantAJ);
-	template <typename T1, typename T2, typename T3> void allConstraintsFun(
-			Eigen::MatrixBase<T1> &constraintOut, Eigen::MatrixBase<T2> &jacobianOut, Eigen::MatrixBase<T3> &needcIn, int mode);
 	template <typename T1> void checkActiveBoxConstraints(Eigen::MatrixBase<T1> &nextEst);
 	template <typename T1> void linearConstraintCoefficients(Eigen::MatrixBase<T1> &lcc);
-	bool isUsingAnalyticJacobian(){ return fc->state->usingAnalyticJacobian; }
-	Eigen::MatrixXd& analyticEqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an equality constraint
-	Eigen::MatrixXd& analyticIneqJacTmp; //<--temporarily holds analytic Jacobian (if present) for an inequality constraint
 	void useBestFit();
 	void copyToOptimizer(double *myPars);
-	void copyFromOptimizer(double *myPars, FitContext *fc2);
-	void copyFromOptimizer(double *myPars) { copyFromOptimizer(myPars, fc); };
+	void copyFromOptimizer(const double *myPars, FitContext *fc2);
+	void copyFromOptimizer(const double *myPars) { copyFromOptimizer(myPars, fc); };
 	void finish();
 	double getFit() const { return fc->fit; };
 	// fc->iterations is a global counter that includes multiple optimizer runs
@@ -122,21 +109,11 @@ class GradientOptimizerContext {
 	int iterations;
 	int getWanted() const { return fc->wanted; };
 	void setWanted(int nw) { fc->wanted = nw; };
-	bool hasKnownGradient() const;
-	template <typename T1>
-	void setKnownGradient(Eigen::MatrixBase<T1> &gradOut) {
-		fc->ciobj->gradient(fc, gradOut.derived().data());
-	};
 	omxState *getState() const { return fc->state; };
-	bool doingCI(){ 
+	bool doingCI(){
 		if(fc->ciobj){return(true);}
 		else{return(false);}
 	};
-
-	GradientWithRef gwrContext;
-
-	template <typename T1>
-	void numericalGradientWithRef(Eigen::MatrixBase<T1> &Epoint);
 };
 
 template <typename T1>
@@ -158,56 +135,6 @@ double median(Eigen::MatrixBase<T1> &vec)
 	} else {
 		int mid = vec.size() / 2;
 		return vec[ind[mid]];
-	}
-}
-
-template <typename T1>
-void GradientOptimizerContext::numericalGradientWithRef(Eigen::MatrixBase<T1> &Epoint)
-{
-	if (getWanted() & FF_COMPUTE_GRADIENT) {
-		return;
-	} else if (hasKnownGradient()) {
-		setKnownGradient(grad);
-		return;
-	}
-
-	// fc assumed to hold the reference fit
-	double refFit = fc->fit;
-
-	gwrContext([&](double *myPars, int thrId)->double{
-			FitContext *fc2 = thrId >= 0? fc->childList[thrId] : fc;
-			Eigen::Map< Eigen::VectorXd > Est(myPars, fc2->numParam);
-			// Only 1 parameter is different so we could
-			// update only that parameter instead of all
-			// of them.
-			copyFromOptimizer(myPars, fc2);
-			int want = FF_COMPUTE_FIT;
-			ComputeFit(getOptName(), fc2->lookupDuplicate(fitMatrix), want, fc2);
-			double fit = fc2->fit;
-			if (fc2->outsideFeasibleSet()) {
-				fit = nan("infeasible");
-			}
-			return fit;
-		}, refFit, Epoint, grad);
-
-	if (true) {
-		Eigen::VectorXd absGrad = grad.array().abs();
-		double m1 = std::max(median(absGrad), 1.0);
-		double big = 1e4 * m1;
-		int adj=0;
-		for (int gx=0; gx < grad.size(); ++gx) {
-			if (absGrad[gx] < big) continue;
-			bool neg = grad[gx] < 0;
-			double gg = m1;
-			if (neg) gg = -gg;
-			grad[gx] = gg;
-			++adj;
-		}
-		if (false && adj) {
-			mxLog("%d grad outlier", adj);
-			mxPrintMat("absGrad", absGrad);
-			mxPrintMat("robust grad", grad);
-		}
 	}
 }
 

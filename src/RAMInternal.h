@@ -51,7 +51,7 @@ namespace RelationalRAMExpectation {
 		omxExpectation *model;  // read-only
 	public:
 		int row;                 // to load definition variables (never the key)
-		struct independentGroup *ig;
+		class independentGroup *ig;
 		int igIndex;
 		int nextMean;
 
@@ -225,8 +225,8 @@ namespace RelationalRAMExpectation {
 	public:
 		bool isChild() const { return this != parent; }
 		typedef std::vector< std::set<int> > SubgraphType;
-		struct omxExpectation *homeEx;
-		std::set<struct omxExpectation *> allEx;
+		class omxExpectation *homeEx;
+		std::set<class omxExpectation *> allEx;
 		bool hasProductNodes;
 		typedef std::map< std::pair<omxData*,int>, int, RowToLayoutMapCompare> RowToLayoutMapType;
 		RowToLayoutMapType               rowToLayoutMap;
@@ -285,6 +285,7 @@ class omxRAMExpectation : public omxExpectation {
 	Eigen::VectorXd exoPredMean;
 	bool hasProductNodes;
   bool studiedF;
+  bool openBox;  // can the user access the expectation during optimization?
 	int numExoPred;
 	std::vector<int> exoDataColIndex;
   void addSlopeMatrix();
@@ -367,9 +368,11 @@ class omxRAMExpectation : public omxExpectation {
 	void CalculateRAMCovarianceAndMeans(FitContext *fc);
 	void analyzeDefVars(FitContext *fc);
 	void logDefVarsInfluence();
+  bool isOpenBox() const { return openBox; }
 
 	omxMatrix *cov, *means; // observed covariance and means
 	omxMatrixPtr covOwner, meanOwner;
+	omxMatrix *fullCov, *fullMean;
 	omxMatrix *slope;       // exogenous predictor slopes
 	omxMatrix *A, *S, *F, *M;
 

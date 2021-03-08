@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ bool condOrdByRow::eval()
 			    ssx < (int)parent->sufficientSets.size()) {
 				INCR_COUNTER(contDensity);
 				sufficientSet &ss = parent->sufficientSets[ssx++];
-				if (ss.start != row) mxThrow("oops");
+				if (ss.start != row) OOPS;
 				if (ordLik == 0.0) {
 					record(-std::numeric_limits<double>::infinity(), ss.length);
 					continue;
@@ -619,7 +619,7 @@ static void loadSufficientSet(omxFitFunction *off, int from, sufficientSet &ss)
 			int col = dc[cx];
 			bool lm = omxDataElementMissing(data, sortedRow, col);
 			if (lm) continue;
-			if (dx >= perRow) mxThrow("oops");
+			if (dx >= perRow) OOPS;
 			dvec[row * perRow + dx] = omxDoubleDataElement(data, sortedRow, col);
 			dx += 1;
 		}
@@ -769,7 +769,7 @@ static bool dispatchByRow(FitContext *_fc, omxFitFunction *_localobj,
 		condContByRow batch(_fc, _localobj, parent, ofiml);
 		return batch.eval();
 	}
-	default: mxThrow("oops");
+	default: OOPS;
 	}
 }
 
@@ -843,14 +843,17 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 	if (want & FF_COMPUTE_INITIAL_FIT) return;
 
 	if (!builtCache) {
-		if (ofiml->rowwiseParallel && fc->isClone()) {
-			omxMatrix *pfitMat = fc->getParentState()->getMatrixFromIndex(off->matrix);
-			ofiml->parent = (omxFIMLFitFunction*) pfitMat->fitFunction;
-			ofiml->elapsed.resize(ELAPSED_HISTORY_SIZE);
-			ofiml->curElapsed = NA_INTEGER;
-		} else {
-			off->openmpUser = ofiml->rowwiseParallel != 0;
+    if (!fc->isClone()) {
 			if (!indexVector.size()) sortData(off);
+			openmpUser = rowwiseParallel && fc->permitParallel;
+      diagParallel(OMX_DEBUG, "%s: openmpUser = %d", name(), openmpUser);
+    } else {
+			omxMatrix *pfitMat = fc->getParentState()->getMatrixFromIndex(off->matrix);
+      auto *pff = (omxFIMLFitFunction*) pfitMat->fitFunction;
+      if (!pff->openmpUser) OOPS;
+      parent = pff;
+      elapsed.resize(ELAPSED_HISTORY_SIZE);
+      curElapsed = NA_INTEGER;
 		}
 		builtCache = true;
 	}
@@ -872,6 +875,8 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 		complainAboutMissingMeans(expectation);
 		return;
 	}
+
+  if (want & FF_COMPUTE_GRADIENT) invalidateGradient(fc);
 
 	bool failed = false;
 
@@ -906,7 +911,7 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 	if (myParent->curParallelism > 1) {
 		if (OMX_DEBUG) {
 			omxFIMLFitFunction *ofo = getChildFIMLObj(fc, fitMatrix, 0);
-			if (!ofo->parent) mxThrow("oops");
+			if (!ofo->parent) OOPS;
 		}
 
 		for (int tx=0; tx < myParent->curParallelism; ++tx) {
@@ -1019,7 +1024,7 @@ void omxFIMLFitFunction::compute(int want, FitContext *fc)
 			mxLog("reducing number of threads to %d", myParent->curParallelism);
 		}
 	}
-	if (rowwiseParallel && !fc->isClone() && want & FF_COMPUTE_BESTFIT) {
+	if (openmpUser && !fc->isClone() && want & FF_COMPUTE_BESTFIT) {
     if (curParallelism == 1) {
       diagParallel(OMX_DEBUG, "%s: rowwiseParallel used %d threads; "
                    "recommend rowwiseParallel=FALSE",
@@ -1035,7 +1040,6 @@ omxFitFunction *omxInitFIMLFitFunction()
 
 void omxFIMLFitFunction::init()
 {
-	builtCache = false;
 	auto *off = this;
 	auto *newObj = this;
 
@@ -1084,14 +1088,10 @@ void omxFIMLFitFunction::init()
 	}
 	newObj->data = off->expectation->data;
 	newObj->rowBegin = 0;
-	newObj->rowCount = std::numeric_limits<decltype(rowCount)>::max();
 
 	if(OMX_DEBUG) {
 		mxLog("Accessing row likelihood option.");
 	}
-	newObj->rowwiseParallel = Rf_asLogical(R_do_slot(rObj, Rf_install("rowwiseParallel")));
-	// currently treats NA_INTEGER as true, probably should be smarter TODO
-	diagParallel(OMX_DEBUG, "%s: rowwiseParallel = %d", name(), newObj->rowwiseParallel != 0);
 
 	{
 		ProtectedSEXP Rverbose(R_do_slot(rObj, Rf_install("verbose")));
@@ -1115,6 +1115,7 @@ void omxFIMLFitFunction::init()
 	newObj->rowLikelihoods = omxInitMatrix(newObj->data->nrows(), 1, off->matrix->currentState);
 	newObj->otherRowwiseValues = omxInitMatrix(newObj->data->nrows(), 2, off->matrix->currentState);
 
+  invalidateCache();
 
 	if(OMX_DEBUG) {
 		mxLog("Accessing row likelihood population option.");
@@ -1144,6 +1145,13 @@ void omxFIMLFitFunction::init()
 		else numContinuous += 1;
 	}
 
+	rowwiseParallel = Rf_asLogical(R_do_slot(rObj, Rf_install("rowwiseParallel")));
+  if (rowwiseParallel == NA_INTEGER) {
+    rowwiseParallel = numOrdinal >= 10;
+		if (verbose >= 1) {
+			mxLog("%s: set rowwiseParallel=%d", name(), rowwiseParallel);
+		}
+  }
 	if (newObj->jointStrat == JOINT_AUTO && 0 == numOrdinal) {
 		newObj->jointStrat = JOINT_CONDORD;
 	}

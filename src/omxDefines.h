@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -396,6 +396,69 @@ void subsetRows(const Eigen::MatrixBase<T1> &in, T2 includeTest,
 	}
 }
 
+template <typename T1, typename T2, typename T3, typename T4, typename T5>
+void partitionCovariance(const Eigen::MatrixBase<T1> &gcov,
+		     T2 filterTest,
+		     Eigen::MatrixBase<T3> &v11,
+		     Eigen::MatrixBase<T4> &v12,
+		     Eigen::MatrixBase<T5> &v22)
+{
+	for (int gcx=0, c1=0,c2=0,c3=0; gcx < gcov.cols(); gcx++) {
+		for (int grx=0, r1=0,r2=0,r3=0; grx < gcov.rows(); grx++) {
+			if (filterTest(grx)) {
+				if (filterTest(gcx)) {
+					v11(r1++, c1) = gcov(grx, gcx);
+				} else {
+					v12(r2++, c2) = gcov(grx, gcx);
+				}
+			} else {
+				if (!filterTest(gcx)) {
+					v22(r3++, c3) = gcov(grx, gcx);
+				}
+			}
+		}
+		if (filterTest(gcx)) {
+			c1 += 1;
+		} else {
+			c2 += 1;
+			c3 += 1;
+		}
+	}
+}
+
+template <typename T1, typename T2, typename T3, typename T4, typename T5>
+void partitionCovarianceSet(Eigen::MatrixBase<T1> &gcov,
+			    T2 filterTest,
+			    const Eigen::MatrixBase<T3> &v11,
+			    const Eigen::MatrixBase<T4> &v12,
+			    const Eigen::MatrixBase<T5> &v22)
+{
+	for (int gcx=0, c1=0,c2=0,c3=0,c4=0; gcx < gcov.cols(); gcx++) {
+		for (int grx=0, r1=0,r2=0,r3=0,r4=0; grx < gcov.rows(); grx++) {
+			if (filterTest(grx)) {
+				if (filterTest(gcx)) {
+					gcov(grx, gcx) = v11(r1++, c1);
+				} else {
+					gcov(grx, gcx) = v12(r2++, c2);
+				}
+			} else {
+				if (!filterTest(gcx)) {
+					gcov(grx, gcx) = v22(r3++, c3);
+				} else {
+					gcov(grx, gcx) = v12(c4, r4++);
+				}
+			}
+		}
+		if (filterTest(gcx)) {
+			c1 += 1;
+			c4 += 1;
+		} else {
+			c2 += 1;
+			c3 += 1;
+		}
+	}
+}
+
 template<typename _MatrixType, int _UpLo = Eigen::Lower>
 class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
  private:
@@ -501,7 +564,7 @@ class AssertProtectStackBalanced {
 	const char *context;
 	int preDepth;
 	PROTECT_INDEX initialpix;
-	
+
 	PROTECT_INDEX getDepth() {
 		PROTECT_INDEX pix;
 		R_ProtectWithIndex(R_NilValue, &pix);
@@ -523,6 +586,25 @@ class AssertProtectStackBalanced {
 				   context, postDepth - preDepth);
 		}
 	}
+};
+
+#define OOPS mxThrow("%s at %d: oops", __FILE__, __LINE__)
+
+inline int cast_with_NA(double val)
+{
+  if (std::isfinite(val)) return int(val);
+  return NA_INTEGER;
+}
+
+inline double cast_with_NA(int val)
+{
+  if (val == NA_INTEGER) return NA_REAL;
+  return double(val);
+}
+
+struct cstrCmp {
+	bool operator() (const char *s1, const char *s2) const
+	{ return strcmp(s1,s2) < 0; }
 };
 
 #endif /* _OMXDEFINES_H_ */

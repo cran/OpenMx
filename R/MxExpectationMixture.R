@@ -88,7 +88,7 @@ setMethod("genericGetExpected", signature("MxExpectationMixture"),
 
 setMethod("genericGenerateData", signature("MxExpectationMixture"),
 	function(.Object, model, nrows, subname, empirical, returnModel, use.miss,
-		   .backend, nrowsProportion) {
+		   .backend, nrowsProportion, silent) {
 		origData <- findDataForSubmodel(model, subname)
 		origRows <- if (!is.null(origData)) { nrowMxData(origData) } else { NULL }
 		nrows <- calcNumRows(nrows, nrowsProportion, origRows, subname)
@@ -108,6 +108,9 @@ setMethod("genericGenerateData", signature("MxExpectationMixture"),
 		cpick <- NULL
 		doDefVar <- imxHasDefinitionVariable(model)
 		if(doDefVar){
+      if (is.null(origData)) {
+        stop("Definition variable(s) found, but no data is available")
+      }
 			if (origData$type != 'raw') {
 				stop(paste("Definition variable(s) found, but original data is type",
 					omxQuotes(origData$type)))

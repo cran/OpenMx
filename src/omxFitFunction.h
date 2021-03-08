@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 /***********************************************************
-* 
+*
 *  omxFitFunction.h
 *
 *  Created: Timothy R. Brick 	Date: 2009-02-17
@@ -31,7 +31,7 @@
 
 #include <functional>
 #include "omxDefines.h"
-#include <R_ext/Rdynload.h> 
+#include <R_ext/Rdynload.h>
 
 #include "omxMatrix.h"
 #include "omxAlgebra.h"
@@ -49,14 +49,19 @@ struct omxFitFunction {
 
 	omxMatrix* matrix;
 	bool initialized;
-	bool gradientAvailable;
 	bool hessianAvailable;
 	FitStatisticUnits units;
 	bool canDuplicate;
 	bool openmpUser; // can decide this in omxAlgebraPreeval
+  int verbose;
 
-	omxFitFunction() : rObj(0), expectation(0), initialized(false), gradientAvailable(false),
-		hessianAvailable(false), units(FIT_UNITS_UNINITIALIZED), canDuplicate(false), openmpUser(false) {};
+	int derivCount;
+	std::vector<int> gradMap;
+	std::vector<int> missingGrad;
+
+	omxFitFunction() : rObj(0), expectation(0), initialized(false),
+		hessianAvailable(false), units(FIT_UNITS_UNINITIALIZED), canDuplicate(false),
+    openmpUser(false), verbose(0), derivCount(0) {};
 	virtual ~omxFitFunction() {};
 	virtual omxFitFunction *initMorph();
 	virtual void init()=0;
@@ -70,6 +75,8 @@ struct omxFitFunction {
 	// populateAttr should be used for returning results specific to fit functions or expectations
 	virtual void populateAttr(SEXP algebra) {};
 
+  void buildGradMap(FitContext *fc, std::vector<const char *> &names, bool strict);
+  void invalidateGradient(FitContext *fc);
 	void setUnitsFromName(const char *name);
 	const char *name() const { return matrix->name(); }
 };
@@ -84,9 +91,7 @@ void omxCompleteFitFunction(omxMatrix *om);
 	void omxGetFitFunctionStandardErrors(omxFitFunction *oo);					// Get Standard Errors
 
 /* FitFunction-specific implementations of matrix functions */
-void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc);
-void omxFitFunctionComputeAuto(omxFitFunction *off, int want, FitContext *fc);
-void omxFitFunctionComputeCI(omxFitFunction *off, int want, FitContext *fc);
+void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc);  // deprecated, use ComputeFit
 	void omxDuplicateFitMatrix(omxMatrix *tgt, const omxMatrix *src, omxState* targetState);
 
 omxMatrix* omxNewMatrixFromSlot(SEXP rObj, omxState* state, const char* slotName);
@@ -111,7 +116,7 @@ void ba81SetFreeVarGroup(omxFitFunction *oo, FreeVarGroup *fvg);
 void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext *fc);
 void loglikelihoodCIFun(omxFitFunction* oo, int ffcompute, FitContext *fc);
 
-double totalLogLikelihood(omxMatrix *fitMat);
+double totalLogLikelihood(omxMatrix *fitMat); // deprecated, use ComputeFit
 
 const char *fitUnitsToName(FitStatisticUnits units);
 bool fitUnitsIsChiSq(FitStatisticUnits units);

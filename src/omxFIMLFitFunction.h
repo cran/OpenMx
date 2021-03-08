@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ class omxFIMLFitFunction : public omxFitFunction {
 	static const int ELAPSED_HISTORY_SIZE = 5;
 
 	omxFIMLFitFunction *parent;
-	int rowwiseParallel;
+  int rowwiseParallel;
 	omxMatrix* cov;				// Covariance Matrix
 	omxMatrix* means;			// Vector of means
 	omxData* data;				// The data
@@ -240,7 +240,7 @@ class mvnByRow {
 		useSufficientSets = ofiml->useSufficientSets;
 		verbose = ofiml->verbose;
 
-		if (parent->rowwiseParallel && fc->isClone()) {
+		if (parent->openmpUser && fc->isClone()) {
 			startTime = get_nanotime();
 		}
 
@@ -250,7 +250,7 @@ class mvnByRow {
 	};
 
 	~mvnByRow() {
-		if (parent->rowwiseParallel && fc->isClone()) {
+		if (parent->openmpUser && fc->isClone()) {
 			double el1 = get_nanotime() - startTime;
 			ofo->elapsed[shared_ofo->curElapsed] = el1;
 			if (verbose >= 3) mxLog("%s: %d--%d %.2fms",

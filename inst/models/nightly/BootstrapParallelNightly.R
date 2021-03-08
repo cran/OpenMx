@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2020 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 require(OpenMx)
 require(snowfall)
-sfInit(parallel = TRUE, cpus = 8)
+sfInit(parallel = TRUE, cpus = imxGetNumThreads())
 sfLibrary(OpenMx)
 
 set.seed(10)

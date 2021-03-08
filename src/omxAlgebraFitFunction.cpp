@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,28 +25,26 @@ struct AlgebraFitFunction : omxFitFunction {
 	omxMatrix *algebra;
 	omxMatrix *gradient;
 	omxMatrix *hessian;
-	int verbose;
 
 	FreeVarGroup *varGroup;
-	int numDeriv;
-	std::vector<int> gradMap;
 	bool vec2diag;
+  bool strict;
 
-	AlgebraFitFunction() : ff(0), gradient(0), hessian(0), verbose(false), varGroup(0) {};
+	AlgebraFitFunction() : ff(0), gradient(0), hessian(0), varGroup(0) {};
 	virtual void init();
 	virtual void compute(int ffcompute, FitContext *fc);
-	void setVarGroup(FreeVarGroup *);
+	void setVarGroup(FitContext *);
 };
 
-void AlgebraFitFunction::setVarGroup(FreeVarGroup *vg)
+void AlgebraFitFunction::setVarGroup(FitContext *fc)
 {
-	varGroup = vg;
+  fc->calcNumFree();
+	varGroup = fc->varGroup;
 
 	if (verbose) {
 		mxLog("%s: rebuild parameter map for var group %d",
 		      ff->matrix->name(), varGroup->id[0]);
 	}
-	numDeriv = 0;
 
 	if (gradient) {
 		if (int(std::max(gradient->rownames.size(),
@@ -99,16 +97,7 @@ void AlgebraFitFunction::setVarGroup(FreeVarGroup *vg)
 	}
 	if (!names) return;
 
-	gradMap.resize(names->size());
-	for (size_t nx=0; nx < names->size(); ++nx) {
-		int to = varGroup->lookupVar((*names)[nx]);
-		gradMap[nx] = to;
-		if (to >= 0) ++numDeriv;
-		if (verbose) {
-			mxLog("%s: name '%s' mapped to free parameter %d",
-			      ff->matrix->name(), (*names)[nx], gradMap[nx]);
-		}
-	}
+  buildGradMap(fc, *names, strict);
 }
 
 // writes to upper triangle of full matrix
@@ -123,10 +112,6 @@ static void addSymOuterProd(const double weight, const double *vec, const int le
 
 void AlgebraFitFunction::compute(int want, FitContext *fc)
 {
-	if (fc && varGroup != fc->varGroup) {
-		setVarGroup(fc->varGroup);
-	}
-
 	if (want & (FF_COMPUTE_FIT | FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) {
 		if (algebra) {
 			omxRecompute(algebra, fc);
@@ -135,20 +120,24 @@ void AlgebraFitFunction::compute(int want, FitContext *fc)
 			ff->matrix->data[0] = 0;
 		}
 	}
+  if (want & FF_COMPUTE_INITIAL_FIT) return;
 
-	if (gradMap.size() == 0) return;
+	if (fc && varGroup != fc->varGroup) {
+		setVarGroup(fc);
+	}
+
 	if (gradient) {
 		omxRecompute(gradient, fc);
 		if (want & FF_COMPUTE_GRADIENT) {
 			for (size_t v1=0; v1 < gradMap.size(); ++v1) {
 				int to = gradMap[v1];
 				if (to < 0) continue;
-				fc->haveGrad[to] = true;
 				fc->gradZ(to) += omxVectorElement(gradient, v1);
 			}
+      invalidateGradient(fc);
 		}
 		if (want & FF_COMPUTE_INFO && fc->infoMethod == INFO_METHOD_MEAT) {
-			std::vector<double> grad(varGroup->vars.size());
+			std::vector<double> grad(varGroup->vars.size()); // wrong size TODO
 			for (size_t v1=0; v1 < gradMap.size(); ++v1) {
 				int to = gradMap[v1];
 				if (to < 0) continue;
@@ -156,21 +145,23 @@ void AlgebraFitFunction::compute(int want, FitContext *fc)
 			}
 			addSymOuterProd(1, grad.data(), varGroup->vars.size(), fc->infoB);
 		}
-	}
+	} else {
+		if (want & FF_COMPUTE_GRADIENT) fc->gradZ.setConstant(NA_REAL);
+  }
 	if (hessian && ((want & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN)) ||
 			(want & FF_COMPUTE_INFO && fc->infoMethod == INFO_METHOD_HESSIAN))) {
 		omxRecompute(hessian, fc);
 
 		if (!vec2diag) {
 			HessianBlock *hb = new HessianBlock;
-			hb->vars.resize(numDeriv);
+			hb->vars.resize(derivCount);
 			int vx=0;
 			for (size_t h1=0; h1 < gradMap.size(); ++h1) {
 				if (gradMap[h1] < 0) continue;
 				hb->vars[vx] = gradMap[h1];
 				++vx;
 			}
-			hb->mat.resize(numDeriv, numDeriv);
+			hb->mat.resize(derivCount, derivCount);
 			for (size_t d1=0, h1=0; h1 < gradMap.size(); ++h1) {
 				if (gradMap[h1] < 0) continue;
 				for (size_t d2=0, h2=0; h2 <= h1; ++h2) {
@@ -213,7 +204,7 @@ void AlgebraFitFunction::init()
 {
 	auto *off = this;
 	omxState *currentState = off->matrix->currentState;
-	
+
 	AlgebraFitFunction *aff = this;
 	aff->ff = off;
 
@@ -225,7 +216,6 @@ void AlgebraFitFunction::init()
 
 	ProtectedSEXP Rgr(R_do_slot(rObj, Rf_install("gradient")));
 	aff->gradient = omxMatrixLookupFromState1(Rgr, currentState);
-	if (aff->gradient) off->gradientAvailable = TRUE;
 
 	ProtectedSEXP Rh(R_do_slot(rObj, Rf_install("hessian")));
 	aff->hessian = omxMatrixLookupFromState1(Rh, currentState);
@@ -234,4 +224,7 @@ void AlgebraFitFunction::init()
 	ProtectedSEXP Rverb(R_do_slot(rObj, Rf_install("verbose")));
 	aff->verbose = Rf_asInteger(Rverb);
 	off->canDuplicate = true;
+
+	ProtectedSEXP Rstrict(R_do_slot(rObj, Rf_install("strict")));
+  aff->strict = Rcpp::as<bool>(Rstrict);
 }

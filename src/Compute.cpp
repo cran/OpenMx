@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013-2019 by the individuals mentioned in the source code history
+ *  Copyright 2013-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <Eigen/Dense>
 #include <RcppEigenWrap.h>
 #include "finiteDifferences.h"
+#include "autoTune.h"
 #include "minicsv.h"
 #include "LoadDataAPI.h"
 #include "EnableWarnings.h"
@@ -59,6 +60,24 @@ SEXP allocInformVector(int size)
 {
 	return makeFactor(Rf_allocVector(INTSXP, size),
 			  OMX_STATIC_ARRAY_SIZE(statusCodeLabels), statusCodeLabels);
+}
+
+void FitContext::calcNumFree()
+{
+  std::vector<bool> &po = profiledOutZ;
+  _numFree = numParam - std::count(po.begin(), po.end(), true);
+  freeToIndexMap.clear();
+  freeToParamMap.resize(_numFree);
+  for (int fx=0, px=0; px < numParam; ++px) {
+    if (po[px]) continue;
+    freeToIndexMap.emplace(varGroup->vars[px]->name, fx);
+    freeToParamMap[fx++] = px;
+  }
+
+  // ???? TODO
+	// for (int cx=0; cx < int(childList.size()); ++cx) {
+	// 	childList[cx]->prepConstraints();
+	// }
 }
 
 void FitContext::queue(HessianBlock *hb)
@@ -168,7 +187,7 @@ void FitContext::refreshDenseHess()
 {
 	if (haveDenseHess) return;
 
-	int numFree = calcNumFree();
+	int numFree = getNumFree();
 	hess.resize(numFree, numFree);
 
 	hess.triangularView<Eigen::Upper>().setZero();
@@ -209,7 +228,7 @@ void FitContext::copyDenseHess(double *dest)
 
 double *FitContext::getDenseHessUninitialized()
 {
-	int numFree = calcNumFree();
+	int numFree = getNumFree();
 	hess.resize(numFree, numFree);
 
 	// Assume the caller is going to fill it out
@@ -397,12 +416,12 @@ void FitContext::testMerge()
 	sparseHess.resize(numParam, numParam);
 	sparseHess.setZero();
 
-	for (size_t vx=0; vx < numParam; ++vx) {
+	for (int vx=0; vx < numParam; ++vx) {
 		HessianBlock *hb = blockByVar[vx];
 		hb->addSubBlocks();
 	}
 
-	for (size_t vx=0; vx < numParam; ++vx) {
+	for (int vx=0; vx < numParam; ++vx) {
 		HessianBlock *hb = blockByVar[vx];
 		if (hb->useId == UseId) continue;
 		hb->useId = UseId;
@@ -453,7 +472,7 @@ bool FitContext::refreshSparseIHess()
 	}
 	if (maxBlockSize < std::min(int(numParam), AcceptableDenseInvertSize)) {
 		const int UseId = 1;
-		for (size_t vx=0; vx < numParam; ++vx) {
+		for (int vx=0; vx < numParam; ++vx) {
 			HessianBlock *hb = blockByVar[vx];
 			if (!hb) mxThrow("Attempting to invert Hessian, "
 					  "but no Hessian information for '%s'", varGroup->vars[vx]->name);
@@ -500,8 +519,8 @@ bool FitContext::refreshSparseIHess()
 
 		if (0) {
 			int nonZero = 0;
-			for (size_t cx=0; cx < numParam; ++cx) {
-				for (size_t rx=0; rx <= cx; ++rx) {
+			for (int cx=0; cx < numParam; ++cx) {
+				for (int rx=0; rx <= cx; ++rx) {
 					if (hess(rx,cx) != 0) {
 						if (rx == cx) nonZero += 1;
 						else nonZero += 2;
@@ -520,10 +539,10 @@ bool FitContext::refreshSparseIHess()
 
 Eigen::VectorXd FitContext::ihessGradProd()
 {
-	for (int px=0; px < int(haveGrad.size()); ++px) {
-		if (haveGrad[px]) continue;
+	for (int px=0; px < int(gradZ.size()); ++px) {
+		if (std::isfinite(gradZ[px])) continue;
 		mxLog("FitContext::ihessGradProd grad[%d/%s] missing",
-		      px, varGroup->vars[px]->name);
+		      px, varGroup->vars[freeToParamMap[px]]->name);
 	}
 	if (refreshSparseIHess()) {
 		return sparseIHess.selfadjointView<Eigen::Upper>() * gradZ;
@@ -542,7 +561,7 @@ Eigen::VectorXd FitContext::ihessDiag()
 
 double *FitContext::getDenseIHessUninitialized()
 {
-	int numFree = calcNumFree();
+	int numFree = getNumFree();
 	ihess.resize(numFree, numFree);
 
 	// Assume the caller is going to fill it out
@@ -646,13 +665,14 @@ int HessianBlock::estNonZero() const
 void FitContext::init()
 {
 	numParam = varGroup->vars.size();
+  _numFree = -1;
 	wanted = 0;
 	mac = parent? parent->mac : 0;
 	fit = parent? parent->fit : NA_REAL;
 	previousReportFit = nan("uninit");
 	fitUnits = parent? parent->fitUnits : FIT_UNITS_UNINITIALIZED;
 	skippedRows = 0;
-	est = new double[numParam];
+	est.resize(numParam);
 	infoDefinite = NA_LOGICAL;
 	infoCondNum = NA_REAL;
 	infoA = NULL;
@@ -663,8 +683,9 @@ void FitContext::init()
 	openmpUser = false;
 	ordinalRelativeError = 0;
 	computeCount = 0;
+  permitParallel = false;
 
-	hess.resize(numParam, numParam);  // TODO why needed?
+	hess.resize(numParam, numParam);  // TODO why needed? should be numFree, WRONG DIMENSION
 	ihess.resize(numParam, numParam);  // TODO why needed?
 
 	clearHessian();
@@ -691,9 +712,33 @@ void FitContext::clearHessian()
 	maxBlockSize = 0;
 }
 
+bool FitContext::hasActiveBoxConstraint(int skip) const
+{
+  const int verbose = 0;
+	double eps = sqrt(std::numeric_limits<double>::epsilon());
+
+  for (int vx=0; vx < getNumFree(); ++vx) {
+    if (vx == skip) continue;
+		bool active=false;
+    int px = freeToParamMap[vx];
+		if (est[px] <= varGroup->vars[px]->lbound + eps) {
+			if (verbose >= 2)
+				mxLog("Param %s at lbound %f", varGroup->vars[px]->name, est[px]);
+			active=true;
+		}
+		if (est[px] >= varGroup->vars[px]->ubound - eps) {
+			if (verbose >= 2)
+				mxLog("Param %s at ubound %f", varGroup->vars[px]->name, est[px]);
+			active=true;
+		}
+    if (active) return true;
+  }
+  return false;
+}
+
 void FitContext::calcStderrs()
 {
-	int numFree = calcNumFree();
+	int numFree = getNumFree();
 	stderrs.resize(numFree);
 	if (vcov.rows() != numFree || vcov.cols() != numFree) {
 		mxThrow("FitContext::calcStderrs vcov size wrong %d vs %d",
@@ -725,8 +770,8 @@ void FitContext::calcStderrs()
 				hesstmp = cholVcov.solve(Eigen::MatrixXd::Identity( vcov.rows(), vcov.cols() ));
 			}
 		}
-		Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qrj(constraintJacobian.transpose());
-		Eigen::MatrixXd Q = qrj.householderQ();
+		Eigen::FullPivHouseholderQR<Eigen::MatrixXd> qrj(constraintJacobian.transpose());
+		Eigen::MatrixXd Q = qrj.matrixQ();
 		Eigen::MatrixXd U = Q.block(0, qrj.rank(), Q.rows(), Q.cols()-qrj.rank());
 		if(U.rows()==0 || U.cols()==0){
 			Rf_warning(
@@ -771,16 +816,16 @@ FitContext::FitContext(omxState *_state)
 	parent = NULL;
 	varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
 	init();
-	profiledOut.assign(numParam, false);
+	profiledOutZ.assign(numParam, false);
 
 	auto &startingValues = Global->startingValues;
 	state = _state;
 	if (numParam) {
-		if (startingValues.size() != numParam) {
+		if (int(startingValues.size()) != numParam) {
 			mxThrow("Got %d starting values for %d parameters",
 				int(startingValues.size()), int(numParam));
 		}
-		memcpy(est, startingValues.data(), sizeof(double) * numParam);
+    est = startingValues;
 	}
 	//equality.resize(state->numEqC);
 	//inequality.resize(state->numIneqC);
@@ -798,14 +843,14 @@ FitContext::FitContext(FitContext *_parent, FreeVarGroup *_varGroup)
 	size_t dvars = varGroup->vars.size();
 	if (dvars == 0) return;
 	mapToParent.resize(dvars);
-	profiledOut.resize(numParam);
+	profiledOutZ.resize(numParam);
 
 	size_t d1 = 0;
 	for (size_t s1=0; s1 < src->vars.size(); ++s1) {
 		if (src->vars[s1] != dest->vars[d1]) continue;
 		mapToParent[d1] = s1;
 		est[d1] = parent->est[s1];
-		profiledOut[d1] = parent->profiledOut[s1];
+		profiledOutZ[d1] = parent->profiledOutZ[s1];
 		if (++d1 == dvars) break;
 	}
 	if (d1 != dvars) mxThrow("Parent free parameter group (id=%d) is not a superset of %d",
@@ -816,9 +861,7 @@ FitContext::FitContext(FitContext *_parent, FreeVarGroup *_varGroup)
 	infoDefinite = parent->infoDefinite;
 	infoCondNum = parent->infoCondNum;
 	iterations = parent->iterations;
-	ciobj = parent->ciobj;
-	//equality.resize(state->numEqC);
-	//inequality.resize(state->numIneqC);
+	if (parent->ciobj) ciobj = parent->ciobj->clone();
 }
 
 void FitContext::updateParent()
@@ -883,35 +926,33 @@ void FitContext::updateParentAndFree()
 
 void FitContext::log(int what)
 {
-	size_t count = varGroup->vars.size();
 	std::string buf;
 	if (what & FF_COMPUTE_MAXABSCHANGE) buf += string_snprintf("MAC: %.5f\n", mac);
 	if (what & FF_COMPUTE_FIT) buf += string_snprintf("fit: %.5f (scale %f)\n", fit, Global->llScale);
 	if (what & FF_COMPUTE_ESTIMATE) {
+    int count = numParam;
 		buf += string_snprintf("est %d: c(", (int) count);
-		for (size_t vx=0; vx < count; ++vx) {
+		for (int vx=0; vx < count; ++vx) {
 			buf += string_snprintf("%.16f", est[vx]);
 			if (vx < count - 1) buf += ", ";
 		}
 		buf += ")\n";
 	}
 	if (what & FF_COMPUTE_GRADIENT) {
+    int count = getNumFree();
 		buf += string_snprintf("gradient %d: c(", (int) count);
-		for (size_t vx=0; vx < count; ++vx) {
-			if (haveGrad[vx]) {
-				buf += string_snprintf("%.5f", gradZ[vx]);
-			} else {
-				buf += '-';
-			}
+		for (int vx=0; vx < count; ++vx) {
+      buf += string_snprintf("%.5f", gradZ[vx]);
 			if (vx < count - 1) buf += ", ";
 		}
 		buf += ")\n";
 	}
 	if (what & FF_COMPUTE_HESSIAN) {
+    int count = getNumFree();
 		refreshDenseHess();
 		buf += string_snprintf("hessian %d x %d: c(\n", (int) count, (int) count);
-		for (size_t v1=0; v1 < count; ++v1) {
-			for (size_t v2=0; v2 < count; ++v2) {
+		for (int v1=0; v1 < count; ++v1) {
+			for (int v2=0; v2 < count; ++v2) {
 				double coef;
 				if (v1 > v2) {
 					coef = hess.selfadjointView<Eigen::Upper>()(v2,v1);
@@ -1003,32 +1044,6 @@ static void _fixSymmetry(const char *name, double *mat, size_t numParam, bool fo
 	}
 }
 
-static void omxRepopulateRFitFunction(omxFitFunction* oo, double* x, int n)
-{
-	omxRFitFunction* rFitFunction = (omxRFitFunction*)oo;
-
-	ProtectedSEXP estimate(Rf_allocVector(REALSXP, n));
-	double *est = REAL(estimate);
-	for(int i = 0; i < n ; i++) {
-		est[i] = x[i];
-	}
-
-	ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 4));
-
-		// imxUpdateModelValues does not handle parameters with equality
-		// constraints. This is a bug.
-	SETCAR(theCall, Rf_install("imxUpdateModelValues"));
-	SETCADR(theCall, rFitFunction->model);
-	SETCADDR(theCall, rFitFunction->flatModel);
-	SETCADDDR(theCall, estimate);
-
-	rFitFunction->model = Rf_eval(theCall, R_GlobalEnv);
-
-	Rf_setAttrib(rFitFunction->rObj, Rf_install("model"), rFitFunction->model);
-
-	omxMarkDirty(oo->matrix);
-}
-
 void FitContext::ensureParamWithinBox(bool nudge)
 {
 	if (OMX_DEBUG) mxLog("FitContext::ensureParamWithinBox(nudge=%d)", nudge);
@@ -1066,180 +1081,49 @@ void FitContext::copyParamToModelClean()
 {
 	if(numParam == 0) return;
 
-	copyParamToModelInternal(varGroup, state, est);
+	copyParamToModelInternal(varGroup, state, est.data());
 
-	if (RFitFunction) omxRepopulateRFitFunction(RFitFunction, est, numParam);
+	if (RFitFunction) {  // special hack
+    omxRFitFunction* rFitFunction = (omxRFitFunction*)RFitFunction;
+
+    ProtectedSEXP estimate(Rf_allocVector(REALSXP, getNumFree()));
+    double *eptr = REAL(estimate);
+    copyEstToOptimizer(eptr);
+
+    ProtectedSEXP theCall(Rf_allocVector(LANGSXP, 4));
+
+		// imxUpdateModelValues does not handle parameters with equality
+		// constraints. This is a bug.
+    SETCAR(theCall, Rf_install("imxUpdateModelValues"));
+    SETCADR(theCall, rFitFunction->model);
+    SETCADDR(theCall, rFitFunction->flatModel);
+    SETCADDDR(theCall, estimate);
+
+    rFitFunction->model = Rf_eval(theCall, R_GlobalEnv);
+
+    Rf_setAttrib(rFitFunction->rObj, Rf_install("model"), rFitFunction->model);
+
+    omxMarkDirty(RFitFunction->matrix);
+  }
 
 	if (childList.size() == 0 || !openmpUser) return;
 
 	for(size_t i = 0; i < childList.size(); i++) {
-		memcpy(childList[i]->est, est, sizeof(double) * numParam);
+		childList[i]->est = est;
 		childList[i]->copyParamToModel();
 	}
 }
 
-// NOTE: All non-linear constraints are applied regardless of free
-// variable group.
-void FitContext::solEqBFun(bool wantAJ, int verbose) //<--"want analytic Jacobian"
+bool FitContext::isUnconstrained()
 {
-	const int eq_n = (int) equality.size();
-
-	if (!eq_n) return;
-
-	/*Note that this needs to happen even if no equality constraints have analytic Jacobians, because
-	 analyticEqJacTmp is copied to the Jacobian matrix the elements of which are populated by code in
-	 finiteDifferences.h, which knows to numerically populate an element if it's NA:*/
-	analyticEqJacTmp.setConstant(NA_REAL);
-
-	int cur=0, j=0, c=0, roffset=0;
-	for(j = 0; j < int(state->conListX.size()); j++) {
-		omxConstraint &con = *state->conListX[j];
-		if (con.opCode != omxConstraint::EQUALITY) continue;
-
-		con.refreshAndGrab(this, &equality(cur));
-		if(wantAJ && isUsingAnalyticJacobian() && con.jacobian != NULL){
-			omxRecompute(con.jacobian, this);
-			for(c=0; c<con.jacobian->cols; c++){
-				if(con.jacMap[c]<0){continue;}
-				for(roffset=0; roffset<con.size; roffset++){
-					analyticEqJacTmp(cur+roffset,con.jacMap[c]) = con.jacobian->data[c * con.size + roffset];
-				}
-			}
-		}
-		cur += con.size;
-	}
-
-	if (verbose >= 3) {
-		mxPrintMat("equality", equality);
-	}
+	omxState *st = state;
+  return st->conListX.size() == 0;
 }
-
-void FitContext::myineqFun(bool wantAJ, int verbose, int ineqType, bool CSOLNP_HACK)
-{
-	const int ineq_n = (int) inequality.size();
-
-	if (!ineq_n) return;
-
-	analyticIneqJacTmp.setConstant(NA_REAL);
-
-	int cur=0, j=0, c=0, roffset=0;
-	for (j=0; j < int(state->conListX.size()); j++) {
-		omxConstraint &con = *state->conListX[j];
-		if (con.opCode == omxConstraint::EQUALITY) continue;
-
-		con.refreshAndGrab(this, (omxConstraint::Type) ineqType, &inequality(cur));
-		if(wantAJ && isUsingAnalyticJacobian() && con.jacobian != NULL){
-			omxRecompute(con.jacobian, this);
-			for(c=0; c<con.jacobian->cols; c++){
-				if(con.jacMap[c]<0){continue;}
-				for(roffset=0; roffset<con.size; roffset++){
-					analyticIneqJacTmp(cur+roffset,con.jacMap[c]) = con.jacobian->data[c * con.size + roffset];
-				}
-			}
-		}
-		cur += con.size;
-	}
-
-	if (CSOLNP_HACK) {
-		// CSOLNP doesn't know that inequality constraints can be inactive (by design, since it's an interior-point algorithm)
-	} else {
-		//SLSQP seems to require inactive inequality constraint functions to be held constant at zero:
-		inequality = inequality.array().max(0.0);
-		if(wantAJ && isUsingAnalyticJacobian()){
-			for(int i=0; i<analyticIneqJacTmp.rows(); i++){
-				/*The Jacobians of each inactive constraint are set to zero here;
-				 as their elements will be zero rather than NaN, the code in finiteDifferences.h will leave them alone:*/
-				if(!inequality[i]){analyticIneqJacTmp.row(i).setZero();}
-			}
-		}
-	}
-
-	if (verbose >= 3) {
-		mxPrintMat("inequality", inequality);
-	}
-}
-
-//Optimizers care about separating equality and inequality constraints, but the ComputeNumericDeriv step doesn't:
-void FitContext::allConstraintsF(bool wantAJ, int verbose, int ineqType, bool CSOLNP_HACK, bool maskInactive){
-	int c_n = state->numEqC + state->numIneqC;
-	if(!c_n){return;}
-	std::vector<bool> is_inactive_ineq(c_n);
-
-	constraintJacobian.setConstant(NA_REAL);
-
-	int cur=0;
-	for (int j=0; j < int(state->conListX.size()); j++) {
-		omxConstraint &con = *state->conListX[j];
-		if (con.opCode == omxConstraint::EQUALITY) {
-			con.refreshAndGrab(this, &constraintFunVals(cur));
-			for(int i=0; i < con.size; i++){
-				is_inactive_ineq[cur+i] = false;
-			}
-		} else{
-			con.refreshAndGrab(this, (omxConstraint::Type) ineqType, &constraintFunVals(cur));
-			for(int i=0; i < con.size; i++){
-				if(constraintFunVals(cur+i) < 0 && maskInactive){
-					constraintFunVals(cur+i) = 0;
-					is_inactive_ineq[cur+i] = true;
-				} else{
-					is_inactive_ineq[cur+i] = false;
-				}
-			}
-		}
-		if(wantAJ && isUsingAnalyticJacobian() && con.jacobian != NULL){
-			omxRecompute(con.jacobian, this);
-			for(int c=0; c<con.jacobian->cols; c++){
-				if(con.jacMap[c]<0){continue;}
-				for(int roffset=0; roffset<con.size; roffset++){
-					constraintJacobian(cur+roffset,con.jacMap[c]) = con.jacobian->data[c * con.size + roffset];
-				}
-			}
-		}
-		cur += con.size;
-	}
-
-	if (CSOLNP_HACK) {
-
-	} else {
-		if(wantAJ && isUsingAnalyticJacobian() && maskInactive){
-			for(int i=0; i<constraintJacobian.rows(); i++){
-				/*The Jacobians of each inactive constraint are set to zero here;
-				 as their elements will be zero rather than NaN, the code in finiteDifferences.h will leave them alone:*/
-				if(is_inactive_ineq[i]){constraintJacobian.row(i).setZero();}
-			}
-		}
-	}
-
-	if (verbose >= 3) {
-		mxPrintMat("constraint Jacobian", constraintJacobian);
-	}
-
-}
-
 
 omxMatrix *FitContext::lookupDuplicate(omxMatrix* element)
 {
 	if (element == NULL) return NULL;
 	return state->lookupDuplicate(element);
-}
-
-double *FitContext::take(int want)
-{
-	if (!(want & (wanted | FF_COMPUTE_ESTIMATE))) {
-		mxThrow("Attempt to take %d but not available", want);
-	}
-
-	double *ret = NULL;
-	switch(want) {
-	case FF_COMPUTE_ESTIMATE:
-		ret = est;
-		est = NULL;
-		break;
-	default:
-		mxThrow("Taking of %d is not implemented", want);
-	}
-	if (!ret) mxThrow("Attempt to take %d, already taken", want);
-	return ret;
 }
 
 // Rethink this whole design TODO
@@ -1306,14 +1190,50 @@ bool FitContext::isClone() const
 	return state->isClone();
 }
 
-void FitContext::createChildren(omxMatrix *alg)
+struct ParallelInvalidator : StateInvalidator {
+  typedef StateInvalidator super;
+  ParallelInvalidator(omxState &_st) : super(_st) {}
+	virtual void doExpectation() {}
+  virtual void doData() {}
+  virtual void doMatrix() {}
+};
+
+void FitContext::createChildren(omxMatrix *alg, bool _permitParallel)
 {
+	if (childList.size()) {
+		diagParallel(OMX_DEBUG, "FitContext::createChildren: ignored, childList already populated");
+    return;
+  }
+
+  openmpUser = false;
 	if (Global->numThreads <= 1) {
 		diagParallel(OMX_DEBUG, "FitContext::createChildren: max threads set to 1");
-		return;
+    _permitParallel = false;
 	}
-	if (childList.size()) return;
 
+  diagParallel(OMX_DEBUG, "FitContext::createChildren(%s, %d)",
+               alg? alg->name() : "NULL", _permitParallel);
+
+  ParallelInvalidator pi(*state);
+  pi();
+
+  permitParallel = _permitParallel;
+  if (alg) omxAlgebraPreeval(alg, this);
+
+	if (Global->numThreads <= 1)  return;
+
+  createChildren1();
+
+  if (alg) {
+    for (auto kid : childList) omxAlgebraPreeval(alg, kid);
+  }
+  if (!_permitParallel) {
+    if (openmpUser) OOPS;
+  }
+}
+
+void FitContext::createChildren1()
+{
 	for(size_t j = 0; j < state->expectationList.size(); j++) {
 		if (!state->expectationList[j]->canDuplicate) {
 			diagParallel(OMX_DEBUG, "FitContext::createChildren: %s cannot be duplicated",
@@ -1332,8 +1252,8 @@ void FitContext::createChildren(omxMatrix *alg)
 		if (ff->openmpUser) {
 			diagParallel(OMX_DEBUG, "FitContext::createChildren: %s is an OpenMP user",
 				     state->algebraList[j]->name());
+      openmpUser = true;
 		}
-		openmpUser |= ff->openmpUser;
 	}
 
 	diagParallel(OMX_DEBUG, "FitContext::createChildren: create %d FitContext for parallel processing; OpenMP user=%d",
@@ -1345,9 +1265,9 @@ void FitContext::createChildren(omxMatrix *alg)
 
 	for(int ii = 0; ii < numThreads; ii++) {
 		FitContext *kid = new FitContext(this, varGroup);
-		kid->state = new omxState(state);
+		kid->state = new omxState(state, openmpUser);
 		kid->state->initialRecalc(kid);
-		omxAlgebraPreeval(alg, kid);
+    kid->calcNumFree();
 		childList.push_back(kid);
 	}
 
@@ -1367,6 +1287,8 @@ void FitContext::destroyChildren()
 
 FitContext::~FitContext()
 {
+  //mxLog("destroy FitContext %p", this);
+
 	destroyChildren();
 
 	if (parent) {
@@ -1377,7 +1299,6 @@ FitContext::~FitContext()
 	}
 
 	clearHessian();
-	if (est) delete [] est;
 	if (infoA) delete [] infoA;
 	if (infoB) delete [] infoB;
 }
@@ -1395,6 +1316,21 @@ void FitContext::setRFitFunction(omxFitFunction *rff)
 	RFitFunction = rff;
 }
 
+void FitContext::withoutCIobjective(std::function<void()> fn)
+{
+  if (!ciobj) OOPS;
+  if (disabledCiobj) OOPS;
+  toggleCIObjective();
+  fn();
+  toggleCIObjective();
+}
+
+void FitContext::toggleCIObjective()
+{
+  std::swap(ciobj, disabledCiobj);
+  for (auto kid : childList) kid->toggleCIObjective();
+}
+
 void CIobjective::evalFit(omxFitFunction *ff, int want, FitContext *fc)
 {
 	omxFitFunctionCompute(ff, want, fc);
@@ -1409,6 +1345,16 @@ void CIobjective::checkSolution(FitContext *fc)
 	}
 }
 
+void CIobjective::setGrad(FitContext *fc)
+{
+  if (CI->varIndex >= 0 && !constrained) {
+    fc->gradZ.setZero();
+    fc->gradZ[ CI->varIndex ] = lowerBound? 1 : -1;
+  } else {
+    fc->gradZ.setConstant(NA_REAL);
+  }
+}
+
 class EMAccel {
 protected:
 	FitContext *fc;
@@ -1419,7 +1365,7 @@ protected:
 
 public:
 	EMAccel(FitContext *_fc, int _verbose) : fc(_fc), verbose(_verbose) {
-		numParam = fc->varGroup->vars.size();
+		numParam = fc->getNumFree();
 		prevAdj1.assign(numParam, 0);
 		prevAdj2.resize(numParam);
 		dir.resize(numParam);
@@ -1708,9 +1654,10 @@ struct LeaveComputeWithVarGroup {
 		}
 	};
 	~LeaveComputeWithVarGroup() {
+    fc->numericalGradTool.reset();
 		fc->destroyChildren();
 		if (toResetInform) fc->setInform(std::max(origInform, fc->getInform()));
-		Global->checkpointMessage(fc, fc->est, "%s", name);
+		Global->checkpointMessage(fc, "%s", name);
 		if (Global->debugProtectStack) {
 			mxLog("exit %s: protect depth %d", name, Global->mpi->getDepth());
 		}
@@ -1939,8 +1886,9 @@ struct ParJacobianSense {
 	std::vector<int> numStats;
 	int maxNumStats;
 	int totalNumStats;
+  int numFree;
 	int defvar_row;
-	Eigen::VectorXd ref;
+	Eigen::ArrayXd ref;
 	Eigen::MatrixXd result;
 
 	// default defvar_row to 1 or 0? TODO
@@ -1966,25 +1914,29 @@ struct ParJacobianSense {
 		using Eigen::Map;
 		using Eigen::VectorXd;
 		fc = _fc;
-		int numFree = fc->calcNumFree();
-		Map< VectorXd > curEst(fc->est, numFree);
+		numFree = fc->getNumFree();
 		result.resize(totalNumStats, numFree);
 		ref.resize(totalNumStats);
-		(*this)(curEst, ref);
+    VectorXd point(numFree);
+    fc->copyEstToOptimizer(point);
+		(*this)(point.data(), -1, ref);
 	}
 
-	template <typename T1, typename T2>
-	void operator()(Eigen::MatrixBase<T1> &, Eigen::MatrixBase<T2> &result1) const {
-		fc->copyParamToModel();
+	template <typename T1>
+	void operator()(double *myPars, int thrId, Eigen::ArrayBase<T1> &result1) const {
+    FitContext *fc2 = thrId >= 0? fc->childList[thrId] : fc;
+    Eigen::Map< Eigen::VectorXd > Est(myPars, numFree);
+    fc2->setEstFromOptimizer(Est);
+    omxState *st = fc2->state;
 		Eigen::VectorXd tmp(maxNumStats);
 		for (int ex=0, offset=0; ex < numOf; offset += numStats[ex++]) {
 			if (exList) {
-				(*exList)[ex]->asVector(fc, defvar_row, tmp);
+				st->lookupDuplicate((*exList)[ex])->asVector(fc2, defvar_row, tmp);
 				result1.block(offset, 0, numStats[ex], 1) =
-					tmp.segment(0, numStats[ex]);
+					tmp.array().segment(0, numStats[ex]);
 			} else {
-				omxMatrix *mat = (*alList)[ex];
-				omxRecompute(mat, fc);
+				omxMatrix *mat = st->lookupDuplicate((*alList)[ex]);
+				omxRecompute(mat, fc2);
 				EigenVectorAdaptor vec(mat);
 				if (numStats[ex] != vec.size()) {
 					mxThrow("Algebra '%s' changed size during Jacobian", mat->name());
@@ -1994,46 +1946,6 @@ struct ParJacobianSense {
 		}
 	}
 };
-
-struct ParJacobianSense1 {
-	FitContext *fc;
-	omxMatrix *alg;
-	Eigen::MatrixXd ref;
-	Eigen::MatrixXd result;
-
-	ParJacobianSense1() : alg(0) {};
-
-	void attach(omxMatrix * _alg) {
-		if (_alg) mxThrow("_alg");
-		alg = _alg;
-	};
-
-	void measureRef(FitContext *_fc) {
-		using Eigen::Map;
-		using Eigen::VectorXd;
-		fc = _fc;
-		int numFree = fc->calcNumFree();
-		Map< VectorXd > curEst(fc->est, numFree);
-		result.resize(alg->rows, alg->cols);
-		ref.resize(alg->rows, alg->cols);
-		(*this)(curEst, ref);
-	}
-
-	template <typename T1, typename T2>
-	void operator()(Eigen::MatrixBase<T1> &, Eigen::MatrixBase<T2> &result1) const {
-		fc->copyParamToModel();
-		omxRecompute(alg, fc);
-		EigenMatrixAdaptor Ealg(alg);
-		result1 = Ealg;
-	}
-};
-
-// usage:
-//
-// ParJacobianSense1 sense;
-// sense.attach(myAlgebra);
-// sense.measureRef(fc);
-// fd_jacobian1<false>(GradientAlgorithm_Forward, 2, 1e-4, sense, sense.ref, curEst, px, sense.result);
 
 class ComputeJacobian : public omxCompute {
 	typedef omxCompute super;
@@ -2095,6 +2007,8 @@ class ComputeCheckpoint : public omxCompute {
 	bool inclSEs;
 	bool inclGradient;
 	bool inclVcov;
+  std::vector<bool> vcovFilter;
+  int vcovEntries;
 	bool badSEWarning;
 	bool firstTime;
 	size_t numExtraCols;
@@ -2762,6 +2676,8 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 			const char *key = R_CHAR(STRING_ELT(argNames, ax));
 			slotValue = VECTOR_ELT(infoArgs, ax);
 			if (strEQ(key, "fitfunction")) {
+        // Why do we allow more than one here? How is this
+        // different from a multigroup fit function?
 				for (int fx=0; fx < Rf_length(slotValue); ++fx) {
 					omxMatrix *ff = globalState->algebraList[INTEGER(slotValue)[fx]];
 					if (!ff->fitFunction) mxThrow("infoArgs$fitfunction is %s, not a fitfunction", ff->name());
@@ -2833,10 +2749,9 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 	bool failed = false;
 	probeOffset(paramProbeCount[vx], vx) = offset;
 
-	Eigen::Map< Eigen::VectorXd > Est(fc->est, (int) fc->varGroup->vars.size());
-	Est = optimum;
-	fc->est[vx] += offset;
-	fc->copyParamToModel();
+  Eigen::VectorXd loc = optimum;
+  loc[vx] += offset;
+  fc->setEstFromOptimizer(loc);
 
 	if (verbose >= 3) mxLog("ComputeEM: probe %d of %s offset %.6f",
 				1+paramProbeCount[vx], fc->varGroup->vars[vx]->name, offset);
@@ -2851,7 +2766,8 @@ bool ComputeEM::probeEM(FitContext *fc, int vx, double offset, Eigen::MatrixBase
 	}
 	fc->setInform(informSave);
 
-	rijWork.col(paramProbeCount[vx]) = (Est - optimum) / offset;
+  fc->copyEstToOptimizer(loc);
+	rijWork.col(paramProbeCount[vx]) = (loc - optimum) / offset;
 
 	paramProbeCount[vx] += 1;
 	++semProbeCount;
@@ -2879,7 +2795,6 @@ void ComputeEM::recordDiff(FitContext *fc, int v1, Eigen::MatrixBase<T> &rijWork
 
 void ComputeEM::observedFit(FitContext *fc)
 {
-	fc->copyParamToModel();
 	ComputeFit("EM", fit3, FF_COMPUTE_FIT, fc);
 	if (verbose >= 4) mxLog("ComputeEM[%d]: observed fit = %f", EMcycles, fc->fit);
 
@@ -2894,7 +2809,6 @@ void ComputeEM::observedFit(FitContext *fc)
 template <typename T1>
 void ComputeEM::accelLineSearch(bool major, FitContext *fc, Eigen::MatrixBase<T1> &preAccel)
 {
-	Eigen::Map< Eigen::VectorXd > pVec(fc->est, fc->numParam);
 	if (!accel->calcDirection(major)) {
 		observedFit(fc);
 		return;
@@ -2903,14 +2817,15 @@ void ComputeEM::accelLineSearch(bool major, FitContext *fc, Eigen::MatrixBase<T1
 	double speed = 1.0;
 	int retry = 3;
 	while (--retry) {
-		pVec = (accel->dir * speed + preAccel).cwiseMax(lbound).cwiseMin(ubound);
+    Eigen::VectorXd pVec((accel->dir * speed + preAccel).cwiseMax(lbound).cwiseMin(ubound));
+    fc->setEstFromOptimizer(pVec);
 		observedFit(fc);
 		if (std::isfinite(fc->fit)) return;
 		speed *= .3;
 		if (verbose >= 3) mxLog("%s: fit NaN; reduce accel speed to %f", name, speed);
 	}
 	// give up
-	pVec = preAccel;
+  fc->setEstFromOptimizer(preAccel);
 	observedFit(fc);
 }
 
@@ -2920,7 +2835,9 @@ void ComputeEM::computeImpl(FitContext *fc)
 	double prevFit = 0;
 	double mac = tolerance * 10;
 	bool converged = false;
-	const int freeVars = int(fc->varGroup->vars.size());
+  // Can't omxAlgebraPreeval because fit function is unknown here
+  fc->calcNumFree();
+	const int freeVars = fc->getNumFree();
 	bool in_middle = false;
 	maxHistLen = 0;
 	EMcycles = 0;
@@ -2934,10 +2851,10 @@ void ComputeEM::computeImpl(FitContext *fc)
 	if (useVaradhan) accel = new Varadhan2008(fc, verbose);
 
 	int mstepInform = INFORM_UNINITIALIZED;
-	std::vector<double> prevEst(fc->numParam);
+	std::vector<double> prevEst(fc->getNumFree());
 	while (EMcycles < maxIter) {
 		++ EMcycles;
-		memcpy(&prevEst[0], fc->est, sizeof(double) * fc->numParam);
+    fc->copyEstToOptimizer(prevEst);
 		if (verbose >= 4) mxLog("ComputeEM[%d]: E-step", EMcycles);
 		estep->compute(fc);
 		fc->wanted &= ~FF_COMPUTE_DERIV;
@@ -2969,8 +2886,8 @@ void ComputeEM::computeImpl(FitContext *fc)
 				}
 			}
 
-			Eigen::Map< Eigen::VectorXd > pVec(fc->est, fc->numParam);
-			Eigen::VectorXd preAccel = pVec;
+			Eigen::VectorXd preAccel(fc->getNumFree());
+      fc->copyEstToOptimizer(preAccel);
 			accel->recordTrajectory(prevEst);
 
 			if (EMcycles > 3 && (EMcycles + 1) % 3 == 0) {
@@ -3022,7 +2939,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 
 		if (semMethod == ClassicSEM || ((semMethod == TianSEM || semMethod == AgileSEM) && in_middle)) {
 			double *estCopy = new double[freeVars];
-			memcpy(estCopy, fc->est, sizeof(double) * freeVars);
+      fc->copyEstToOptimizer(estCopy);
 			estHistory.push_back(estCopy);
 		}
 	}
@@ -3037,7 +2954,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 	if (!converged || fc->skippedRows || information == EMInfoNone) return;
 
 	optimum.resize(freeVars);
-	memcpy(optimum.data(), fc->est, sizeof(double) * freeVars);
+  fc->copyEstToOptimizer(optimum);
 
 	if (information == EMInfoMengRubinFamily) {
 		MengRubinFamily(fc);
@@ -3048,8 +2965,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 	}
 
 	fc->fit = bestFit;
-	memcpy(fc->est, optimum.data(), sizeof(double) * freeVars);
-	fc->copyParamToModel();
+  fc->setEstFromOptimizer(optimum);
 }
 
 struct estep_jacobian_functional {
@@ -3067,18 +2983,15 @@ struct estep_jacobian_functional {
 template <typename T1, typename T2>
 void ComputeEM::dEstep(FitContext *fc, Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result)
 {
-	Eigen::Map< Eigen::ArrayXd > Est(fc->est, fc->numParam);
-	Est = x;
-	fc->copyParamToModel();
+  fc->setEstFromOptimizer(x);
 
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_PREOPTIMIZE, fc);
 	}
 
-	Est = optimum;
-	fc->copyParamToModelClean();
+  fc->setEstFromOptimizerClean(optimum);
 
-	fc->gradZ = Eigen::VectorXd::Zero(fc->numParam);
+	fc->gradZ = Eigen::VectorXd::Zero(fc->getNumFree());
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
 		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_GRADIENT, fc);
 	}
@@ -3491,7 +3404,7 @@ void omxComputeOnce::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	for (int ax=0; ax < (int) algebras.size(); ++ax) {
 		omxFitFunction *ff = algebras[ax]->fitFunction;
-		if (gradient && (!ff || !ff->gradientAvailable)) {
+		if (gradient && !ff) {
 			mxThrow("Gradient requested but not available");
 		}
 		if ((hessian || ihessian || hgprod) && (!ff || !ff->hessianAvailable)) {
@@ -3504,6 +3417,8 @@ void omxComputeOnce::initFromFrontend(omxState *globalState, SEXP rObj)
 
 void omxComputeOnce::computeImpl(FitContext *fc)
 {
+  fc->calcNumFree();
+
 	if (algebras.size()) {
 		int want = 0;
 		if (starting) {
@@ -3520,7 +3435,6 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 		}
 		if (gradient) {
 			want |= FF_COMPUTE_GRADIENT;
-			fc->initGrad();
 		}
 		if (hessian) {
 			want |= FF_COMPUTE_HESSIAN;
@@ -3529,7 +3443,7 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 		if (infoMat) {
 			want |= FF_COMPUTE_INFO;
 			fc->infoMethod = infoMethod;
-			fc->initGrad();
+			fc->initGrad(); // remove? TODO
 			fc->clearHessian();
 			fc->preInfo();
 		}
@@ -3539,10 +3453,13 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 		}
 		if (!want) return;
 
+    fc->createChildren();
+
 		for (size_t wx=0; wx < algebras.size(); ++wx) {
 			omxMatrix *algebra = algebras[wx];
 			if (algebra->fitFunction) {
 				omxAlgebraPreeval(algebra, fc);
+
 				ComputeFit("Once", algebra, want, fc);
 				if (infoMat) {
 					fc->postInfo();
@@ -3612,13 +3529,19 @@ void ComputeJacobian::initFromFrontend(omxState *state, SEXP rObj)
 
 void ComputeJacobian::computeImpl(FitContext *fc)
 {
-	int numFree = fc->calcNumFree();
-	Eigen::Map< Eigen::VectorXd > curEst(fc->est, numFree);
+  fc->calcNumFree();  // can't omxAlgebraPreeval because no fitmat
+	int numFree = fc->getNumFree();
 	if (sense.defvar_row != NA_INTEGER) {
 		data->loadDefVars(fc->state, sense.defvar_row - 1);
 	}
-	sense.measureRef(fc);
-	fd_jacobian<false>(GradientAlgorithm_Forward, 2, 1e-4, sense, sense.ref, curEst, sense.result);
+
+  sense.measureRef(fc);
+  fc->createChildren();
+  AutoTune<JacobianGadget> jg(name);
+  jg.setWork(std::unique_ptr<JacobianGadget>(new JacobianGadget(numFree)));
+  jg.work().setAlgoOptions(GradientAlgorithm_Forward, 2, 1e-4);
+  jg(sense, sense.ref, [&fc](){ return fc->getCurrentFree(); }, false, sense.result);
+  fc->destroyChildren();
 }
 
 void ComputeJacobian::reportResults(FitContext *fc, MxRList *slots, MxRList *out)
@@ -3675,7 +3598,7 @@ template <typename T1> bool isULS(const Eigen::MatrixBase<T1> &acov)
 void ComputeStandardError::computeImpl(FitContext *fc)
 {
 	if (fc->fitUnits == FIT_UNITS_UNINITIALIZED) return;
-	int numFree = fc->calcNumFree();
+	int numFree = fc->getNumFree();
 	if (fc->fitUnits == FIT_UNITS_MINUS2LL) {
 		if (!fc->vcov.size()) {
 			fc->vcov.resize(numFree, numFree);
@@ -3772,14 +3695,18 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 			});
 	}
 
-	Eigen::Map< Eigen::VectorXd > curEst(fc->est, numFree);
 	ParJacobianSense sense;
 	sense.attach(&exList, 0);
 	sense.measureRef(fc);
-	fd_jacobian<false>(GradientAlgorithm_Forward, 2, 1e-4, sense, sense.ref, curEst, sense.result);
+  fc->createChildren(fitMat, false);
+  AutoTune<JacobianGadget> jg(name);
+  jg.setWork(std::unique_ptr<JacobianGadget>(new JacobianGadget(numFree)));
+  jg.work().setAlgoOptions(GradientAlgorithm_Forward, 2, 1e-4);
+  jg(sense, sense.ref, [&fc](){ return fc->getCurrentFree(); }, false, sense.result);
+  fc->destroyChildren();
 
-	Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr1(sense.result);
-	Eigen::MatrixXd q1 = qr1.householderQ();
+	Eigen::FullPivHouseholderQR<Eigen::MatrixXd> qr1(sense.result);
+	Eigen::MatrixXd q1 = qr1.matrixQ();
 	Eigen::MatrixXd jacOC = q1.block(0, qr1.rank(), q1.rows(), q1.cols() - qr1.rank());
 	if (jacOC.cols()) {
 		Eigen::MatrixXd zqb = jacOC.transpose() * Wmat * jacOC;
@@ -3787,7 +3714,7 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 
 		Eigen::VectorXd diff = obStats - exStats;
 		x2 = diff.transpose() * jacOC * zqb * jacOC.transpose() * diff;
-		Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(jacOC);
+		Eigen::FullPivHouseholderQR<Eigen::MatrixXd> qr2(jacOC);
 		df = qr2.rank();
 	} else {
 		x2 = 0;
@@ -3808,7 +3735,7 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 	double trUW = UW.diagonal().array().sum();
 	madj = trUW / df;
 	x2m = fc->fit / madj;
-	dstar = round((trUW * trUW) / UW2.diagonal().array().sum());
+	dstar = (trUW * trUW) / UW2.diagonal().array().sum();
 	mvadj = (trUW*trUW) / dstar;
 	x2mv = fc->fit / mvadj;
 	// N.B. x2mv is off by a factor of N where N is the total number of rows in all data sets for the ULS case.
@@ -3818,20 +3745,16 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 
 void ComputeStandardError::reportResults(FitContext *fc, MxRList *slots, MxRList *out)
 {
-	int numFree=0;
+	int numFree = fc->getNumFree();
 	SEXP parNames=0, dimnames=0;
 
 	if (fc->vcov.size() || fc->stderrs.size()) {
-		numFree = fc->calcNumFree();
-		if (numFree != fc->stderrs.size()) {
-			mxThrow("%s: numFree != fc->stderrs.size() %d != %d",
-				name, numFree, fc->stderrs.size());
-		}
+		if (numFree != fc->stderrs.size()) OOPS;
 
 		parNames = Rf_allocVector(STRSXP, numFree);
 		Rf_protect(parNames);
-		for (int vx=0, px=0; vx < int(fc->numParam) && px < numFree; ++vx) {
-			if (fc->profiledOut[vx]) continue;
+		for (int vx=0, px=0; vx < int(fc->numParam); ++vx) {
+			if (fc->profiledOutZ[vx]) continue;
 			SET_STRING_ELT(parNames, px++, Rf_mkChar(varGroup->vars[vx]->name));
 		}
 
@@ -3877,9 +3800,9 @@ void ComputeHessianQuality::initFromFrontend(omxState *globalState, SEXP rObj)
 	verbose = Rf_asInteger(slotValue);
 }
 
-void ComputeHessianQuality::reportResults(FitContext *fc, MxRList *slots, MxRList *)
+bool FitContext::isEffectivelyUnconstrained()
 {
-	if (!(fc->wanted & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN))) return;
+  if (isUnconstrained()) return true;
 
 	/*
 	 * If there are equality MxConstraints, then the quality of the generically calculated Hessian will not be informative;
@@ -3888,15 +3811,31 @@ void ComputeHessianQuality::reportResults(FitContext *fc, MxRList *slots, MxRLis
 	 * The quality of the generically calculated Hessian is likewise uninformative if there are active inequality MxConstraints.
 	 * But, if there are no equalities, and all of the inequalities are inactive, then we might as well proceed (corner case as that may be):
 	*/
-	if(fc->state->conListX.size()){
-		//Any compute step that cares about how many constraints there are needs to ask the omxState to recount:
-		fc->state->countNonlinearConstraints(fc->state->numEqC, fc->state->numIneqC, false);
-		int nf = fc->calcNumFree();
-		fc->inequality.resize(fc->state->numIneqC);
-		fc->analyticIneqJacTmp.resize(fc->state->numIneqC, nf);
-		fc->myineqFun(true, verbose, omxConstraint::LESS_THAN, false);
-		if(fc->state->numEqC || fc->inequality.array().sum()){return;}
-	}
+  ConstraintVec EqC(this, "eq",
+                    [](const omxConstraint &con){ return con.opCode == omxConstraint::EQUALITY; });
+  if (EqC.getCount()) {
+    if (EqC.verbose >= 1) mxLog("isEffectivelyUnconstrained: equality constraint active");
+    return false;
+  }
+
+  ConstraintVec IneqC(this, "ineq",
+                      [](const omxConstraint &con){ return con.opCode != omxConstraint::EQUALITY; });
+  Eigen::ArrayXd ineq(IneqC.getCount());
+  IneqC.eval(this, ineq.data());
+  if (ineq.sum() != 0.0) {
+    if (IneqC.verbose >= 1) mxLog("isEffectivelyUnconstrained: inequality "
+                                  "constraint active (%f)", ineq.sum());
+    return false;
+  }
+
+  return true;
+}
+
+void ComputeHessianQuality::reportResults(FitContext *fc, MxRList *slots, MxRList *)
+{
+	if (!(fc->wanted & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN))) return;
+
+  if (!fc->isEffectivelyUnconstrained()) return;
 
 	// See Luenberger & Ye (2008) Second Order Test (p. 190) and Condition Number (p. 239)
 
@@ -3955,21 +3894,8 @@ void ComputeReportDeriv::reportResults(FitContext *fc, MxRList *, MxRList *resul
 		 * 'constraintRows', and 'constraintCols' to populate the dimnames of 'constraintFunctionValues' and
 		 * 'constraintJacobian'.
 		 */
-		SEXP cn, cr, cc, cv, cjac;
-		size_t i=0;
-		{
-			Rf_protect(cn = Rf_allocVector( STRSXP, fc->state->conListX.size() ));
-			Rf_protect(cr = Rf_allocVector( INTSXP, fc->state->conListX.size() ));
-			Rf_protect(cc = Rf_allocVector( INTSXP, fc->state->conListX.size() ));
-			for(i=0; i < fc->state->conListX.size(); i++){
-				SET_STRING_ELT( cn, i, Rf_mkChar(fc->state->conListX[i]->name) );
-				INTEGER(cr)[i] = fc->state->conListX[i]->nrows;
-				INTEGER(cc)[i] = fc->state->conListX[i]->ncols;
-			}
-			result->add("constraintNames", cn);
-			result->add("constraintRows", cr);
-			result->add("constraintCols", cc);
-		}
+		SEXP cv, cjac;
+    fc->state->reportConstraints(*result);
 		if( fc->constraintFunVals.size() ){
 			Rf_protect(cv = Rf_allocVector( REALSXP, fc->constraintFunVals.size() ));
 			memcpy( REAL(cv), fc->constraintFunVals.data(), sizeof(double) * fc->constraintFunVals.size() );
@@ -3984,12 +3910,12 @@ void ComputeReportDeriv::reportResults(FitContext *fc, MxRList *, MxRList *resul
 
 	if (!(fc->wanted & (FF_COMPUTE_GRADIENT|FF_COMPUTE_HESSIAN|FF_COMPUTE_IHESSIAN))) return;
 
-	int numFree = fc->calcNumFree();
+	int numFree = fc->getNumFree();
 
 	SEXP parNames = Rf_allocVector(STRSXP, numFree);
 	Rf_protect(parNames);
-	for (int vx=0, px=0; vx < int(fc->numParam) && px < numFree; ++vx) {
-		if (fc->profiledOut[vx]) continue;
+	for (int vx=0, px=0; vx < int(fc->numParam); ++vx) {
+		if (fc->profiledOutZ[vx]) continue;
 		SET_STRING_ELT(parNames, px++, Rf_mkChar(varGroup->vars[vx]->name));
 	}
 
@@ -4229,10 +4155,6 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 		if (only == NA_INTEGER) {
 			fc->wanted &= ~FF_COMPUTE_DERIV;  // discard garbage
 		}
-		if (verbose >= 3) {
-			auto est = fc->getEst();
-			mxPrintMat("est", est);
-		}
 		REAL(VECTOR_ELT(rawOutput, 1))[repl] = fc->fit;
 		for (int px=0; px < int(fc->numParam); ++px) {
 			REAL(VECTOR_ELT(rawOutput, 2 + px))[repl] = fc->est[px];
@@ -4344,10 +4266,10 @@ void LoadDataCSVProvider::mxScanInt(mini::csv::ifstream &st, ColumnData &rc, int
 		*out = NA_INTEGER;
 		return;
 	}
-	if (rc.levels.size()) {
+	if (rc.levelNames.size()) {
 		bool found = false; // maybe use a map for better performance?
-		for (int lx=0; lx < int(rc.levels.size()); ++lx) {
-			if (rn == rc.levels[lx]) {
+		for (int lx=0; lx < int(rc.levelNames.size()); ++lx) {
+			if (rn == rc.levelNames[lx]) {
 				found = true;
 				*out = 1+lx;
 				break;
@@ -4531,11 +4453,11 @@ class LoadDataDFProvider : public LoadDataProvider<LoadDataDFProvider> {
 				if (vec.hasAttribute("levels")) {
 					CharacterVector lev = vec.attr("levels");
 					auto &rc = (*rawCols)[ columns[cx] ];
-					if (int(rc.levels.size()) != int(lev.size())) {
+					if (int(rc.levelNames.size()) != int(lev.size())) {
 						mxThrow("%s: observed column %d (%s) has a different number"
 								 "of factor levels %d compare to the original data %d",
 								 name, 1+cx, as<const char *>(obNames[cx]),
-								 int(lev.size()), int(rc.levels.size()));
+								 int(lev.size()), int(rc.levelNames.size()));
 					}
 				}
 			}
@@ -4742,13 +4664,31 @@ void ComputeLoadData::loadedHook()
 	Providers.push_back(new LoadDataDFProvider());
 }
 
-void AddLoadDataProvider(double version, int ldpbSz, LoadDataProviderBase2 *ldp)
+unsigned int DJBHash(const char *str, std::size_t len)
 {
+   unsigned int hash = 5381;
+
+   for(std::size_t i = 0; i < len; i++) {
+     hash = ((hash << 5) + hash) + str[i];
+   }
+
+   return hash;
+}
+
+void AddLoadDataProvider(double version, unsigned int otherHash,
+                         LoadDataProviderBase2 *ldp)
+{
+  std::size_t sz2[] = {
+               sizeof(dataPtr),
+               sizeof(LoadDataProviderBase2),
+               sizeof(ColumnData)
+  };
+  auto apiHash = DJBHash((char*)sz2, sizeof(sz2));
 	if (version == OPENMX_LOAD_DATA_API_VERSION) {
-		if (ldpbSz != sizeof(LoadDataProviderBase2)) {
+		if (otherHash != apiHash) {
 			mxThrow("Cannot add mxComputeLoadData provider, version matches "
-							"but OpenMx is compiled with different compiler options (%d != %d)",
-							ldpbSz, int(sizeof(LoadDataProviderBase2)));
+							"but OpenMx is compiled with different compiler options (%u != %u)",
+							otherHash, apiHash);
 		}
 	} else {
 		mxThrow("Cannot add mxComputeLoadData provider, version mismatch");
@@ -5097,6 +5037,26 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 	ProtectedSEXP Rvcov(R_do_slot(rObj, Rf_install("vcov")));
 	inclVcov = Rf_asLogical(Rvcov);
 
+  auto &vg = *Global->findVarGroup(FREEVARGROUP_ALL);
+  numParam = vg.vars.size();
+
+  if (inclVcov) {
+    S4 ro(rObj);
+    if (ro.slot("vcovFilter") == R_NilValue) {
+      vcovFilter.assign(numParam, true);
+    } else {
+      CharacterVector filter = ro.slot("vcovFilter");
+      vcovFilter.assign(numParam, false);
+      for (int fx=0; fx < filter.size(); ++fx) {
+        String pstr = filter[fx];
+        auto pname = pstr.get_cstring();
+        int vx = vg.lookupVar(pname);
+        if (vx < 0) mxThrow("%s: can't find parameter called '%s'", name, pname);
+        vcovFilter[vx] = true;
+      }
+    }
+  }
+
 	ProtectedSEXP Rwhat(R_do_slot(rObj, Rf_install("what")));
 	for (int wx=0; wx < Rf_length(Rwhat); ++wx) {
 		if (isErrorRaised()) return;
@@ -5121,7 +5081,6 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 	}
 
 	std::vector< omxFreeVar* > &vars = Global->findVarGroup(FREEVARGROUP_ALL)->vars;
-	numParam = vars.size();
 
 	if (inclPar) {
 		for(int j = 0; j < numParam; j++) {
@@ -5149,13 +5108,16 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 		}
 	}
 	if (inclVcov) {
+    vcovEntries = 0;
 		for (int cx=0; cx < numParam; ++cx) {
 			for (int rx=cx; rx < numParam; ++rx) {
+        if (cx != rx && (!vcovFilter[cx] || !vcovFilter[rx])) continue;
 				std::string c1 = "V";
 				c1 += vars[rx]->name;
 				c1 += ":";
 				c1 += vars[cx]->name;
 				colnames.push_back(c1);
+        vcovEntries += 1;
 			}
 		}
 	}
@@ -5187,8 +5149,7 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 	s1.timestamp = time(0);
 	if (inclLoop) s1.computeLoopIndex = Global->computeLoopIndex;
 	if (inclPar) {
-		Eigen::Map< Eigen::VectorXd > Eest(fc->est, fc->numParam);
-		s1.est = Eest;
+		s1.est = fc->est;
 	}
 	s1.fit = fc->fit;
 	s1.fitUnits = fc->fitUnits;
@@ -5205,10 +5166,11 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 	}
 	if (inclGradient) s1.gradient = fc->gradZ;
 	if (inclVcov && fc->vcov.rows() == numParam) {
-		s1.vcov.resize(triangleLoc1(numParam));
+		s1.vcov.resize(vcovEntries);
 		int lx=0;
 		for (int cx=0; cx < numParam; ++cx) {
 			for (int rx=cx; rx < numParam; ++rx) {
+        if (cx != rx && (!vcovFilter[cx] || !vcovFilter[rx])) continue;
 				s1.vcov[lx++] = fc->vcov(rx, cx);
 			}
 		}
@@ -5308,7 +5270,7 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 			}
 		}
 		if (inclVcov) {
-			int numVcov = triangleLoc1(numParam);
+			int numVcov = vcovEntries;
 			if (s1.vcov.size()) {
 				for (int x1=0; x1 < numVcov; ++x1) {
 					ofs << '\t' << std::setprecision(digits) << s1.vcov[x1];
@@ -5457,7 +5419,7 @@ void ComputeCheckpoint::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 		}
 	}
 	if (inclVcov) {
-		int numVcov = triangleLoc1(numParam);
+		int numVcov = vcovEntries;
 		for (int x1=0; x1 < numVcov; ++x1) {
 			SEXP col = Rf_allocVector(REALSXP, numSnaps);
 			SET_VECTOR_ELT(log, curCol++, col);

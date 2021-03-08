@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2019 by the individuals mentioned in the source code history
+ *  Copyright 2007-2020 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -77,6 +77,8 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	if(OMX_DEBUG) { mxLog("Beginning WLS Evaluation.");}
 	// Requires: Data, means, covariances.
 
+  if (want & FF_COMPUTE_GRADIENT) invalidateGradient(fc);
+
 	double sum = 0.0;
 
 	omxMatrix *eCov, *eMeans, *oFlat, *eFlat;
@@ -104,7 +106,15 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	omxMatrix *weights = expectation->data->getSingleObsSummaryStats().acovMat;
 	if(weights != NULL) {
 		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(weights, "....WLS Weight Matrix: "); }
-		omxDGEMV(TRUE, 1.0, weights, B, 0.0, P);
+
+		if (units == FIT_UNITS_SQUARED_RESIDUAL) { // diagonally weighted
+      EigenMatrixAdaptor Ew(weights);
+      EigenVectorAdaptor EB(B);
+      EigenVectorAdaptor EP(P);
+      EP.derived() = Ew.diagonal().array() * EB.array();
+    } else {
+      omxDGEMV(TRUE, 1.0, weights, B, 0.0, P);
+    }
 	} else {
 		// ULS Case: Memcpy faster than dgemv.
 		omxCopyMatrix(P, B);
@@ -194,7 +204,7 @@ void omxWLSFitFunction::prepData()
 
 	omxData* dataMat = oo->expectation->data;
 
-	if (!matrix->currentState->isClone()) {
+	if (matrix->currentState->isTopState()) {
 		std::vector<int> exoPred;
 		expectation->getExogenousPredictors(exoPred);
 		// how to prohibit def vars? TODO
@@ -323,6 +333,18 @@ void omxWLSFitFunction::init()
   if (expectedSlope) {
     expectation->invalidateCache();
     expectation->connectToData();
+  }
+
+  if (false) {
+    // This is too strict because we might use def vars in a way that
+    // doesn't affect the model expectation (i.e. generate a column of
+    // the interaction between two other columns).
+    omxData *data = expectation->data;
+    if (data->defVars.size()) {
+      mxThrow("%s: There are %d definition variables. "
+              "The WLS fit function cannot handle definition variables except as exogenous predictors.",
+              name(), int(data->defVars.size()));
+    }
   }
 
 	observedFlattened = 0;

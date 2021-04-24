@@ -15,8 +15,8 @@
  *
  */
 
-#ifndef _OMXDEFINES_H_
-#define _OMXDEFINES_H_
+#ifndef u_OMXDEFINES_H_
+#define u_OMXDEFINES_H_
 
 #include <Rcpp.h>
 using namespace Rcpp;
@@ -45,7 +45,7 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 
 #define EIGEN_NO_DEBUG 1
 //#define EIGEN_DONT_PARALLELIZE
-#define  _OpenMx_Compilation_ 1  // work around bug in Eigen 3.2.5
+#define  u_OpenMx_Compilation_ 1  // work around bug in Eigen 3.2.5
 #define EIGEN_DEFAULT_DENSE_INDEX_TYPE int   // default is 8 but 4 bytes is plenty for us
 
 #ifdef OMX_BOUNDS_CHECK
@@ -67,7 +67,7 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #ifdef OMX_BOUNDS_CHECK
 #define EIGEN_INITIALIZE_MATRICES_BY_NAN
 #undef EIGEN_NO_DEBUG
-//#define _GLIBCXX_DEBUG  // but gives link errors without -D_GLIBCXX_DEBUG on command line
+//#define u_GLIBCXX_DEBUG  // but gives link errors without -D_GLIBCXX_DEBUG on command line
 #endif // OMX_BOUNDS_CHECK
 
 #ifdef DEBUGMX_ROWS
@@ -230,7 +230,12 @@ static inline int omp_get_thread_num() { return 0; }
 static inline int omp_get_num_threads(void) { return 1; }
 #endif
 
+#include <stan/math/version.hpp>
+#if STAN_MATH_MAJOR >= 4
+#include <stan/math/prim/fun/Eigen.hpp>
+#else
 #include <stan/math/prim/mat/fun/Eigen.hpp>
+#endif
 #include <Eigen/Core>
 
 // Refactor as a single split function that pulls out all 3 parts
@@ -459,13 +464,13 @@ void partitionCovarianceSet(Eigen::MatrixBase<T1> &gcov,
 	}
 }
 
-template<typename _MatrixType, int _UpLo = Eigen::Lower>
-class SimpCholesky : public Eigen::LDLT<_MatrixType, _UpLo> {
+template<typename u_MatrixType, int u_UpLo = Eigen::Lower>
+class SimpCholesky : public Eigen::LDLT<u_MatrixType, u_UpLo> {
  private:
 	Eigen::MatrixXd inverse;
 
  public:
-	typedef Eigen::LDLT<_MatrixType, _UpLo> Base;
+	typedef Eigen::LDLT<u_MatrixType, u_UpLo> Base;
 
 	SimpCholesky() : Base() {};
 	template<typename InputType>
@@ -573,7 +578,7 @@ class AssertProtectStackBalanced {
 		return diff;
 	}
  public:
- 	AssertProtectStackBalanced(const char *_context) : context(_context) {
+ 	AssertProtectStackBalanced(const char *u_context) : context(u_context) {
 		R_ProtectWithIndex(R_NilValue, &initialpix);
 		Rf_unprotect(1);
 		preDepth = getDepth();
@@ -607,4 +612,4 @@ struct cstrCmp {
 	{ return strcmp(s1,s2) < 0; }
 };
 
-#endif /* _OMXDEFINES_H_ */
+#endif /* u_OMXDEFINES_H_ */

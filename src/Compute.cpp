@@ -65,9 +65,9 @@ SEXP allocInformVector(int size)
 void FitContext::calcNumFree()
 {
   std::vector<bool> &po = profiledOutZ;
-  _numFree = numParam - std::count(po.begin(), po.end(), true);
+  u_numFree = numParam - std::count(po.begin(), po.end(), true);
   freeToIndexMap.clear();
-  freeToParamMap.resize(_numFree);
+  freeToParamMap.resize(u_numFree);
   for (int fx=0, px=0; px < numParam; ++px) {
     if (po[px]) continue;
     freeToIndexMap.emplace(varGroup->vars[px]->name, fx);
@@ -665,7 +665,7 @@ int HessianBlock::estNonZero() const
 void FitContext::init()
 {
 	numParam = varGroup->vars.size();
-  _numFree = -1;
+  u_numFree = -1;
 	wanted = 0;
 	mac = parent? parent->mac : 0;
 	fit = parent? parent->fit : NA_REAL;
@@ -811,7 +811,7 @@ void FitContext::calcStderrs()
 	}
 }
 
-FitContext::FitContext(omxState *_state)
+FitContext::FitContext(omxState *u_state)
 {
 	parent = NULL;
 	varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
@@ -819,7 +819,7 @@ FitContext::FitContext(omxState *_state)
 	profiledOutZ.assign(numParam, false);
 
 	auto &startingValues = Global->startingValues;
-	state = _state;
+	state = u_state;
 	if (numParam) {
 		if (int(startingValues.size()) != numParam) {
 			mxThrow("Got %d starting values for %d parameters",
@@ -831,10 +831,10 @@ FitContext::FitContext(omxState *_state)
 	//inequality.resize(state->numIneqC);
 }
 
-FitContext::FitContext(FitContext *_parent, FreeVarGroup *_varGroup)
+FitContext::FitContext(FitContext *u_parent, FreeVarGroup *u_varGroup)
 {
-	this->parent = _parent;
-	this->varGroup = _varGroup;
+	this->parent = u_parent;
+	this->varGroup = u_varGroup;
 	init();
 
 	state = parent->state;
@@ -1031,7 +1031,7 @@ std::string FitContext::getIterationError()
 	}
 }
 
-static void _fixSymmetry(const char *name, double *mat, size_t numParam, bool force)
+static void u_fixSymmetry(const char *name, double *mat, size_t numParam, bool force)
 {
 	for (size_t h1=1; h1 < numParam; h1++) {
 		for (size_t h2=0; h2 < h1; h2++) {
@@ -1160,7 +1160,7 @@ void FitContext::postInfo()
 		std::vector<double> work(numParam * numParam);
 		ThinMatrix amat(infoA, numParam, numParam);
 		InvertSymmetricIndef(amat, 'U');
-		_fixSymmetry("InfoB", infoB, numParam, false);
+		u_fixSymmetry("InfoB", infoB, numParam, false);
 		ThinMatrix bmat(infoB, numParam, numParam);
 		ThinMatrix wmat(work.data(), numParam, numParam);
 		ThinMatrix hmat(getDenseIHessUninitialized(), numParam, numParam);
@@ -1192,13 +1192,13 @@ bool FitContext::isClone() const
 
 struct ParallelInvalidator : StateInvalidator {
   typedef StateInvalidator super;
-  ParallelInvalidator(omxState &_st) : super(_st) {}
-	virtual void doExpectation() {}
-  virtual void doData() {}
-  virtual void doMatrix() {}
+  ParallelInvalidator(omxState &u_st) : super(u_st) {}
+	virtual void doExpectation() override {}
+  virtual void doData() override {}
+  virtual void doMatrix() override {}
 };
 
-void FitContext::createChildren(omxMatrix *alg, bool _permitParallel)
+void FitContext::createChildren(omxMatrix *alg, bool u_permitParallel)
 {
 	if (childList.size()) {
 		diagParallel(OMX_DEBUG, "FitContext::createChildren: ignored, childList already populated");
@@ -1208,16 +1208,16 @@ void FitContext::createChildren(omxMatrix *alg, bool _permitParallel)
   openmpUser = false;
 	if (Global->numThreads <= 1) {
 		diagParallel(OMX_DEBUG, "FitContext::createChildren: max threads set to 1");
-    _permitParallel = false;
+    u_permitParallel = false;
 	}
 
   diagParallel(OMX_DEBUG, "FitContext::createChildren(%s, %d)",
-               alg? alg->name() : "NULL", _permitParallel);
+               alg? alg->name() : "NULL", u_permitParallel);
 
   ParallelInvalidator pi(*state);
   pi();
 
-  permitParallel = _permitParallel;
+  permitParallel = u_permitParallel;
   if (alg) omxAlgebraPreeval(alg, this);
 
 	if (Global->numThreads <= 1)  return;
@@ -1227,7 +1227,7 @@ void FitContext::createChildren(omxMatrix *alg, bool _permitParallel)
   if (alg) {
     for (auto kid : childList) omxAlgebraPreeval(alg, kid);
   }
-  if (!_permitParallel) {
+  if (!u_permitParallel) {
     if (openmpUser) OOPS;
   }
 }
@@ -1364,7 +1364,7 @@ protected:
 	int verbose;
 
 public:
-	EMAccel(FitContext *_fc, int _verbose) : fc(_fc), verbose(_verbose) {
+	EMAccel(FitContext *u_fc, int u_verbose) : fc(u_fc), verbose(u_verbose) {
 		numParam = fc->getNumFree();
 		prevAdj1.assign(numParam, 0);
 		prevAdj2.resize(numParam);
@@ -1398,12 +1398,12 @@ public:
 	double caution;
 
 	Ramsay1975(FitContext *fc, int verbose, double minCaution);
-	virtual void recalibrate();
-	virtual bool calcDirection(bool major);
+	virtual void recalibrate() override;
+	virtual bool calcDirection(bool major) override;
 };
 
-Ramsay1975::Ramsay1975(FitContext *_fc, int _verbose, double _minCaution) :
-	EMAccel(_fc, _verbose), minCaution(_minCaution)
+Ramsay1975::Ramsay1975(FitContext *u_fc, int u_verbose, double u_minCaution) :
+	EMAccel(u_fc, u_verbose), minCaution(u_minCaution)
 {
 	maxCaution = 0.0;
 	caution = 0;
@@ -1497,16 +1497,16 @@ class Varadhan2008 : public EMAccel {
 	Eigen::VectorXd vv;
 
 public:
-	Varadhan2008(FitContext *_fc, int _verbose) :
-		EMAccel(_fc, _verbose), rr(&prevAdj2[0], numParam), vv(numParam)
+	Varadhan2008(FitContext *u_fc, int u_verbose) :
+		EMAccel(u_fc, u_verbose), rr(&prevAdj2[0], numParam), vv(numParam)
 	{
 		alpha = 0;
 		maxAlpha = 0;
 		retried = false;
 	};
-	virtual void recalibrate();
-	virtual bool retry();
-	virtual bool calcDirection(bool major);
+	virtual void recalibrate() override;
+	virtual bool retry() override;
+	virtual bool calcDirection(bool major) override;
 };
 
 bool Varadhan2008::calcDirection(bool major)
@@ -1645,7 +1645,7 @@ struct LeaveComputeWithVarGroup {
 	ComputeInform origInform;
 	const char *name;
 
-	LeaveComputeWithVarGroup(FitContext *_fc, struct omxCompute *compute) : fc(_fc), name(compute->name) {
+	LeaveComputeWithVarGroup(FitContext *u_fc, struct omxCompute *compute) : fc(u_fc), name(compute->name) {
 		origInform = fc->getInform();
 		toResetInform = compute->accumulateInform();
 		if (toResetInform) fc->setInform(INFORM_UNINITIALIZED);
@@ -1676,7 +1676,7 @@ class ComputeContainer : public omxCompute {
 protected:
 	std::vector< omxCompute* > clist;
 public:
-	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out);
+	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out) override;
 };
 
 void ComputeContainer::collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out)
@@ -1690,8 +1690,8 @@ class omxComputeSequence : public ComputeContainer {
 	bool independent;
 
  public:
-	virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
+	virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
 	virtual ~omxComputeSequence();
 };
 
@@ -1704,9 +1704,9 @@ class omxComputeIterate : public ComputeContainer {
 	int verbose;
 
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 	virtual ~omxComputeIterate();
 };
 
@@ -1721,9 +1721,9 @@ class ComputeLoop : public ComputeContainer {
 	int startFrom;
 
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 	virtual ~ComputeLoop();
 };
 
@@ -1746,9 +1746,9 @@ class omxComputeOnce : public omxCompute {
 	bool isBestFit; // for backward compatibility
 
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeEM : public omxCompute {
@@ -1817,10 +1817,10 @@ class ComputeEM : public omxCompute {
 	template <typename T1, typename T2>
 	void dEstep(FitContext *fc, Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result);
 
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 	virtual ~ComputeEM();
 };
 
@@ -1828,8 +1828,8 @@ const double ComputeEM::MIDDLE_START = 0.105360515657826281366; // -log(.9) cons
 const double ComputeEM::MIDDLE_END = 0.001000500333583534363566; // -log(.999) constexpr
 
 struct ComputeSetOriginalStarts : public omxCompute {
-	virtual bool accumulateInform() { return false; };
-        virtual void computeImpl(FitContext *fc);
+	virtual bool accumulateInform() override { return false; };
+        virtual void computeImpl(FitContext *fc) override;
 };
 
 class ComputeStandardError : public omxCompute {
@@ -1862,9 +1862,9 @@ class ComputeStandardError : public omxCompute {
 			}
 			omxData *d1 = e1->data;
 			d1->visitObsStats([this, d1](obsSummaryStats &o1) {
-					if (o1.fullWeight) return;
+					if (o1.asymCov) return;
 					mxThrow("%s: terribly sorry, master, but '%s' does not "
-						"include the full weight matrix hence "
+						"include the asymptotic covariance matrix hence "
 						"standard errors cannot be computed",
 						top.name, d1->name);
 				});
@@ -1873,9 +1873,9 @@ class ComputeStandardError : public omxCompute {
 	};
 
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 struct ParJacobianSense {
@@ -1894,10 +1894,10 @@ struct ParJacobianSense {
 	// default defvar_row to 1 or 0? TODO
 	ParJacobianSense() : exList(0), alList(0), defvar_row(1) {};
 
-	void attach(std::vector<omxExpectation *> *_exList, std::vector<omxMatrix *> *_alList) {
-		if (_exList && _alList) mxThrow("_exList && _alList");
-		exList = _exList;
-		alList = _alList;
+	void attach(std::vector<omxExpectation *> *u_exList, std::vector<omxMatrix *> *u_alList) {
+		if (u_exList && u_alList) mxThrow("u_exList && u_alList");
+		exList = u_exList;
+		alList = u_alList;
 		numOf = exList? exList->size() : alList->size();
 		numStats.reserve(numOf);
 		maxNumStats = 0;
@@ -1910,10 +1910,10 @@ struct ParJacobianSense {
 		}
 	};
 
-	void measureRef(FitContext *_fc) {
+	void measureRef(FitContext *u_fc) {
 		using Eigen::Map;
 		using Eigen::VectorXd;
-		fc = _fc;
+		fc = u_fc;
 		numFree = fc->getNumFree();
 		result.resize(totalNumStats, numFree);
 		ref.resize(totalNumStats);
@@ -1955,23 +1955,23 @@ class ComputeJacobian : public omxCompute {
 	ParJacobianSense sense;
 
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeHessianQuality : public omxCompute {
 	typedef omxCompute super;
 	int verbose;
  public:
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeReportDeriv : public omxCompute {
 	typedef omxCompute super;
  public:
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeCheckpoint : public omxCompute {
@@ -2014,16 +2014,16 @@ class ComputeCheckpoint : public omxCompute {
 	size_t numExtraCols;
 
  public:
-	virtual bool accumulateInform() { return false; };
-        virtual void initFromFrontend(omxState *, SEXP rObj);
-        virtual void computeImpl(FitContext *fc);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+	virtual bool accumulateInform() override { return false; };
+        virtual void initFromFrontend(omxState *, SEXP rObj) override;
+        virtual void computeImpl(FitContext *fc) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeReportExpectation : public omxCompute {
 	typedef omxCompute super;
  public:
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeBootstrap : public omxCompute {
@@ -2052,11 +2052,11 @@ class ComputeBootstrap : public omxCompute {
  public:
 	ComputeBootstrap() : plan(0) {};
 	virtual ~ComputeBootstrap();
-	virtual bool accumulateInform() { return false; };
-	virtual void initFromFrontend(omxState *, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
-	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out);
-	virtual void reportResults(FitContext *fc, MxRList *, MxRList *result);
+	virtual bool accumulateInform() override { return false; };
+	virtual void initFromFrontend(omxState *, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out) override;
+	virtual void reportResults(FitContext *fc, MxRList *, MxRList *result) override;
 };
 
 class ComputeGenerateData : public omxCompute {
@@ -2065,9 +2065,9 @@ class ComputeGenerateData : public omxCompute {
 	MxRList simData;
 
  public:
-	virtual void initFromFrontend(omxState *globalState, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
-        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out);
+	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+        virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *out) override;
 };
 
 class ComputeLoadData : public omxCompute {
@@ -2083,18 +2083,18 @@ class ComputeLoadData : public omxCompute {
 		typedef StateInvalidator super;
 		omxData *data;
 		const std::vector< int > &columns;
-		ColumnInvalidator(omxState &_st, omxData *_data,
-				  const std::vector< int > &_columns) :
-			super(_st), data(_data), columns(_columns) {};
-		virtual void doData() { data->invalidateColumnsCache(columns); };
+		ColumnInvalidator(omxState &u_st, omxData *u_data,
+				  const std::vector< int > &u_columns) :
+			super(u_st), data(u_data), columns(u_columns) {};
+		virtual void doData() override { data->invalidateColumnsCache(columns); };
 	};
 
  public:
 	static void loadedHook();
 	static void addProvider(LoadDataProviderBase2 *ldp) { Providers.push_back(ldp); }
-	virtual void initFromFrontend(omxState *globalState, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
-	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *);
+	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *) override;
 };
 
 std::vector<LoadDataProviderBase2*> ComputeLoadData::Providers;
@@ -2124,8 +2124,8 @@ class ComputeLoadMatrix : public omxCompute {
 
  public:
 	virtual ~ComputeLoadMatrix();
-	virtual void initFromFrontend(omxState *globalState, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
+	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
 };
 
 class ComputeLoadContext : public omxCompute {
@@ -2147,9 +2147,9 @@ class ComputeLoadContext : public omxCompute {
 	void reopen();
 
  public:
-	virtual void initFromFrontend(omxState *globalState, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
-	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *);
+	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *) override;
 };
 
 class ComputeTryCatch : public omxCompute {
@@ -2158,9 +2158,9 @@ class ComputeTryCatch : public omxCompute {
 	int cpIndex;
 
 public:
-	virtual void initFromFrontend(omxState *, SEXP rObj);
-	virtual void computeImpl(FitContext *fc);
-	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out);
+	virtual void initFromFrontend(omxState *, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out) override;
 };
 
 static class omxCompute *newComputeSequence()
@@ -2972,7 +2972,7 @@ struct estep_jacobian_functional {
 	ComputeEM *em;
 	FitContext *fc;
 
-	estep_jacobian_functional(ComputeEM *_em, FitContext *_fc) : em(_em), fc(_fc) {};
+	estep_jacobian_functional(ComputeEM *u_em, FitContext *u_fc) : em(u_em), fc(u_fc) {};
 
 	template <typename T1, typename T2>
 	void operator()(Eigen::MatrixBase<T1> &x, Eigen::MatrixBase<T2> &result) const {
@@ -3629,7 +3629,7 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 		e1->data->visitObsStats([&](obsSummaryStats &o1){
 				numOrdinal += o1.numOrdinal;
 				totalWeight += o1.totalWeight;
-				int sz = o1.fullWeight->rows;
+				int sz = o1.asymCov->rows;
 				numStats.push_back(sz);
 				totalStats += sz;
 			});
@@ -3664,32 +3664,15 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 				}
 				obStats.segment(offset, sz) = vec1;
 
-				if (o1.acovMat) {
-					EigenMatrixAdaptor acov(o1.acovMat);
-					Vmat.block(offset,offset,sz,sz) = acov;
+				if (o1.useWeight) {
+					EigenMatrixAdaptor uw(o1.useWeight);
+					Vmat.block(offset,offset,sz,sz) = uw;
 				} else {
 					Vmat.block(offset,offset,sz,sz).setIdentity();
 				}
 
-				EigenMatrixAdaptor fw(o1.fullWeight);
-				int nonZeroDims = (fw.diagonal().array() != 0.0).count();
-				if (nonZeroDims == 0) {
-					omxRaiseErrorf("%s: fullWeight matrix is missing", exList[ex]->name);
-					return;
-				}
-				Eigen::MatrixXd ifw(fw.rows(), fw.cols());
-				ifw.setZero();
-				Eigen::MatrixXd dense;
-				subsetCovariance(fw, [&](int xx){ return fw.diagonal().coeff(xx,xx) != 0.0; },
-						 nonZeroDims, dense);
-				if (InvertSymmetricIndef(dense, 'L') > 0) {
-					MoorePenroseInverse(dense);
-				}
-				Eigen::MatrixXd idense = dense.selfadjointView<Eigen::Lower>();
-				subsetCovarianceStore(ifw,
-						      [&](int xx){ return fw.diagonal().coeff(xx,xx) != 0.0; },
-						      idense);
-				Wmat.block(offset,offset,sz,sz) = ifw;
+				EigenMatrixAdaptor ac(o1.asymCov);
+				Wmat.block(offset,offset,sz,sz) = ac;
 				offset += sz;
 				sx += 1;
 			});
@@ -4227,8 +4210,8 @@ class LoadDataCSVProvider : public LoadDataProvider<LoadDataCSVProvider> {
 	int cpIndex;
 	bool byrow;
 
-	virtual const char *getName() { return "csv"; };
-	virtual void init(SEXP rObj) {
+	virtual const char *getName() override { return "csv"; };
+	virtual void init(SEXP rObj) override {
 		ProtectedSEXP Rbyrow(R_do_slot(rObj, Rf_install("byrow")));
 		byrow = Rf_asLogical(Rbyrow);
 		ProtectedSEXP Rcs(R_do_slot(rObj, Rf_install("cacheSize")));
@@ -4236,7 +4219,7 @@ class LoadDataCSVProvider : public LoadDataProvider<LoadDataCSVProvider> {
 		if (!byrow) stripeSize = std::max(Rf_asInteger(Rcs), 1);
 		requireFile(rObj);
 	}
-	virtual void addCheckpointColumns(std::vector< std::string > &cp)
+	virtual void addCheckpointColumns(std::vector< std::string > &cp) override
 	{
 		if (rowNames == 0 || !byrow) return;
 		cpIndex = cp.size();
@@ -4248,7 +4231,7 @@ class LoadDataCSVProvider : public LoadDataProvider<LoadDataCSVProvider> {
 	}
 	void loadByCol(int index);
 	void loadByRow(int index);
-	virtual void loadRowImpl(int index)
+	virtual void loadRowImpl(int index) override
 	{
 		if (!byrow) {
 			loadByCol(index);
@@ -4416,11 +4399,11 @@ class LoadDataDFProvider : public LoadDataProvider<LoadDataDFProvider> {
 	bool byrow;
 	Rcpp::DataFrame observed;
 
-	virtual const char *getName() { return "data.frame"; };
-	virtual int getNumVariants() {
+	virtual const char *getName() override { return "data.frame"; };
+	virtual int getNumVariants() override {
 		return (observed.nrows() / srcRows) * (observed.ncol() / columns.size());
 	}
-	virtual void init(SEXP rObj) {
+	virtual void init(SEXP rObj) override {
 		ProtectedSEXP Rbyrow(R_do_slot(rObj, Rf_install("byrow")));
 		byrow = Rf_asLogical(Rbyrow);
 		if (byrow) mxThrow("byrow=TRUE not implemented for data.frame data");
@@ -4463,7 +4446,7 @@ class LoadDataDFProvider : public LoadDataProvider<LoadDataDFProvider> {
 			}
 		}
 	}
-	virtual void loadRowImpl(int index)
+	virtual void loadRowImpl(int index) override
 	{
 		auto &rc = *rawCols;
 		if (observed.nrows() != srcRows) {
@@ -4511,20 +4494,20 @@ class LoadDataDFProvider : public LoadDataProvider<LoadDataDFProvider> {
 	}
 };
 
-void LoadDataProviderBase2::commonInit(SEXP rObj, const char *_name,
-                                       const char *_dataName, int _rows,
-                                       std::vector<ColumnData> &_rawCols,
-                                       ColMapType &_rawColMap,
-                                       std::vector< std::string > &_checkpointValues,
+void LoadDataProviderBase2::commonInit(SEXP rObj, const char *u_name,
+                                       const char *u_dataName, int u_rows,
+                                       std::vector<ColumnData> &u_rawCols,
+                                       ColMapType &u_rawColMap,
+                                       std::vector< std::string > &u_checkpointValues,
                                        bool useOriginalData)
 {
-	name = _name;
-	dataName = _dataName;
-	destRows = _rows;
-	srcRows = _rows;
-	rawCols = &_rawCols;
-	rawColMap = &_rawColMap;
-	checkpointValues = &_checkpointValues;
+	name = u_name;
+	dataName = u_dataName;
+	destRows = u_rows;
+	srcRows = u_rows;
+	rawCols = &u_rawCols;
+	rawColMap = &u_rawColMap;
+	checkpointValues = &u_checkpointValues;
 
 	curRecord = -1;
 	loadCounter = 0;
@@ -4563,7 +4546,7 @@ void LoadDataProviderBase2::commonInit(SEXP rObj, const char *_name,
 			continue;
 		}
 		columns.push_back(rci->second);
-		auto &rc = _rawCols[rci->second];
+		auto &rc = u_rawCols[rci->second];
 		colTypes.push_back(rc.type);
 		if (useOriginalData) origData.emplace_back(rc.steal());
 	}
@@ -4935,7 +4918,7 @@ struct clmStream {
 	Rcpp::DataFrame &observed;
 	const int row;
 	int curCol;
-	clmStream(Rcpp::DataFrame &_ob, int _row) : observed(_ob), row(_row) { curCol = 0; };
+	clmStream(Rcpp::DataFrame &u_ob, int u_row) : observed(u_ob), row(u_row) { curCol = 0; };
 
 	void operator >> (double& val)
 	{

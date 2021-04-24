@@ -8,7 +8,7 @@ imxSfClient()
 }
 \description{
 As of snowfall 1.84, the snowfall supervisor process
-stores an internal state information in a variable 
+stores an internal state information in a variable
 named ".sfOption" that is located in the "snowfall" namespace.
 The snowfall client processes store internal state
 information in a variable named ".sfOption" that is located

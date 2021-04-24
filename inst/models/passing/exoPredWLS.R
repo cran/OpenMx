@@ -8,6 +8,7 @@
 # TODO: Change the file name: "exoPredWLS.R" is not discoverable
 
 library(OpenMx)
+library(testthat)
 
 # Make the results repeatable (unclear if this is needed?)
 set.seed(1)
@@ -67,6 +68,10 @@ buildModel <- function(manifests= paste0('z', 1:5), type = 'WLS', slopes= TRUE) 
 jointRAM1 <- buildModel()
 jointRAM1 <- mxRun(jointRAM1)
 summary(jointRAM1)
+
+expect_equal(length(mxGetExpected(jointRAM1, 'standvector')),
+             summary(jointRAM1)$observedStatistics)
+
 # plot(jointRAM1) # (if using umx)
 
 # Where do these come from?
@@ -140,6 +145,9 @@ jointLISREL <- mxModel("JointLISREL", type="LISREL",
 # jointLISREL$expectation$verbose <- 1L
 
 jointLISREL <- mxRun(jointLISREL)
+
+expect_equal(length(mxGetExpected(jointLISREL, 'standvector')),
+             summary(jointLISREL)$observedStatistics)
 
 # Compare parameter estimates from the RAM and LISREL models
 print(max(abs(coef(jointLISREL) - coef(jointRAM1))))

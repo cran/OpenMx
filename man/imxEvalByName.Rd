@@ -19,7 +19,3 @@ imxEvalByName(name, model, compute = FALSE, show = FALSE)
 This is an internal function exported for those people who know
 what they are doing.
 }
-\details{
-This function should not be used in MxSummary. All summary
-information should be extracted from runstate.
-}

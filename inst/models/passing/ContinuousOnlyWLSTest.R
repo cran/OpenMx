@@ -35,6 +35,8 @@ library(testthat)
 require(OpenMx)
 data(Bollen)
 
+suppressWarnings(RNGversion("3.5"))
+set.seed(1)
 got <- mxGenerateData(Bollen[, 1:8], nrows=10)
 omxCheckEquals(nrow(got), 10)
 
@@ -117,9 +119,18 @@ wlsRun <- mxRun(wlsMod)
 summary(wlsRun)
 omxCheckTrue(is.null(wlsRun$output$calculatedHessian))
 
+expect_equal(length(mxGetExpected(wlsRun, 'standvector')),
+             summary(wlsRun)$observedStatistics)
+
 dwlsRun <- mxRun(dwlsMod)
 
 ulsRun <- mxRun(ulsMod)
+
+expect_equal(median(log(diag(wlsRun$data$observedStats$acov))),
+             median(log(diag(dwlsRun$data$observedStats$acov))), 1)
+
+expect_equal(diag(wlsRun$data$observedStats$fullWeight),
+             diag(dwlsRun$data$observedStats$fullWeight))
 
 print(cbind(coef(wlsRun), coef(dwlsRun), coef(ulsRun)))
 
@@ -142,8 +153,7 @@ fitParam <- c(mxEval(Lam, wlsRun)[1:4,1], diag(mxEval(Theta, wlsRun)))
 
 omxCheckCloseEnough(bollenParam, fitParam, epsilon=0.01)
 
-j1 <- expect_warning(omxManifestModelByParameterJacobian(wlsRun, standardize = TRUE),
-                     "Means requested, but model has no means")
+j1 <- omxManifestModelByParameterJacobian(wlsRun, standardize = TRUE)
 # Tedious to check all entries, but if variances match then
 # other labels are probably correct.
 expect_equivalent(j1[1:8, paste0('var',1:8)], diag(8))
@@ -156,10 +166,10 @@ dwlsMO <- omxAugmentDataWithWLSSummary(mxData(Bollen[,1:8], 'raw'), "DWLS", allC
 
 omxCheckCloseEnough(cor(vech(wlsMO$observedStats$cov),
                         vech(wlsRun$data$observedStats$cov)), 1, 5e-3)
-omxCheckCloseEnough(cor(vech(wlsMO$observedStats$acov[-1:-8,-1:-8]),
-                        vech(wlsRun$data$observedStats$acov)), 1, .15)
-omxCheckCloseEnough(cor(diag(dwlsMO$observedStats$acov)[-1:-8],
-                        diag(dwlsRun$data$observedStats$acov)), 1, .21)
+omxCheckCloseEnough(cor(vech(wlsMO$observedStats$asymCov[-1:-8,-1:-8]),
+                        vech(wlsRun$data$observedStats$asymCov)), 1, .31)
+omxCheckCloseEnough(cor(diag(dwlsMO$observedStats$useWeight)[-1:-8],
+                        diag(dwlsRun$data$observedStats$useWeight)), 1, .21)
 
 #--------------------------------------
 # Re-run with ML
@@ -179,13 +189,13 @@ wlsSum <- summary(wlsRun)
 rms <- function(x, y){sqrt(mean((x-y)^2))}
 
 # parameters are sort of close
-omxCheckTrue(rms(mlSum$parameters[,5], wlsSum$parameters[,5]) < 0.7)
+expect_equal(rms(mlSum$parameters[,5], wlsSum$parameters[,5]), 0, 0.65)
 
 # standard errors are close
-omxCheckTrue(rms(mlSum$parameters[,6], wlsSum$parameters[,6]) < 0.2)
+expect_equal(rms(mlSum$parameters[,6], wlsSum$parameters[,6]), 0, 0.18)
 
 # Chi square is on par
-omxCheckWithinPercentError(mlSum$Chi, wlsSum$Chi, percent=85)
+expect_equal(mlSum$Chi - wlsSum$Chi, 0, 11)
 
 # Chi square df are the same
 omxCheckEquals(mlSum$ChiDoF, wlsSum$ChiDoF)

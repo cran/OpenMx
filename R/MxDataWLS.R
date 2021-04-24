@@ -42,6 +42,7 @@ setMethod("initialize", "MxDataLegacyWLS",
 	}
 )
 
+# Due to confusion, acov is actually useWeight and fullWeight is asymCov
 legacyMxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullWeight=NA, thresholds=NA) {
 	if (length(means) == 1 && is.na(means)) means <- as.numeric(NA)
 	if (length(acov) == 1 && is.na(acov)) acov <- matrix(as.numeric(NA))
@@ -66,6 +67,7 @@ legacyMxData <- function(observed, type, means = NA, numObs = NA, acov=NA, fullW
 		verifyCovarianceMatrix(acov, nameMatrix="asymptotic", strictPD=FALSE)
 		if(!single.na(fullWeight)){
 			verifyCovarianceMatrix(fullWeight, nameMatrix="asymptotic", strictPD=FALSE)
+      fullWeight <- solve(fullWeight)
 		}
 		if ( !single.na(thresholds) ) {
 			verifyThresholdNames(thresholds, observed)

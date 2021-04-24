@@ -17,7 +17,11 @@
 #include "omxDefines.h"
 
 #include <utility>
+#if STAN_MATH_MAJOR >= 4
+#include <stan/math/mix.hpp>
+#else
 #include <stan/math/mix/mat.hpp>
+#endif
 #include "multi_normal_sufficient.hpp"
 
 #include "omxExpectation.h"
@@ -40,11 +44,11 @@ struct MLFitState : omxFitFunction {
 
 	MLFitState() : copiedData(false) {};
 	virtual ~MLFitState();
-	virtual omxFitFunction *initMorph();
-	virtual void init();
-	virtual void compute(int ffcompute, FitContext *fc);
-	virtual void populateAttr(SEXP algebra);
-	virtual void addOutput(MxRList *out);
+	virtual omxFitFunction *initMorph() override;
+	virtual void init() override;
+	virtual void compute(int ffcompute, FitContext *fc) override;
+	virtual void populateAttr(SEXP algebra) override;
+	virtual void addOutput(MxRList *out) override;
 };
 
 MLFitState::~MLFitState()
@@ -103,8 +107,8 @@ struct multi_normal_deriv {
 	std::vector<bool> &fvMask;
 	MLFitState *omo;
 
-	multi_normal_deriv(FitContext *_fc, std::vector<bool> &_fvMask, MLFitState *_omo) :
-		fc(_fc), fvMask(_fvMask), omo(_omo) {};
+	multi_normal_deriv(FitContext *u_fc, std::vector<bool> &u_fvMask, MLFitState *u_omo) :
+		fc(u_fc), fvMask(u_fvMask), omo(u_omo) {};
 
 	template <typename T>
 	T operator()(const Eigen::Matrix<T, Eigen::Dynamic, 1>& x) const {
@@ -453,11 +457,15 @@ void MLFitState::init()
 	}
 
 	EigenMatrixAdaptor obCov(newObj->observedCov);
+#if STAN_MATH_MAJOR >= 4
+	auto ldlt_obCov = stan::math::make_ldlt_factor(obCov);
+#else
 	stan::math::LDLT_factor<double,Eigen::Dynamic,Eigen::Dynamic> ldlt_obCov(obCov);
 	if (!ldlt_obCov.success()) {
 		omxRaiseErrorf("Observed Covariance Matrix is non-positive-definite.");
 		return;
 	}
+#endif
 	newObj->logDetObserved = log_determinant_ldlt(ldlt_obCov);
 	if(OMX_DEBUG) { mxLog("Log Determinant of Observed Cov: %f", newObj->logDetObserved); }
 }

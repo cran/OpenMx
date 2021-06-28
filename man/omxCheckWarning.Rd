@@ -27,7 +27,7 @@ omxCheckWarning(2+2, message = NA)
 
 }
 \references{
-The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
+The OpenMx User's guide can be found at <https://openmx.ssri.psu.edu/documentation>.
 }
 \seealso{
 \code{\link{omxCheckError}}

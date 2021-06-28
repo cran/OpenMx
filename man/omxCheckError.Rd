@@ -19,7 +19,7 @@ Arguments \sQuote{expression} and \sQuote{message} give the expression
 that generates the error and the message that is supposed to be generated, respectively.
 }
 \references{
-The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
+The OpenMx User's guide can be found at <https://openmx.ssri.psu.edu/documentation>.
 }
 \seealso{
 \code{\link{omxCheckWarning}}

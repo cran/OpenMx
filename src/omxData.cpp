@@ -185,7 +185,8 @@ static void importDataFrame(SEXP dataLoc, std::vector<ColumnData> &rawCols,
 			}
       cd.setMaxValueFromLevels();
 			numFactor++;
-		} else if (Rf_isInteger(rcol)) {
+		} else if (Rf_isInteger(rcol) || Rf_isLogical(rcol)) {
+      // Otherwise logical will be handled by isNumeric
 			if(debug+OMX_DEBUG) {mxLog("Column[%d] %s is integer.", j, colname);}
 			cd.setBorrow(INTEGER(rcol));
 			cd.type = COLUMNDATA_INTEGER;
@@ -1429,6 +1430,37 @@ void obsSummaryStats::log()
 	if (thresholdMat) omxPrint(thresholdMat, "thr");
 }
 
+int obsSummaryStats::numPredictors(int vx)
+{
+    int numTh = thresholdCols[vx].numThresholds;
+    if (numTh == 0) numTh = 1;
+    int ef = exoFree.row(vx).sum();
+    return numTh + ef;
+}
+
+std::string omxData::getExoPredictorName(int vx, int nx)
+{
+  auto &o1 = *oss;
+
+  if (!(0 <= nx && nx < o1.numPredictors(vx))) mxThrow("nx %d out of range for vx %d", nx, vx);
+
+  int numTh = o1.thresholdCols[vx].numThresholds;
+  if (numTh == 0) { // continuous
+    if (nx == 0) return "(intercept)";
+    nx -= 1;
+  } else {  // ordinal
+    if (nx < numTh) return string_snprintf("th%d", 1+nx);
+    nx -= numTh;
+  }
+
+  for (int xx=0, px=0; xx < int(o1.exoPred.size()); ++xx) {
+    if (!o1.exoFree(vx, xx)) continue;
+    if (nx == px) return columnName(o1.exoPred[xx]);
+    px += 1;
+  }
+  return "unknown";
+}
+
 void omxData::reportResults(MxRList &out)
 {
 	out.add("numObs", Rf_ScalarReal(omxDataNumObs(this)));
@@ -1475,6 +1507,36 @@ void omxData::reportResults(MxRList &out)
 	if (o1.useWeight) out.add("useWeight", o1.useWeight->asR());
 	if (o1.thresholdMat) out.add("thresholds", o1.thresholdMat->asR());
   out.add("numEstimatedEntries", Rcpp::wrap(numEstimatedEntries));
+
+  for (int vx=0; vx < int(o1.perVar.size()); ++vx) {
+    auto &pv = o1.perVar[vx];
+    if (pv.vcov.rows() == 0) continue;
+    std::string key = o1.dc[vx];
+    key += ".vcov";
+    int ef = o1.exoFree.row(vx).sum();
+    int numTh = o1.thresholdCols[vx].numThresholds;
+    if (numTh == 0) numTh = 1;
+    if (pv.vcov.rows() != numTh+ef)
+      mxThrow("%s pv.vcov.rows() %d != ef %d", key.c_str(), pv.vcov.rows(), ef);
+    Rcpp::NumericMatrix vcov = Rcpp::wrap(pv.vcov);
+    Rcpp::CharacterVector ch(pv.vcov.rows());
+    int nx=0;
+    if (o1.thresholdCols[vx].numThresholds == 0) {
+      ch(nx++) = "(intercept)";
+    } else {
+      for (int xx=0; xx < numTh; ++xx) {
+        std::string tname = string_snprintf("th%d", 1+xx);
+        ch(nx++) = tname.c_str();
+      }
+    }
+    for (int xx=0; xx < int(o1.exoPred.size()); ++xx) {
+      if (!o1.exoFree(vx, xx)) continue;
+      ch(nx++) = columnName(o1.exoPred[xx]);
+    }
+    colnames(vcov) = ch;
+    rownames(vcov) = ch;
+    out.add(key.c_str(), vcov);
+  }
 }
 
 template <typename T>
@@ -1634,6 +1696,7 @@ struct OLSRegression {
 	Eigen::MatrixXd scores;
 	double var;
 	Eigen::VectorXd ycol;
+  Eigen::MatrixXd vcov;
 	OLSRegression(omxData *u_d, double u_totalWeight,
 		      const Eigen::Ref<const Eigen::ArrayXd> u_rowMult,
 		      std::vector<int> &u_index);
@@ -1671,11 +1734,11 @@ void OLSRegression::setResponse(ColumnData &cd, WLSVarData &pv,
 	subsetVector(ycol, notMissingF, ycolF);
 	Eigen::ArrayXd rowMultF(rowMult.size() - naCount);
 	subsetVector(rowMult, notMissingF, rowMultF);
+  Eigen::MatrixXd predCov;
 	if (pred.cols() > 1) {
 		Eigen::DiagonalMatrix<double, Eigen::Dynamic> weightMat(rowMultF.matrix());
 		Eigen::MatrixXd predF(pred.rows() - naCount, pred.cols());
 		subsetRows(pred, notMissingF, predF);
-		Eigen::MatrixXd predCov;
 		predCov = predF.transpose() * weightMat * predF;
 		int singular = InvertSymmetricPosDef(predCov, 'L');
 		if (singular) {
@@ -1686,10 +1749,14 @@ void OLSRegression::setResponse(ColumnData &cd, WLSVarData &pv,
 		beta = predCov.selfadjointView<Eigen::Lower>() * predF.transpose() * weightMat * ycolF;
 		resid = ycol - pred * beta;
 	} else {
+    predCov.resize(1, 1);
+    predCov(0,0) = 1 / totalWeight;
 		beta.resize(1);
 		beta[0] = (ycolF.array() * rowMultF).sum() / totalWeight;
 		resid = ycol.array() - beta[0];
 	}
+  double sigma2 = resid.matrix().dot(resid.matrix()) / (totalWeight - beta.size());
+  vcov = sigma2 * predCov.selfadjointView<Eigen::Lower>();
 	subsetVectorStore(resid, [&](int rx){ return !std::isfinite(ycol[rx]); }, 0.);
 	var = (resid.square() * rowMult).sum() / totalWeight;
 }
@@ -2714,6 +2781,7 @@ struct sampleStats {
 			pv.theta.resize(olsr.beta.size() + 1);
 			pv.theta.segment(0, olsr.beta.size()) = olsr.beta;
 			pv.theta[olsr.beta.size()] = olsr.var;
+      pv.vcov = olsr.vcov;
 			Ecov(yy,yy) = olsr.var;
 			if (olsr.var < data.getMinVariance()) {
 				omxRaiseErrorf("%s: '%s' has observed variance less than %g",
@@ -2741,7 +2809,11 @@ struct sampleStats {
 				nro(pr);
 			} else {
 				pr.calcScores();
+        pr.evaluateDerivs(FF_COMPUTE_HESSIAN);
 			}
+      pv.vcov = pr.hess;
+      InvertSymmetricIndef(pv.vcov, 'U');
+      pv.vcov.triangularView<Eigen::Lower>() = pv.vcov.transpose().triangularView<Eigen::Lower>();
 			pv.theta = pr.param;
 			auto &tc = o1.thresholdCols[yy];
 			Ethr.block(0,tc.column,tc.numThresholds,1) = pv.theta.segment(0,tc.numThresholds);
@@ -3212,7 +3284,7 @@ void omxData::estimateObservedStats()
 	//mxPrintMat("A11", A11); // good
 
 	if (InvertSymmetricPosDef(A11, 'L')) {
-		MoorePenroseInverse(A11);
+		MoorePenroseInverseSq(A11);
 	}
 
 	int pstar = H22.rows();

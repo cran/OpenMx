@@ -1990,6 +1990,7 @@ class ComputeCheckpoint : public omxCompute {
 		Eigen::VectorXd gradient;
 		Eigen::VectorXd vcov;
 		Eigen::VectorXd algebraEnt;
+    Eigen::VectorXd sampleSize;
 		std::vector< std::string > extra;
 	};
 
@@ -2007,8 +2008,12 @@ class ComputeCheckpoint : public omxCompute {
 	bool inclSEs;
 	bool inclGradient;
 	bool inclVcov;
+	bool inclVcovWLS;
+  std::set<std::string> vcovFilterSet;
+  std::map<std::string, std::vector<bool> > exoVcovFilter;
   std::vector<bool> vcovFilter;
   int vcovEntries;
+  bool inclSampleSize;
 	bool badSEWarning;
 	bool firstTime;
 	size_t numExtraCols;
@@ -3693,7 +3698,7 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 	Eigen::MatrixXd jacOC = q1.block(0, qr1.rank(), q1.rows(), q1.cols() - qr1.rank());
 	if (jacOC.cols()) {
 		Eigen::MatrixXd zqb = jacOC.transpose() * Wmat * jacOC;
-		MoorePenroseInverse(zqb);
+		MoorePenroseInverseSq(zqb);
 
 		Eigen::VectorXd diff = obStats - exStats;
 		x2 = diff.transpose() * jacOC * zqb * jacOC.transpose() * diff;
@@ -5020,6 +5025,19 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 	ProtectedSEXP Rvcov(R_do_slot(rObj, Rf_install("vcov")));
 	inclVcov = Rf_asLogical(Rvcov);
 
+  inclVcovWLS = false;
+  if (R_has_slot(rObj, Rf_install("vcovWLS"))) {
+    ProtectedSEXP Rv(R_do_slot(rObj, Rf_install("vcovWLS")));
+    inclVcovWLS = Rf_asLogical(Rv);
+    inclVcov |= inclVcovWLS;
+  }
+
+  inclSampleSize = false;
+  if (R_has_slot(rObj, Rf_install("sampleSize"))) {
+    ProtectedSEXP Rss(R_do_slot(rObj, Rf_install("sampleSize")));
+    inclSampleSize = Rf_asLogical(Rss);
+  }
+
   auto &vg = *Global->findVarGroup(FREEVARGROUP_ALL);
   numParam = vg.vars.size();
 
@@ -5033,9 +5051,9 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
       for (int fx=0; fx < filter.size(); ++fx) {
         String pstr = filter[fx];
         auto pname = pstr.get_cstring();
+        vcovFilterSet.insert(pname);
         int vx = vg.lookupVar(pname);
-        if (vx < 0) mxThrow("%s: can't find parameter called '%s'", name, pname);
-        vcovFilter[vx] = true;
+        if (vx >= 0) vcovFilter[vx] = true;
       }
     }
   }
@@ -5114,6 +5132,15 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 		}
 		numAlgebraEnt += mat->cols * mat->rows;
 	}
+
+  if (inclSampleSize) {
+    for (auto dat : globalState->dataList) {
+      std::string str = dat->name;
+      str += ".nrow";
+      colnames.push_back(str);
+    }
+  }
+
 	// TODO: confidence intervals, hessian, constraint algebras
 	// what does Eric Schmidt include in per-voxel output?
 	// remove old checkpoint code?
@@ -5125,6 +5152,46 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 	// if ((timePerCheckpoint && timePerCheckpoint <= now - lastCheckpoint) ||
 	//     (iterPerCheckpoint && iterPerCheckpoint <= fc->iterations - lastIterations) ||
 	//     (evalsPerCheckpoint && evalsPerCheckpoint <= curEval - lastEvaluation)) {
+
+	if (firstTime) {
+    if (inclVcovWLS) {
+      for (auto dat : fc->state->dataList) {
+        if (!dat->hasVcov()) continue;
+        auto &o1 = dat->getSingleObsSummaryStats();
+        for (int vx=0; vx < int(o1.perVar.size()); ++vx) {
+          std::string scope = dat->name;
+          scope += ".";
+          scope += o1.dc[vx];
+          int numPred = o1.numPredictors(vx);
+          auto iter = exoVcovFilter.emplace(std::make_pair(scope, std::vector<bool>{}));
+          auto &mask = iter.first->second;
+          mask.assign(numPred, vcovFilterSet.empty());
+          for (int cx=0; cx < numPred; ++cx) {
+            std::string key = scope + "." + dat->getExoPredictorName(vx, cx);
+            if (vcovFilterSet.find(key) == vcovFilterSet.end()) continue;
+            mask[cx] = true;
+          }
+
+          for (int cx=0; cx < numPred; ++cx) {
+            for (int rx=cx; rx < numPred; ++rx) {
+              if (cx != rx && (!mask[cx] || !mask[rx])) continue;
+              std::string c1 = scope + ".V";
+              c1 += dat->getExoPredictorName(vx, rx);
+              c1 += ":";
+              c1 += dat->getExoPredictorName(vx, cx);
+              colnames.push_back(c1);
+              vcovEntries += 1;
+            }
+          }
+        }
+      }
+    }
+
+		auto &xcn = Global->checkpointColnames;
+		numExtraCols = xcn.size();
+		colnames.insert(colnames.end(), xcn.begin(), xcn.end());
+		firstTime = false;
+	}
 
 	snap s1;
 	s1.evaluations = fc->getGlobalComputeCount();
@@ -5148,15 +5215,35 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 		s1.stderrs = fc->stderrs;
 	}
 	if (inclGradient) s1.gradient = fc->gradZ;
-	if (inclVcov && fc->vcov.rows() == numParam) {
+	if (inclVcov) {
 		s1.vcov.resize(vcovEntries);
 		int lx=0;
-		for (int cx=0; cx < numParam; ++cx) {
-			for (int rx=cx; rx < numParam; ++rx) {
+    for (int cx=0; cx < numParam; ++cx) {
+      for (int rx=cx; rx < numParam; ++rx) {
         if (cx != rx && (!vcovFilter[cx] || !vcovFilter[rx])) continue;
-				s1.vcov[lx++] = fc->vcov(rx, cx);
-			}
-		}
+        s1.vcov[lx++] = fc->vcov.rows() == numParam? fc->vcov(rx, cx) : NA_REAL;
+      }
+    }
+    if (inclVcovWLS) {
+      for (auto dat : fc->state->dataList) {
+        if (!dat->hasVcov()) continue;
+        auto &o1 = dat->getSingleObsSummaryStats();
+        for (int vx=0; vx < int(o1.perVar.size()); ++vx) {
+          std::string scope = dat->name;
+          scope += ".";
+          scope += o1.dc[vx];
+          auto &mask = exoVcovFilter[scope];
+          auto &pv = o1.perVar[vx];
+          int numPred = o1.numPredictors(vx);
+          for (int cx=0; cx < numPred; ++cx) {
+            for (int rx=cx; rx < numPred; ++rx) {
+              if (cx != rx && (!mask[cx] || !mask[rx])) continue;
+              s1.vcov[lx++] = pv.vcov(rx, cx);
+            }
+          }
+        }
+      }
+    }
 	}
 	s1.algebraEnt.resize(numAlgebraEnt);
 
@@ -5171,12 +5258,12 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 		}
 	}}
 
-	if (firstTime) {
-		auto &xcn = Global->checkpointColnames;
-		numExtraCols = xcn.size();
-		colnames.insert(colnames.end(), xcn.begin(), xcn.end());
-		firstTime = false;
-	}
+  auto &dataList = fc->state->dataList;
+  s1.sampleSize.resize(dataList.size());
+  for (int dx=0; dx < int(dataList.size()); ++dx) {
+    s1.sampleSize[dx] = dataList[dx]->nrows();
+  }
+
 	s1.extra = Global->checkpointValues;
 
 	if (ofs.is_open()) {
@@ -5267,6 +5354,11 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 		for (int x1=0; x1 < int(s1.algebraEnt.size()); ++x1) {
 			ofs << '\t' << std::setprecision(digits) << s1.algebraEnt[x1];
 		}
+		if (inclSampleSize) {
+      for (int dx=0; dx < s1.sampleSize.size(); ++dx) {
+        ofs << '\t' << s1.sampleSize[dx];
+      }
+    }
 		for (auto &x1 : s1.extra) ofs << '\t' << x1;
 		ofs << std::endl;
 		ofs.flush();
@@ -5420,6 +5512,18 @@ void ComputeCheckpoint::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 		auto *v = REAL(col);
 		int sx=0;
 		for (auto &s1 : snaps) v[sx++] = s1.algebraEnt[x1];
+	}
+	if (inclSampleSize) {
+		auto numSS = int(snaps.front().sampleSize.size());
+		for (int x1=0; x1 < numSS; ++x1) {
+			SEXP col = Rf_allocVector(REALSXP, numSnaps);
+			if (debug) mxLog("log[%d] = %s (parameter %d/%d)", curCol, colnames[curCol].c_str(),
+			      x1, numSS);
+			SET_VECTOR_ELT(log, curCol++, col);
+			auto *v = REAL(col);
+			int sx=0;
+			for (auto &s1 : snaps) v[sx++] = s1.sampleSize[x1];
+		}
 	}
 	auto &xcn = Global->checkpointColnames;
 	if (xcn.size() != numExtraCols) {

@@ -32,7 +32,7 @@ omxCheckCloseEnough(matrix(3, 3, 3), matrix(4, 3, 3), epsilon = 2)
 try(omxCheckCloseEnough(c(1, 2, 3), c(1.1, 1.9 ,3.0), epsilon = 0.01))
 }
 \references{
-The OpenMx User's guide can be found at http://openmx.ssri.psu.edu/documentation.
+The OpenMx User's guide can be found at <https://openmx.ssri.psu.edu/documentation>.
 }
 \seealso{
 \code{\link{omxCheckWithinPercentError}},

@@ -20,7 +20,9 @@ mxComputeCheckpoint(
   standardErrors = FALSE,
   gradient = FALSE,
   vcov = FALSE,
-  vcovFilter = c()
+  vcovFilter = c(),
+  sampleSize = FALSE,
+  vcovWLS = FALSE
 )
 }
 \arguments{
@@ -55,6 +57,10 @@ mxComputeCheckpoint(
 \item{vcovFilter}{character vector. Vector of parameters indicating
 which parameter covariances to include. Only the variance is
 included for those parameters not mentioned.}
+
+\item{sampleSize}{logical. Whether to include the sample size of the mxData. \lifecycle{experimental}}
+
+\item{vcovWLS}{logical. Whether to include the vcov from WLS residualizing regressions in half-vectorized order}
 }
 \description{
 Captures the current state of the backend. When \code{path} is set, the

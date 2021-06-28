@@ -4,9 +4,9 @@
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,7 +26,7 @@ mxRename <- function(model, newname, oldname = NA) {
 	}
 	if( !(is.na(oldname) || is.character(oldname))) {
 		stop("'oldname' argument is not either NA or character string")
-	}	
+	}
 	imxVerifyName(newname, 0)
 	if (is.na(oldname)) {
 		oldname <- model@name
@@ -62,11 +62,29 @@ renameReference <- function(reference, oldname, newname) {
 	if (is.na(reference)) {
 		return(reference)
 	}
-	components <- unlist(strsplit(reference, imxSeparatorChar, fixed = TRUE))	
+	components <- unlist(strsplit(reference, imxSeparatorChar, fixed = TRUE))
 	if (length(components) == 2 && components[[1]] == oldname) {
 		return(paste(newname, components[[2]], sep = imxSeparatorChar))
+  } else if (length(components) == 1 && components[[1]] == oldname) {
+    # Don't have enough context to know whether this is a model name or not.
+		reference
 	} else {
+		reference
+	}
+}
+
+renameUnqualifiedReference <- function(reference, oldname, newname) {
+  if (length(reference) == 0) return(reference)
+	if (is.na(reference)) {
 		return(reference)
+	}
+	components <- unlist(strsplit(reference, imxSeparatorChar, fixed = TRUE))
+	if (length(components) == 2 && components[[1]] == oldname) {
+		return(paste(newname, components[[2]], sep = imxSeparatorChar))
+  } else if (length(components) == 1 && components[[1]] == oldname) {
+    newname  # assume it's a model name
+	} else {
+		reference
 	}
 }
 

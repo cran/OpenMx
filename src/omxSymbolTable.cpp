@@ -97,4 +97,5 @@ const omxAlgebraTableEntry omxAlgebraSymbolTable[] = {
 {93,	"Element-wise robust log",	"mxRobustLog",	 1,	omxElementRobustLogCheck,	omxElementRobustLog},
 {94,	"Pearson Selection covariance",	"mxPearsonSelCov",	 2,	pearsonSelCovCheck,	pearsonSelCov},
 {95,	"Pearson Selection mean",	"mxPearsonSelMean",	 3,	pearsonSelMeanCheck,	pearsonSelMean},
+{96,	"Moore Penrose Inverse",	"mpinv",	 1,	MoorePenroseInvertCheck,	MoorePenroseInvert},
 }; 

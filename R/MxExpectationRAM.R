@@ -223,7 +223,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 				}
 			} else {
 				.Object@thresholds <- as.integer(NA)
-				targetNames <- rownames(mxDataObject@observed)
+				targetNames <- observedDataNames(mxDataObject)
 				if (!identical(translatedNames, targetNames)) {
 					varsNotInData <- translatedNames[!(translatedNames %in% targetNames)]
 					msg <- paste("The names of the manifest",
@@ -279,7 +279,8 @@ setMethod("genericGetExpected", signature("MxExpectationRAM"),
         cov <- origCov[[1]]
       } else {
         selPlan <- .Object@selectionPlan
-        selVec <- mxEvalByName(.Object@selectionVector, model, compute=TRUE, defvar.row=defvar.row)
+        selVecName <- .modifyDottedName(subname, .Object@selectionVector)
+        selVec <- mxEvalByName(selVecName, model, compute=TRUE, defvar.row=defvar.row)
         sx <- 1L
         rx <- 1L
         curStep <- selPlan[sx,'step']

@@ -49,7 +49,7 @@ runHelper <- function(model, frontendStart,
 	imxCheckMatrices(model)
 	imxVerifyModel(model)
 	model <- processParentData(model, parentData)
-	if (modelIsHollow(model)) {
+	if (modelIsHollowAndNotEmpty(model)) {
 		independents <- getAllIndependents(model)
 		indepTimeStart <- Sys.time()
 	    independents <- omxLapply(independents, runHelper,
@@ -77,7 +77,7 @@ runHelper <- function(model, frontendStart,
 		useOptimizer = useOptimizer)
 	indepTimeStop <- Sys.time()
 	indepElapsed <- indepTimeStop - indepTimeStart
-	if (modelIsHollow(model)) {
+	if (modelIsHollowAndNotEmpty(model)) {
 		return(processHollowModel(model, independents,
 					  frontendStart, indepElapsed))
 	}
@@ -85,7 +85,7 @@ runHelper <- function(model, frontendStart,
 	model <- imxReplaceModels(model, frozen)
 	namespace <- imxGenerateNamespace(model)
 	flatModel <- imxFlattenModel(model, namespace, unsafe)
-	options <- generateOptionsList(model, length(flatModel@constraints), useOptimizer)
+	options <- generateOptionsList(model, useOptimizer)
 	options[['intervals']] <- intervals
 
 	if (!is.null(model@compute) && (!.hasSlot(model@compute, '.persist') || !model@compute@.persist)) {

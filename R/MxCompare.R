@@ -330,7 +330,7 @@ setupBootData <- function(nullHyp, comparison, todo,
 
   # pre-check data compatibility of nullHyp and comparison? TODO
 
-	if (!is.null(previousRun)) previousRun <- attr(previousRun, "bootData")
+	if (!is.null(previousRun)) previousRun <- attr(previousRun@results, "bootData")
 
   seedVec <- as.integer(runif(replications, min = -2e9, max=2e9))
 
@@ -522,7 +522,7 @@ collectBaseStatistics <- function(row, ref) {
 		  AIC(ref))
 	rfu <- ref$output$fitUnits
 	row[, 'fitUnits'] <- rfu
-	row[, 'chisq'] <- ref$output$chi
+	row[, 'chisq'] <- ifelse(!is.null(ref$output$chi), ref$output$chi, NA)
 	row[, c('fit', 'df')] <- if(rfu == "r'Wr"){
 			c(ref$output$chi, ref$output$chiDoF)
 		} else if(rfu == '-2lnL'){
@@ -967,6 +967,7 @@ mxPowerSearch <- function(trueModel, falseModel, n=NULL, sig.level=0.05, ...,
       curX <- pm$curX
       alg <- pm$alg
     }
+    if (is.null(n)) curX <- max(curX, 2/origSampleSize) # lower bound for N
   }
   if (!silent) imxReportProgress('', prevProgressLen)
   if (is.null(m1)) stop("Logistic model failed to converge")

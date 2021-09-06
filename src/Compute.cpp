@@ -4582,18 +4582,29 @@ void ComputeLoadData::initFromFrontend(omxState *globalState, SEXP rObj)
 	ProtectedSEXP Rmethod(R_do_slot(rObj, Rf_install("method")));
 	const char *methodName = R_CHAR(STRING_ELT(Rmethod, 0));
 
+  data = 0;
 	ProtectedSEXP Rdata(R_do_slot(rObj, Rf_install("dest")));
-	if (Rf_length(Rdata) != 1)
+	if (Rf_length(Rdata) > 1)
 		mxThrow("%s: can only handle 1 destination MxData", name);
-	int objNum = Rf_asInteger(Rdata);
-	data = globalState->dataList[objNum];
-	auto &rd = data->getUnfilteredRawData();
+  int objNum = Rf_asInteger(Rdata);
+  if (objNum != -1) {
+    data = globalState->dataList[objNum];
+  }
 
 	for (auto pr : Providers) {
 		if (strEQ(methodName, pr->getName())) {
 			provider = pr->clone();
-			provider->commonInit(rObj, name, data->name, rd.rows, rd.rawCols,
-                           data->rawColMap, Global->checkpointValues, useOriginalData);
+      if (data) {
+        auto &rd = data->getUnfilteredRawData();
+        provider->commonInit(rObj, name, data->name, rd.rows, rd.rawCols,
+                             data->rawColMap, Global->checkpointValues, useOriginalData);
+      } else {
+        int rows = 0;
+        std::vector<ColumnData> rawCols;
+        ColMapType rawColMap;
+        provider->commonInit(rObj, name, 0, rows, rawCols,
+                             rawColMap, Global->checkpointValues, useOriginalData);
+      }
 			provider->init(rObj);
 			break;
 		}
@@ -4617,25 +4628,29 @@ void ComputeLoadData::initFromFrontend(omxState *globalState, SEXP rObj)
 void ComputeLoadData::computeImpl(FitContext *fc)
 {
 	std::vector<int> &clc = Global->computeLoopIndex;
-	if (clc.size() == 0) mxThrow("%s: must be used within a loop", name);
-	int index = clc[clc.size()-1] - 1;  // innermost loop index
+  int index = 0;
+	if (clc.size()) index = clc[clc.size()-1] - 1;  // innermost loop index
 
-	data->setModified();
+	if (data) data->setModified();
 	if (useOriginalData && index == 0) {
 		provider->loadOrigRow();
 	} else {
 		index -= useOriginalData; // 0 == the first record
 		provider->loadRow(index);
-		auto &clm = Global->computeLoopMax;
-		auto &max = clm.at(clm.size()-1);
-		if (max == 0) max = provider->getNumVariants();
+    if (clc.size()) {
+      auto &clm = Global->computeLoopMax;
+      auto &max = clm.at(clm.size()-1);
+      if (max == 0) max = provider->getNumVariants();
+    }
 	}
 
-	auto &columns = provider->getColumns();
-	ColumnInvalidator ci(*fc->state, data, columns);
-	ci();
-	data->evalAlgebras(fc);
-  fc->state->connectToData();
+  if (data) {
+    auto &columns = provider->getColumns();
+    ColumnInvalidator ci(*fc->state, data, columns);
+    ci();
+    data->evalAlgebras(fc);
+    fc->state->connectToData();
+  }
 }
 
 void ComputeLoadData::reportResults(FitContext *fc, MxRList *slots, MxRList *)
@@ -4643,6 +4658,10 @@ void ComputeLoadData::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 	MxRList dbg;
 	dbg.add("loadCounter", Rf_ScalarInteger(provider->getLoadCounter()));
 	slots->add("debug", dbg.asR());
+
+	MxRList output;
+	output.add("rowsAvailable", Rcpp::wrap(provider->getNumVariants()));
+	slots->add("output", output.asR());
 }
 
 void ComputeLoadData::loadedHook()
@@ -5043,17 +5062,20 @@ void ComputeCheckpoint::initFromFrontend(omxState *globalState, SEXP rObj)
 
   if (inclVcov) {
     S4 ro(rObj);
-    if (ro.slot("vcovFilter") == R_NilValue) {
-      vcovFilter.assign(numParam, true);
-    } else {
-      CharacterVector filter = ro.slot("vcovFilter");
+    vcovFilter.assign(numParam, true);
+    bool filter = false;
+    if (ro.hasSlot("useVcovFilter")) filter = ro.slot("useVcovFilter");
+    if (filter) {
       vcovFilter.assign(numParam, false);
-      for (int fx=0; fx < filter.size(); ++fx) {
-        String pstr = filter[fx];
-        auto pname = pstr.get_cstring();
-        vcovFilterSet.insert(pname);
-        int vx = vg.lookupVar(pname);
-        if (vx >= 0) vcovFilter[vx] = true;
+      if (ro.slot("vcovFilter") != R_NilValue) {
+        CharacterVector vcf = ro.slot("vcovFilter");
+        for (int fx=0; fx < vcf.size(); ++fx) {
+          String pstr = vcf[fx];
+          auto pname = pstr.get_cstring();
+          vcovFilterSet.insert(pname);
+          int vx = vg.lookupVar(pname);
+          if (vx >= 0) vcovFilter[vx] = true;
+        }
       }
     }
   }

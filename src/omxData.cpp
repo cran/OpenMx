@@ -218,6 +218,7 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 		ScopedProtect p1(dataLoc, R_do_slot(dataObj, Rf_install("type")));
 		od->u_type = CHAR(STRING_ELT(dataLoc,0));
 		if(OMX_DEBUG) {mxLog("Element is type %s.", od->u_type);}
+    if (strEQ(od->u_type, "none")) od->u_type = "raw";
 
 		if (R_has_slot(dataObj, Rf_install("naAction"))) {
 			ProtectedSEXP RactStr(R_do_slot(dataObj, Rf_install("naAction")));
@@ -380,6 +381,8 @@ void omxData::newDataStatic(omxState *state, SEXP dataObj)
 				o1.thresholdMat = omxNewMatrixFromRPrimitive(VECTOR_ELT(RobsStats, ax), state, 0, 0);
 			} else if (strEQ(key, "numEstimatedEntries")) {
         // ignore, just diagnostic output
+      } else if (strstr(key, ".vcov")) {
+        // Ignore for now. Is the vcov regenerated?
 			} else {
 				Rf_warning("%s: observedStats key '%s' ignored", name, key);
 			}
@@ -1513,7 +1516,8 @@ void omxData::reportResults(MxRList &out)
     if (pv.vcov.rows() == 0) continue;
     std::string key = o1.dc[vx];
     key += ".vcov";
-    int ef = o1.exoFree.row(vx).sum();
+    int ef = 0;
+    if (o1.exoPred.size()) ef = o1.exoFree.row(vx).sum();
     int numTh = o1.thresholdCols[vx].numThresholds;
     if (numTh == 0) numTh = 1;
     if (pv.vcov.rows() != numTh+ef)
@@ -1755,10 +1759,11 @@ void OLSRegression::setResponse(ColumnData &cd, WLSVarData &pv,
 		beta[0] = (ycolF.array() * rowMultF).sum() / totalWeight;
 		resid = ycol.array() - beta[0];
 	}
-  double sigma2 = resid.matrix().dot(resid.matrix()) / (totalWeight - beta.size());
-  vcov = sigma2 * predCov.selfadjointView<Eigen::Lower>();
 	subsetVectorStore(resid, [&](int rx){ return !std::isfinite(ycol[rx]); }, 0.);
-	var = (resid.square() * rowMult).sum() / totalWeight;
+  double residSqSum = (resid.square() * rowMult).sum();
+  double sigma2 = residSqSum / (totalWeight - beta.size());
+  vcov = sigma2 * predCov.selfadjointView<Eigen::Lower>();
+	var = residSqSum / totalWeight;
 }
 
 void OLSRegression::calcScores()
@@ -2023,7 +2028,7 @@ void ProbitRegression::evaluateDerivs(int want)
 		   (Y2.colwise() * gdzi.col(1)).transpose().matrix() * pred.matrix()));
 
 	hess.block(numThr,0,pred.cols(),numThr) =
-		hess.block(0,numThr,numThr,pred.cols()).transpose();
+		hess.block(0,numThr,numThr,pred.cols()).transpose().eval();
 
 	if (data.verbose >= 3) mxPrintMat("hess", hess);
 

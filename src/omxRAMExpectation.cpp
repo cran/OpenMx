@@ -213,10 +213,6 @@ void omxRAMExpectation::CalculateRAMCovarianceAndMeans(FitContext *fc)
 	if (M) {
 		EigenVectorAdaptor Emean(means);
 		pcalc.mean(fc, Emean);
-		if (slope) {
-			EigenMatrixAdaptor Eslope(slope);
-			Emean += Eslope * exoPredMean;
-		}
 		if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(means, "....RAM: Model-implied Means Vector:");}
 	}
 }
@@ -548,18 +544,6 @@ void omxRAMExpectation::addSlopeMatrix()
 			dx += 1;
 		}
 		ex += 1;
-	}
-}
-
-void omxRAMExpectation::connectToData()
-{
-  super::connectToData();
-
-	exoPredMean.resize(exoDataColumns.size());
-	for (int cx=0; cx < int(exoDataColumns.size()); ++cx) {
-		auto &e1 = data->rawCol( exoDataColumns[cx] );
-		Eigen::Map< Eigen::VectorXd > vec(e1.d(), data->numRawRows());
-		exoPredMean[cx] = vec.mean();
 	}
 }
 
@@ -2390,8 +2374,11 @@ namespace RelationalRAMExpectation {
 			//Rf_setAttrib(dv, R_NamesSymbol, obsNameVec);
 			dbg.add("dataVec", dv);
 		} else {
-			Rf_warning("%s: group %d too large to transfer to back to R",
-				   st.homeEx->name, arrayIndex+1);
+      if (!Global->RAMmultilevelWarning) {
+        Rf_warning("%s: group %d too large to transfer to back to R",
+                   st.homeEx->name, arrayIndex+1);
+        Global->RAMmultilevelWarning = true;
+      }
 		}
 
 		SEXP aIndex, modelStart, obsStart;
@@ -2420,18 +2407,20 @@ namespace RelationalRAMExpectation {
 		dbg.add("numSufficientSets", Rcpp::wrap(int(sufficientSets.size())));
 		dbg.add("fit", Rcpp::wrap(fit));
 
-		int digits = ceilf(log10f(sufficientSets.size()));
-		std::string fmt = string_snprintf("ss%%0%dd", digits);
-		for (size_t gx=0; gx < sufficientSets.size(); ++gx) {
-			sufficientSet &ss = sufficientSets[gx];
-			MxRList info;
-			info.add("start", Rcpp::wrap(1 + ss.start));
-			info.add("length", Rcpp::wrap(ss.length));
-			info.add("mean", Rcpp::wrap(ss.dataMean));
-			info.add("covariance", Rcpp::wrap(ss.dataCov));
-			std::string name = string_snprintf(fmt.c_str(), int(1+gx));
-			dbg.add(name.c_str(), info.asR());
-		}
+    if (sufficientSets.size()) {
+      int digits = ceilf(log10f(sufficientSets.size()));
+      std::string fmt = string_snprintf("ss%%0%dd", digits);
+      for (size_t gx=0; gx < sufficientSets.size(); ++gx) {
+        sufficientSet &ss = sufficientSets[gx];
+        MxRList info;
+        info.add("start", Rcpp::wrap(1 + ss.start));
+        info.add("length", Rcpp::wrap(ss.length));
+        info.add("mean", Rcpp::wrap(ss.dataMean));
+        info.add("covariance", Rcpp::wrap(ss.dataCov));
+        std::string name = string_snprintf(fmt.c_str(), int(1+gx));
+        dbg.add(name.c_str(), info.asR());
+      }
+    }
 	}
 
 	void state::exportInternalState(MxRList &dbg)

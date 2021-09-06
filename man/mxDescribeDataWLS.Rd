@@ -38,7 +38,7 @@ When data are not all continuous, allContinuousMethod is ignored, and means are 
 
 tmp = mxDescribeDataWLS(mtcars, allContinuousMethod= "cumulants", verbose = TRUE)
 tmp$hasMeans # FALSE - no means with cumulants
-tmp = mxDescribeDataWLS(mtcars, allContinuousMethod= "marginals") 
+tmp = mxDescribeDataWLS(mtcars, allContinuousMethod= "marginals")
 tmp$hasMeans # TRUE we get means with marginals
 
 # ==========================

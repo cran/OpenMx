@@ -87,10 +87,9 @@ int FreeVarGroup::lookupVar(omxMatrix *matrix, int row, int col)
 
 int FreeVarGroup::lookupVar(const char *name)
 {
-	for (size_t vx=0; vx < vars.size(); ++vx) {
-		if (strcmp(name, vars[vx]->name) == 0) return vx;
-	}
-	return -1;
+  auto got = byName.find(name);
+  if (got == byName.end()) return -1;
+  return got->second;
 }
 
 /* might be useful?
@@ -104,6 +103,17 @@ int FreeVarGroup::lookupVar(int id)
 	return -1;
 }
 */
+
+void FreeVarGroup::reIndex()
+{
+  byName.clear();
+	for (int vx = 0; vx < int(vars.size()); vx++) {
+		omxFreeVar *fv = vars[vx];
+    // In FREEVARGROUP_ALL, vx == fv->id
+    auto ret = byName.emplace(fv->name, vx);
+    if (!ret.second) mxThrow("Two free variables with same name '%s'", fv->name);
+  }
+}
 
 void FreeVarGroup::cacheDependencies(omxState *os)
 {
@@ -229,6 +239,7 @@ omxGlobal::omxGlobal()
 	llScale = -2.0;
 	debugProtectStack = OMX_DEBUG;
 	rowLikelihoodsWarning = false;
+	RAMmultilevelWarning = false;
 	unpackedConfidenceIntervals = false;
 	topFc = NULL;
 	intervals = true;
@@ -406,6 +417,9 @@ void omxGlobal::deduplicateVarGroups()
 			}
 		}
 	}
+	for (size_t g1=0; g1 < freeGroup.size(); ++g1) {
+    freeGroup[g1]->reIndex();
+  }
 }
 
 int omxState::nextId = 0;
@@ -984,12 +998,13 @@ void UserConstraint::preeval(FitContext *fc)
 
 UserConstraint::UserConstraint(FitContext *fc, const char *u_name, omxMatrix *arg1,
                                omxMatrix *arg2, omxMatrix *jac, int u_verbose) :
-	super(u_name), verbose(u_verbose)
+	super(u_name)
 {
 	omxState *state = fc->state;
 	omxMatrix *args[2] = {arg1, arg2};
 	pad = omxNewAlgebraFromOperatorAndArgs(10, args, 2, state); // 10 = binary subtract
 	jacobian = jac;
+  verbose = u_verbose;
 }
 
 void UserConstraint::getDim(int *rowsOut, int *colsOut) const
@@ -1065,6 +1080,8 @@ void UserConstraint::refresh(FitContext *fc)
 void omxConstraint::recalcSize()
 {
   size = std::count(redundant.begin(), redundant.end(), false);
+  if (verbose >= 1) mxLog("%s::recalcSize %d/%d constraints not redundant",
+                          name, size, int(redundant.size()));
 }
 
 ConstraintVec::ConstraintVec(FitContext *fc, const char *u_name,
@@ -1131,16 +1148,17 @@ void ConstraintVec::markUselessConstraints(FitContext *fc)
 
   if (count <= 1) return;
 
-  Eigen::MatrixXd tmp = ej.block(0,0,count,ej.cols()).transpose();
+  // pad with dummy parameters so #constraints <= #param
+  Eigen::MatrixXd tmp(std::max(count,ej.cols()), count);
+  tmp.setZero();
+  tmp.block(0,0,ej.cols(),count) = ej.block(0,0,count,ej.cols()).transpose();
   Eigen::FullPivHouseholderQR<Eigen::MatrixXd> qrOp(tmp);
   Eigen::ArrayXi perm = qrOp.colsPermutation().indices();
-  //mxPrintMat("perm", perm);
   Eigen::MatrixXd qr = qrOp.matrixQR();
-  //mxPrintMat("qr", qr);
   double thr = qrOp.maxPivot() * qrOp.threshold();
 
-	for (int j=0, cur=0; j < int(state->conListX.size()); j++) {
-		omxConstraint &con = *state->conListX[j];
+  for (int j=0, cur=0; j < int(state->conListX.size()); j++) {
+    omxConstraint &con = *state->conListX[j];
     if (!cf(con)) continue;
     if (con.opCode != omxConstraint::EQUALITY) OOPS;
     for (int kk=0, dx=0; kk < int(con.redundant.size()); ++kk) {
@@ -1149,10 +1167,11 @@ void ConstraintVec::markUselessConstraints(FitContext *fc)
       if (abs(qr(xx,xx)) < thr) {
         con.redundant[kk] = true;
         if (con.getVerbose()) {
-          mxLog("Ignoring constraint '%s[%d]' because it is redundant",
-                con.name, 1+kk);
+          mxLog("Ignoring constraint '%s[%d]' because it is redundant (|%f| < %f)",
+                con.name, 1+kk, qr(xx,xx), thr);
         }
       }
+      dx += 1;
     }
     cur += con.size;
     con.recalcSize();
@@ -1171,7 +1190,7 @@ void ConstraintVec::eval(FitContext *fc, double *constrOut, double *jacOut)
 
 	for (int j=0, cur=0; j < int(state->conListX.size()); j++) {
 		omxConstraint &con = *state->conListX[j];
-		if (!cf(con)) continue;
+		if (!cf(con) || con.size == 0) continue;
 
     con.refreshAndGrab(fc, &constr(cur));
 
@@ -1249,7 +1268,7 @@ void ConstraintVec::eval(FitContext *fc, double *constrOut, double *jacOut)
 
     for (int j=0, cur=0; j < int(state->conListX.size()); j++) {
       omxConstraint &con = *state->conListX[j];
-      if (!cf(con)) continue;
+      if (!cf(con) || con.size == 0) continue;
       auto &vars = fc->varGroup->vars;
       for (int kk=0, dx=0; kk < int(con.redundant.size()); ++kk) {
         if (con.redundant[kk]) continue;

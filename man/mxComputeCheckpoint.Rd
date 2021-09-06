@@ -22,7 +22,8 @@ mxComputeCheckpoint(
   vcov = FALSE,
   vcovFilter = c(),
   sampleSize = FALSE,
-  vcovWLS = FALSE
+  vcovWLS = FALSE,
+  useVcovFilter = FALSE
 )
 }
 \arguments{
@@ -61,6 +62,8 @@ included for those parameters not mentioned.}
 \item{sampleSize}{logical. Whether to include the sample size of the mxData. \lifecycle{experimental}}
 
 \item{vcovWLS}{logical. Whether to include the vcov from WLS residualizing regressions in half-vectorized order}
+
+\item{useVcovFilter}{logical. Whether to use the vcovFilter (TRUE) or include all entries (FALSE)}
 }
 \description{
 Captures the current state of the backend. When \code{path} is set, the

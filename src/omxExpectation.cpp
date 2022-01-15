@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -492,7 +492,7 @@ void omxCompleteExpectation(omxExpectation *ox) {
 const std::vector<const char *> &omxExpectation::getDataColumnNames() const
 { return dataColumnNames; }
 
-const Eigen::Map<omxExpectation::DataColumnIndexVector> omxExpectation::getDataColumns()
+const Eigen::Map<omxExpectation::DataColumnIndexVector> omxExpectation::getDataColumns() // NOT const
 {
 	return Eigen::Map<DataColumnIndexVector>(dataColumnsPtr, numDataColumns);
 }
@@ -614,3 +614,39 @@ void omxExpectation::asVector1(FitContext *fc, int row, Eigen::Ref<Eigen::Vector
 
 bool omxExpectation::isTopState() const
 { return currentState->isTopState(); }
+
+int MVNExpectation::numObservedStats()
+{
+  if (strEQ(data->getType(), "raw")) {
+    if (data->hasSummaryStats()) return numSummaryStats();
+
+    auto &dc = getDataColumns();
+    // More accurate to use sufficient statistics for each missingness pattern? TODO
+    int stats = 0;
+    for (int cx=0; cx < int(dc.size()); ++cx) {
+      stats += data->countObs(dc[cx]);
+    }
+
+    auto &allTh = getThresholdInfo();
+    for (auto &col : allTh) stats += col.numThresholds;
+
+    return stats;
+
+  } else if (strEQ(data->getType(), "cov") || strEQ(data->getType(), "cor")) {
+    omxMatrix *cov = omxDataCovariance(data);
+    int size = cov->rows;
+    if (strEQ(data->getType(), "cor")) size -= 1;
+    int stats = triangleLoc1(size);
+    omxMatrix *means = omxDataMeans(data);
+    if (means) stats += means->rows * means->cols;
+    return stats;
+  } else {
+    return NA_INTEGER;
+  }
+}
+
+void MVNExpectation::populateAttr(SEXP algebra)
+{
+  IntegerVector RobStat = Rcpp::wrap(numObservedStats());
+  Rf_setAttrib(algebra, Rf_install("numStats"), RobStat);
+}

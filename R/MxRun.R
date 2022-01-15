@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -13,10 +13,46 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+#' mxPenaltySearch
+#'
+#' Grid search for the best \link[=MxPenalty-class]{MxPenalty} hyperparameters. Uses
+#' \link{omxDefaultComputePlan} with
+#' \code{penaltySearch=TRUE}. Specifically, wraps
+#' \link{mxComputeGradientDescent} with \link{mxComputePenaltySearch}
+#' and passes the model to the backend.
+#'
+#' @param model A \link{MxModel} object to be optimized.
+#' @template args-dots-barrier
+#' @param silent A boolean indicating whether to print status to terminal.
+#' @param suppressWarnings A boolean indicating whether to suppress warnings.
+#' @param unsafe A boolean indicating whether to ignore errors.
+#' @param checkpoint A boolean indicating whether to periodically write parameter values to a file.
+#' @param useSocket A boolean indicating whether to periodically write parameter values to a socket.
+#' @param onlyFrontend A boolean indicating whether to run only front-end model transformations.
+#' @param beginMessage A boolean indicating whether to print the number of parameters before invoking the backend.
+
+mxPenaltySearch <-
+  function(model, ..., silent = FALSE,
+           suppressWarnings = FALSE, unsafe = FALSE,
+           checkpoint = FALSE, useSocket = FALSE, onlyFrontend = FALSE,
+           beginMessage=!silent)
+  {
+    options <- generateOptionsList(model, useOptimizer=TRUE)
+		compute <- omxDefaultComputePlan(modelName=model@name, intervals=FALSE,
+                                     useOptimizer=TRUE, optionList=options,
+                                     penaltySearch=TRUE)
+		model@compute <- compute
+    model <- mxRun(model, ..., silent=silent, suppressWarnings=suppressWarnings,
+          unsafe=unsafe, checkpoint=checkpoint, useSocket=useSocket,
+          onlyFrontend=onlyFrontend, beginMessage=beginMessage)
+		model@compute@.persist <- FALSE
+    model
+}
+
 mxRun <- function(model, ..., intervals=NULL, silent = FALSE,
 		suppressWarnings = FALSE, unsafe = FALSE,
 		checkpoint = FALSE, useSocket = FALSE, onlyFrontend = FALSE,
-		useOptimizer = TRUE, beginMessage=!silent){
+		useOptimizer = TRUE, beginMessage=!silent) {
 
 	warnModelCreatedByOldVersion(model)
 
@@ -182,10 +218,11 @@ runHelper <- function(model, frontendStart,
 	fitfunctions <- convertFitFunctions(flatModel, model, labelsData, dependencies)
 	data <- convertDatasets(flatModel@datasets, model, flatModel)
 	numAlgebras <- length(algebras)
-	algebras <- append(algebras, fitfunctions)
-	constraints <- convertConstraints(flatModel)
 	parameters <- flatModel@parameters
 	numParam <- length(parameters)
+  penaltyList <- generatePenaltyList(flatModel, model@name, parameters, labelsData)
+	algebras <- append(append(algebras, fitfunctions), penaltyList)
+	constraints <- convertConstraints(flatModel)
 	if (numParam == 0 && defaultComputePlan && !is.null(model@fitfunction)) {
 		compute <- mxComputeSequence(list(CO=mxComputeOnce(from=paste(model@name, 'fitfunction', sep="."),
 								   'fit', .is.bestfit=TRUE),
@@ -259,29 +296,6 @@ runHelper <- function(model, frontendStart,
 			"mxOption(NULL, 'mvnRelEps', value= mxOption(NULL, 'mvnRelEps')*5)\n",
 			"see `?mxOptions`" ))
 	}
-
-	# Although runstate currently preserves the pre-backend state of the
-	# model, it was envisioned to store the post-backend state (circa
-	# 2014). The idea was that summary(model) would show the
-	# post-backend state regardless of subsequent modifications to
-	# model. This was before the invention of
-	# model@.modifiedSinceRun. Now that we have .modifiedSinceRun,
-	# runstate is deprecated. It was never implemented properly and it
-	# increases the maintanance burden because backend initiated
-	# modifications to the model must modify both regular model state
-	# and runstate, violating the principle of single source of truth.
-
-	runstate <- model@runstate
-	runstate$parameters <- parameters
-	runstate$matrices <- matrices
-	runstate$fitfunctions <- fitfunctions
-	runstate$expectations <- expectations
-	runstate$datalist <- data
-	runstate$constraints <- flatModel@constraints
-	runstate$independents <- independents
-	runstate$defvars <- names(defVars)
-	runstate$compute <- computes
-	model@runstate <- runstate
 
 	frontendStop <- Sys.time()
 	frontendElapsed <- frontendElapsed + (frontendStop - backendStop)

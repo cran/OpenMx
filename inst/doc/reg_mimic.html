@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Joshua Pritikin and Ross Jacobucci and Timothy R. Brick" />
+
+<meta name="date" content="2022-01-14" />
+
+<title>Regularized MIMIC</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+<script>// Hide empty <a> tag within highlighted CodeBlock for screen reader accessibility (see https://github.com/jgm/pandoc/issues/6352#issuecomment-626106786) -->
+// v0.0.1
+// Written by JooYoung Seo (jooyoung@psu.edu) and Atsushi Yasumoto on June 1st, 2020.
+
+document.addEventListener('DOMContentLoaded', function() {
+  const codeList = document.getElementsByClassName("sourceCode");
+  for (var i = 0; i < codeList.length; i++) {
+    var linkList = codeList[i].getElementsByTagName('a');
+    for (var j = 0; j < linkList.length; j++) {
+      if (linkList[j].innerHTML === "") {
+        linkList[j].setAttribute('aria-hidden', 'true');
+      }
+    }
+  }
+});
+</script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+
+<style type="text/css">
+  code {
+    white-space: pre;
+  }
+  .sourceCode {
+    overflow: visible;
+  }
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Regularized MIMIC</h1>
+<h4 class="author">Joshua Pritikin and Ross Jacobucci and Timothy R. Brick</h4>
+<h4 class="date">2022-01-14</h4>
+
+
+
+<div id="regularized-mimic-model" class="section level1">
+<h1>Regularized MIMIC model</h1>
+<p>This example uses the immortal Holzinger Swineford data set.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true"></a><span class="kw">library</span>(OpenMx)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true"></a><span class="kw">data</span>(HS.ability.data)</span></code></pre></div>
+<p>The OpenMx model looks like this:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true"></a>HS.ability.data<span class="op">$</span>ageym &lt;-<span class="st"> </span>HS.ability.data<span class="op">$</span>agey<span class="op">*</span><span class="dv">12</span> <span class="op">+</span><span class="st"> </span>HS.ability.data<span class="op">$</span>agem</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true"></a>HS.ability.data<span class="op">$</span>male &lt;-<span class="st"> </span><span class="kw">as.numeric</span>(HS.ability.data<span class="op">$</span>Gender <span class="op">==</span><span class="st"> &#39;Male&#39;</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true"></a><span class="co"># Specify variables</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true"></a>indicators &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&#39;visual&#39;</span>,<span class="st">&#39;cubes&#39;</span>,<span class="st">&#39;paper&#39;</span>,<span class="st">&#39;flags&#39;</span>,<span class="st">&#39;paperrev&#39;</span>,<span class="st">&#39;flagssub&#39;</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true"></a>                <span class="st">&#39;general&#39;</span>,<span class="st">&#39;paragrap&#39;</span>,<span class="st">&#39;sentence&#39;</span>,<span class="st">&#39;wordc&#39;</span>,<span class="st">&#39;wordm&#39;</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true"></a>covariates &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;male&quot;</span>,<span class="st">&quot;ageym&quot;</span>,<span class="st">&quot;grade&quot;</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true"></a>latents =<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;g&quot;</span>, covariates)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true"></a><span class="co"># Build the model</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true"></a>mimicModel &lt;-<span class="st"> </span><span class="kw">mxModel</span>(</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true"></a>  <span class="st">&quot;MIMIC&quot;</span>, <span class="dt">type=</span><span class="st">&quot;RAM&quot;</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true"></a>  <span class="dt">manifestVars =</span> indicators, <span class="dt">latentVars =</span> latents,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true"></a>  <span class="co"># Set up exogenous predictors</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true"></a>  <span class="kw">mxPath</span>(<span class="st">&quot;one&quot;</span>, covariates, <span class="dt">labels=</span><span class="kw">paste0</span>(<span class="st">&#39;data.&#39;</span>,covariates), <span class="dt">free=</span><span class="ot">FALSE</span>),</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true"></a></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true"></a>  <span class="co"># Fix factor variance</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true"></a>  <span class="kw">mxPath</span>(<span class="st">&#39;g&#39;</span>, <span class="dt">arrows=</span><span class="dv">2</span>, <span class="dt">free=</span><span class="ot">FALSE</span>, <span class="dt">values=</span><span class="dv">1</span>),</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true"></a></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true"></a>  <span class="co"># Error variances:</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true"></a>  <span class="kw">mxPath</span>(<span class="dt">from=</span><span class="kw">c</span>(indicators), <span class="dt">arrows=</span><span class="dv">2</span>, <span class="dt">free=</span><span class="ot">TRUE</span>, <span class="dt">values=</span><span class="dv">10</span>),</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true"></a></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true"></a>  <span class="co"># Means (saturated means model):</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true"></a>  <span class="kw">mxPath</span>(<span class="dt">from=</span><span class="st">&quot;one&quot;</span>, <span class="dt">to=</span>indicators, <span class="dt">values=</span><span class="kw">rep</span>(<span class="dv">5</span>, <span class="kw">length</span>(indicators))),</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true"></a></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true"></a>  <span class="co"># Loadings:</span></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true"></a>  <span class="kw">mxPath</span>(<span class="dt">from=</span><span class="st">&quot;g&quot;</span>, <span class="dt">to=</span>indicators, <span class="dt">values=</span>.<span class="dv">5</span>),</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true"></a></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true"></a>  <span class="co"># Covariate paths</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true"></a>  <span class="kw">mxPath</span>(covariates, <span class="st">&quot;g&quot;</span>, <span class="dt">labels=</span>covariates),</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true"></a></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true"></a>  <span class="co"># Data</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true"></a>  <span class="kw">mxData</span>(<span class="dt">observed =</span> HS.ability.data, <span class="dt">type =</span> <span class="st">&quot;raw&quot;</span>))</span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true"></a></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true"></a><span class="co"># Get some good starting values for regularization. This</span></span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true"></a><span class="co"># saves 2-3 minutes on my laptop.</span></span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true"></a>mimicModel &lt;-<span class="st"> </span><span class="kw">mxRun</span>(mimicModel)</span></code></pre></div>
+<pre><code>## Running MIMIC with 36 parameters</code></pre>
+<p>Add the penalty:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true"></a>mimicModel &lt;-<span class="st"> </span><span class="kw">mxModel</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true"></a>  mimicModel,</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true"></a>  <span class="kw">mxMatrix</span>(<span class="st">&#39;Full&#39;</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dt">free=</span><span class="ot">TRUE</span>,<span class="dt">values=</span><span class="dv">0</span>,<span class="dt">labels=</span><span class="st">&quot;lambda&quot;</span>,<span class="dt">name=</span><span class="st">&quot;hparam&quot;</span>),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true"></a>  <span class="co"># Set scale to ML estimates for adaptive lasso</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true"></a>  <span class="kw">mxPenaltyLASSO</span>(<span class="dt">what=</span>covariates, <span class="dt">name=</span><span class="st">&quot;LASSO&quot;</span>,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true"></a>                    <span class="dt">scale =</span> <span class="kw">coef</span>(mimicModel)[covariates],</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true"></a>                    <span class="dt">lambda =</span>  <span class="dv">0</span>, <span class="dt">lambda.max =</span><span class="dv">2</span>, <span class="dt">lambda.step=</span>.<span class="dv">04</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true"></a>)</span></code></pre></div>
+<p>Run the regularization. With only three covariates, the plot of results is not very exciting. We learn that sex is not a good predictor of this factor.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true"></a>regMIMIC &lt;-<span class="st"> </span><span class="kw">mxPenaltySearch</span>(mimicModel)</span></code></pre></div>
+<pre><code>## Running MIMIC with 37 parameters</code></pre>
+<pre><code>## Warning: In model &#39;MIMIC&#39; Optimizer returned a non-zero status code 6. The model
+## does not satisfy the first-order optimality conditions to the required accuracy,
+## and no improved point for the merit function could be found during the final
+## linesearch (Mx status RED)</code></pre>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true"></a>detail &lt;-<span class="st"> </span>regMIMIC<span class="op">$</span>compute<span class="op">$</span>steps<span class="op">$</span>PS<span class="op">$</span>output<span class="op">$</span>detail</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true"></a><span class="kw">library</span>(reshape2)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true"></a><span class="kw">library</span>(ggplot2)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true"></a>est &lt;-<span class="st"> </span>detail[,<span class="kw">c</span>(covariates, <span class="st">&#39;lambda&#39;</span>)]</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true"></a><span class="kw">ggplot</span>(<span class="kw">melt</span>(est, <span class="dt">id.vars =</span> <span class="st">&#39;lambda&#39;</span>)) <span class="op">+</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true"></a><span class="st">  </span><span class="kw">geom_line</span>(<span class="kw">aes</span>(<span class="dt">x=</span>lambda, <span class="dt">y=</span>value, <span class="dt">color=</span>variable)) <span class="op">+</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true"></a><span class="st">  </span><span class="kw">geom_vline</span>(<span class="kw">aes</span>(<span class="dt">xintercept=</span><span class="kw">coef</span>(regMIMIC)[<span class="st">&#39;lambda&#39;</span>]),</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true"></a>             <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">alpha=</span>.<span class="dv">5</span>)</span></code></pre></div>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASAAAAEgCAIAAACb4TnXAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAgAElEQVR4nO3deVQUZ9Yw8KeW3ptmBwV50fgi4AYqEjAHQeOnBASXGHHJaILBJGqMMc6gMSaaSdTRYKKjiTpjHHSMSyIicU2MC7hGnZE4LhDFxLgAgkIDvVfV90fl7el0Q1O9lN2F93fmnKnuulV1m/S1lq66D8YwDAIA8AP3dAIAdGRQYADwCAoMAB5BgQHAIygwAHgEBQYAj0hPJ9C6pqYmy5dSqdRkMplMJo6Li8Vig8HAPRjDML1ez8fKCYIQi8VarZZ7PEKIoiguwRiGSaVSg8HAPZ4kSaPRyDEZiURC07RVvI+PD8fFAfLaArP6uisUCqPRyL0GJBKJQwXjRIFx/P1QKpWSJOlQPE3THAsYx3GlUqnRaLjHkyTJ/ZPK5XKapq3iocAcAoeIAPAICkwAduzYcebMGU9nAZwBBSYAarVap9N5OgvgDCgwAHgEBQYAj6DAAOARFJgAqFQqqVTq6SyAM7z0dzBgacKECZ5OAThJGAX2oAl99YOEQDiOIwJHEoJBCElFNEJIQjIEhsQkQ+BIQjIighETTDCGGfS4mGAkJDxOCjxJGAVmolCDFjMYSZpBOiOGENKbMAZhBhMy0VgbCwWw/2euOpmIERGMmERSkhaTjIREYoKRkLSPgpCIMGSSiAlGRDASkpGKGHZaJoL6BC4RRoF19kNzh+k0Gk2rcyka6U0YxWBGCtMZMSOFkRJFfaNWb8IMJmSgML0JN5iQkcK0RsxAYS0G/KEG0xoxI4WZaExjYEu09TuAxARDEoyUZKQiRkIyYoJRykiMUbK7RwlJS0gkIv5bkxKSkZCMmGQkBCOF+nziCaPA7CNwJBczCP3326xS0WoF1zvufHx8TDRe/6hJZ8LMNak14v9XnJjehBkpTG/CdEZMZ8KadEijJ/QmzGDCDBSmNba1C0UIISnJSMSIQH5SESMikJhglBI6zNcU7mvyldEEjmgGteixFgOuENOhKoq9lKEzYjTDfiggbB2hwFwnJpFcTMvFnIJ9fHyam5stb941UJiJwizrU2fE9SZkMGE0LjYx4qYWo4FC7N61roW4fE/c1pGtXMzoTBhN//ZShDMKCdP46/nOIf7R/xuhktIaPdZiwCkGyUWMVIS6dUJKEmcoQmfETDQWrKSUErrVNQOPgAJzAzHBiAmm1fqUSpFSKa6vb7EsSIpGNU1ky2+HpkgmYhRipkmPVavJJqNYRtISwsgwyERjWgPWYsT3nzxJaWLUov9t1uNyMe0jYRBCBhNqNuDGqwghpeUWZSKGwBmdEacRCpRToT6UUkKz558kgeRSskUrM1EYjVCgnA5SUiTOsEfLIoKRkoyYZMQEoxAzYrg+5A5eWmAymczyJYZhIpHI6k07CIJwKBjDMEdXzvHxE5IkEUK2v2IpFa0ER4chkmQQwkwmy98n6Qc/0D16mIYNs36oDMMwLS2//cBAUbRMzGAI1bXgNWqMYTCZyITjqEaN328kHrSQRgrTGRFNI50JExGkiGAIHDXp7B3cysXM/wSit/6fA39JYMtLC8z22Uqaprk/cMkwjENPZ2IY5lC8yWTiWGA4jiOEKIriHm+bPE3TFEXZZojjeKAPkuEm8zOR4b4IhdlbuUQiMT/9qTViD5pwmkHs+aGR+u06EHu2Wd+Ci0Rih/6SwJaXFpjVU7QMw1AUxf1RXNvncO0H226x3ZVzLBj2CWWH4m2Tpyiq1Y/PVq/JZOKYPI7jIpHIHEwi1Nnuw5P+/v5GowN/SWALbpUCgEdeugcDlsaOHSuRSDydBXAGFJgABAUFeToF4CQ4RASAR1BgAPAICgwAHkGBCYBer4dr5QIFBSYAhYWFJ0+e9HQWwBlQYADwCAoMAB5BgQHAIygwAHgEd3IIQExMTEhIiKezAM6AAhOAwYMHezoF4CQ4RASAR1BgAPAICgwAHkGBAcAjKDAB2L9//6VLlzydBXAGXEUUgLt378rlck9nAZwBezAAeAQFBgCP3H+IeOXKlfXr16vV6pSUlNzcXLa1mNnx48e3b99uNBqTk5OnTZtmNReADsbN32+KogoKCvLy8jZs2PDTTz+VlpZazr1169bGjRuXLFmyfv3627dvHzx40L1bB8DbuLnAysvLg4KC+vbtK5VKs7Kyjh8/bjn34sWLAwYM6NSpk1gsfu655+AhQo6mT58+ZMgQT2cBnOHmAqutrY2IiGCnIyIiHjx4YDnXsuM0juNWcwHoeNx8DtbU1GQeK0Amk6nVasu5/fv3Lykp+fnnn/39/UtKSpqbm82z6uvr58yZw06PHDny+eeft1wQx3GpVCoWcxtfCCGCIPz8/LgHI4Qcivf19eUYzJ5kOhTPMIxDF+UVCgX3eBzHuX9SHMfFYjH3eGDLzQWmVCpramrYaa1Wq1T+bmSdHj165ObmFhQUYBj2zDPP1NbWmmcRBBEeHs5Oq1QqiqIsFyQIgm1PzzENHMcdCkYIORRP0zTHXvOOJoMQYhiGpjmN8YVhGEKIpmnu8RiGcU+m1T87O14M4MjNf6zQ0FDzhY179+6FhoZazjUYDIMGDRo2bBhC6IcffujcubN5lp+f3/Lly80v6+rqLBcMCAjQ6/VtDSFrS6VSNTU1cQz28fHBcdyheKsB+OyQSqVKpdKheJqmDQYDl2AcxwMCArRaLfd4uVxueeBgn7+/v9FotIqHJt4OcfM5WFxc3P3796uqqmiaPnTokPlBpsrKSq1Wq1arZ82aVVdXp9Vqd+/ePXz4cPduvaOqqqqy3NsDAXHzHowgiPnz569evVqv1ycmJpqvfeXn5y9dujQ2Nvb5559/6623FApFenp6SkqKe7feUR05ciQqKgoeahYi9x9Px8TErF692urNPXv2sBOZmZmZmZlu3ygA3glupACAR1BgAPAICgwAHsFvGgKQkpKiUqk8nQVwBhSYAMTGxno6BeAkOEQEgEdQYADwCAoMAB5BgQHAIygwASgsLCwrK/N0FsAZUGACoNfrTSaTp7MAzoACA4BHUGAA8AgKDAAeQYEJQHh4uL+/v6ezAM6AW6UEAJ6gEy7YgwHAIygwAHgEBQYAj6DAAOARFJgA/PDDDzdv3vR0FsAZUGACcOnSpdu3b3s6C+AMKDAAeOSlv4NJpVLLlxiGkSRp9aYdBEE4FIxhmKMr59gKWyQSIUfaTYtEIoZhrMYlJElSJBLZZsj2pheLxRzHMcQwzKG/jKPxwJaX7sGY32v1TTdyaOWOZuJ68nbW4Gjmrsc/xm9BK/R6PYZh5eXlbQWcO3eO/XfHCkVRGIadO3eOz+xa4aV7ML1eb/lSoVCYTCarN+2QSCTcg9lRkRyK1+v1HL9q7H9sh+JtB38wmUxGo9E2Q3bHZTQauQ/+QBAE908ql8spirKK9/Hx4bg4HwiCmDdvXnBwsAdzcIiXFhiwNGHCBPZQ8wmn0WjkcvnKlSs9nYgDvPQQEVhSqVTmYQ07gFGjRr3wwgvml+vWrQsODjYajTdu3Bg9enRoaKhKpUpLSzMfB7KHdiNGjJg4caLlIWJb8Qih0tLShIQEX1/f1NRU2+NJtVr92muvRUZG+vr6ZmVl3blzh78PCwUGHrecnJyDBw/qdDr25VdffTVp0iSRSJSdna1Wq7dv3753716GYfLy8syLvPXWW1OmTFm3bp3leuzE5+bmLliwYN++fUqlMjU1tb6+3nLBMWPGVFRUbN269ciRIyqVasSIEQ0NDTx9WDhEBI9bVlYWRVHffvttdnZ2dXV1WVnZqlWrGIaZNm3a2LFju3XrhhC6c+fO3LlzLReZPHkysjhVth9fUFAwatQohFBCQkLXrl3/8Y9/mAcoPnfuXFlZWW1tLTs07pYtW8LDw3fv3j1t2jQ+PiwUGHjcfHx8MjIy9uzZk52dvXv37tjY2P79+yOEZs6cWVJSsmnTpuvXrx89epQdO5vFBljCMMxOfFpaGjshk8kGDRp07do186xr164ZjUbLyyQmk+nevXs8fFCE4BBREOrq6riPcCsI48eP/+abb0wm065du6ZOnYoQam5uTk5OXrlypa+v70svvfTJJ59YxlsN9t1uvCWCINgLxSxfX99OnToZLTAMs2jRIrd+vv+CAhOAoqKiCxcueDoLdxo5cqRWq925c+eZM2fYY79jx45dvXr122+//eMf/zhy5Mh2h1q3H3/ixAl2QqfTnTp1qk+fPuZZvXr1qqmpMe/T7t69m5SU9OOPP7rz41mAQ0TgAQqFIjMzc86cOUOHDg0LC0MIBQYGGgyGoqKi4cOHnz9/fuHChRqNpq6uLigoqNU1tBXPzp05cyZCKDg4eNmyZQihKVOmmBfs0aPHmDFjRo8evXr1arFY/MEHHzQ3N/fq1YunTwp7MOAZOTk5dXV15q/+oEGDPvroo3fffTc+Pn779u2HDx+OjIzMyMhoa3E78WFhYfn5+fPnz09PT9fpdGVlZQqFwnLZrVu3Pvvss3l5ec8//7y/v//+/fstz9/cC/P4zS+tMv9TxAoICNDpdBqNhuPiKpVKrVZzDPbx8cFxvLGxkXt8c3Mzx7+bVCpVKpX19fXc423v5Ni4cWNUVJR5RHkzHMcDAgLUajX3OznkcnlzczOXYISQv7+/0Wi0im9rlwJaBXswAHgE52ACEB8fHxgY6OksgDOgwAQgMTHR0ykAJ8EhIgA8ggIDgEdQYADwCAoMAB5BgQlAUVHR+fPnPZ0FcAZcRRSAurq6jjS6iltuXPZs5wLuYA8GAI+gwADgERQYADyCAhMAlUoF3T8Fyv0XOa5cubJ+/Xq1Wp2SkpKbm2vVdLampmbt2rVVVVVPPfVUfn6+7ZOqwNaECRM8nQJwUvt7sIaGhk2bNn344YcIoR9//JGiKDvBFEUVFBTk5eVt2LDhp59+Ki0ttZzLMMzixYuzs7MLCwvDw8P37t3rYvYAeLl2CuzXX3995plnFi5cyDYtmD59elxc3C+//NJWfHl5eVBQUN++faVSaVZW1vHjx63m+vn5DRw4kCTJadOm2XmcDoDH4+LFi8nJyfytv51DxNdff71fv36FhYXsOcDu3bsnT5781ltvFRUVtRpfW1sbERHBTkdERDx48MBy7v3791Uq1YoVK6qqqqKjo1955RXzrIcPH7777rvs9PDhw62G/cZxXCqVcu9uSxCEr68v92AMwxyKV6lUHIPZI2SH4hmG4dhmlO3LrVAouLcldegvg+O4WCzmHg9stbMHKy0tffPNN80PVIeHhy9atOjYsWNtxTc1NZn/Y8tkMqvHipubm8+ePTt06NBVq1YhhDZs2OBS7gD8Xnl5eWJi4uDBg0NCQtLT0/fs2TNgwIDu3bvv2rWLDVi+fHlkZGRAQMCQIUOqq6utFv/uu+/69OnTtWvXadOmce/gb187ezBfX19zB1aWwWCw8yO6Uqmsqalhp7VardU1DLlcHh0dnZCQgBAaOXKkZa+sgICAzz77zPyyg7UMUKvVrrQMuHbtmkqlCg8PtwpmWwa0tLQIsWUA1vAI02kdXYoRiZhAeyM/nD9/vrS0dMCAAf369Vu2bNmZM2f279+/ePHi8ePHV1ZWLl269PLly507d54yZcrmzZsXLFhgXrC2tjYnJ+fEiRM9e/Z85ZVX5s6da9VI2DntFFhGRsb7779vPiC8du3am2++mZ2d3VZ8aGio+cLGvXv3QkNDLeeGhISYpwmC4K/TSAdTVlYWFRVlW2CChh/7lrjicLM0psv/GF961U5A9+7dU1JSEEJPP/30gAEDxGLxs88+m5ubixDq1q3bzz//HBAQUFtbi2GY1T/BJSUlQ4YMYRu8zZo1Kz09/XEU2IoVK8aMGRMSEmIymTp37lxTUzNmzJgVK1a0FR8XF7dmzZqqqqquXbseOnQoNTWVfb+ysjIiIiI+Pv7TTz+9fv16dHT0vn37Bg4c6PoHAAJFDxnOJKc4uhTT3nm4+aZNgiDYna3lv+MffPDB7t27u3TpQhBE165dLRe8e/fu6dOn+/Xrx740X0pwUfuHiEePHj137ty1a9d8fX179+4dFRVlJ54giPnz569evVqv1ycmJpobIeXn5y9dujQ2NnbBggXr1q1rbGzs1avXjBkz3PIZgBAxfv4Meqx3MO/YsePChQuXL1/28/NbuXLlw4cPLeeGhIS88MILa9asQQhpNJrr16+7ZaPtFBh7ZhITExMTE2P5jp0rSzExMatXr7Z6c8+ePexE7969//rXvzqdLgBOq6urCw4OVqlUdXV1hYWF6enplnMzMjI++OCDvLy86Ojot99+22AwbNq0yfWNtlNg7AgUtryzmyIAdkydOvXs2bPR0dGRkZGzZ89evHjxxIkTzXMjIyPXrl07bty4R48eJScnb9682S0bbafxaEVFhXnaaDSWl5e/8847CxcunD59uls235YOdhXRxcajd+7ckcvlAQEBVsECbTz6RD0P1s4eLDo62vJl7969O3XqlJ6ePnHiRKF8wg6gS5cunk4BOMnhu+k7depE07TleDAAgLa0swe7cuWK5cuGhoZly5ZFR0dLJBI+swKgg2inwHr37m31TkhIyJYtW3jLB4AOpZ0Csz0hthoJBjwGer0ex3Hu9zoD79F6gZ07d87+Yk8//TQPyYDWFRYWtjp8EfB+rRdYUlKS/cXgdzAAuGi9wEwm02POA4AOqfXL9ETb2N+5H3OWAAhUOxc5ysvL8/Lybt26ZX5Ho9FY3YYMAGhLOz80z549Wy6Xr1q1ymQyffzxx59++mlwcHBb/QIAT5566inLR+mAgLSzB/vXv/71zTffpKWl7d27NygoKDMzUyqVLlq0yPwMNngMhg0b5ukUgJPa2YPJZDKaphFC0dHRV69eRQglJiYePXr0caQGgPC1U2BJSUkffvjhrVu34uLivvrqq4aGhsOHD8ONiABw1E6BrVq1qrq6uqioKDs722AwhIaG5uXlzZo16/EkB4DQtVNgkZGRV69enTt3rlQqPXny5Ndff33q1Kl33nnn8SQHgKNsG7MVFhZ27do1NjZ27ty5f/jDH5BNe7aXX37Z3EEwLy9vzZo17bZ/466dBy6Dg4MnTZo0derU/v37O/V5nQQPXFq+eeTIkc6dO/fq1csqWNAPXP6ir35kcvjJSzku7SGLQG08cFlZWZmQkGBuzBYXFzd+/PihQ4eeOXNGJBINGjQoKSmpoKAgJibG3J5NLpenpaVt27atuLiYYZiwsLCzZ882NDTEx8eb27/5+vqePHmSbf9WXl7uUMLtXEVcsmTJrl27Bg4cGBsbO3Xq1MmTJ4eFhTm0AeC6qqoqgiBsC0zQltz+4uv6444ulaiMPdLbuuOLmW1jtqKiovHjx7Nf2qlTp1ZUVNi2Z/voo4+mT59uNBovXrwYFhYWGRnZ0NBgp/2bQ9opsBkzZsyYMaO6unr37t27du1auHDh0KFDp0yZMmnSJEe3BICleeGT/hCS3n7c7/mS7QzHY9WY7e7du5GRkeyssLCwiooK2/Zsfn5+ffr0OXny5HfffTdmzBj2ffvt37jjNHxRp06dZs6c+eqrr+7cuXPOnDmHDx+GAgMu6inv2hN1de86bRuzhYSEmFtksxOttmfLyMg4ePDggQMHdu7c6d6U2i8wrVb73Xff7dmzp6SkRKfTZWZm5uTkuDcJW1ZPTGMYRpIk98eocRx3KNiheIIgJBIJx3MqkiQRQg7FMwzDjupg+aZIJLLNkA0TiURW8W3BcZxNnkswu36H4j3OtjFbVlZWVlbW22+/LRKJtm7dmpCQ0Gp7tueee27EiBEqlcrtx+HtFNi4ceMOHTpEUVRGRsZnn32WlZUll8vdm0GrWv3GcPwasZEOBTu0ckczcWgRO8nYvmkO5il55+I9qNXGbPPmzevfv39YWFhWVlZjY2Or7dni4uJIkjQfH7pRO1cRR48ePX78+KysrMfcQwquIlq+2dYTzYK+iugijl/I8vLyr7/++s9//jPDMJMnT37uuefYK/W2+vbtu3HjxnafhHRUO3uw4uJi924POEFAB2nepmfPnhqNJikpyWg0DhkyZPLkybYxJpPphx9+ePjwIR/P6bt/jGYAvIdIJCooKLAfU1JSMnfu3FWrVvFxMAwFBp50Y8eOHTt2LE8rd7jxKACAOygwAbhz547VWDtAKKDABODAgQOO3gIHvAQUGAA8ggIDgEdQYADwCAoMAB7B72ACkJKSolKpPJ0FcAYUmADExsZ6OgXgJDhEBIBHUGAA/ObKlSsDBw507zqhwMATgeMTPW4HBQY6FKsmbRcvXhw5cuSbb76ZmZmJWmvqhhBauXJleHh4jx49LPsFWLV2czofKDAB2LFjx5kzZzydhZs16bD6FtzR/zVq7T1RcvPmzffee+/06dOlpaXffPMN++bRo0d79ux56NChysrKpUuXlpaWVldXh4aGss8yHz16dO3atadOnTp//vyhQ4fYRWpra3Nycr788subN2/SND137lynPyZcRRQAtVqt0+k8nYWbFV2S/Ou2w6NOdw2k3nq2zQfbbZu0IYQCAgJeffVV1FpTN3aRGTNmsCNyzZs3b+XKlQgh29Zu69atc+5jQoEBzxgea0jqZnR0KZndkrRt0oYQCg8PNwdYNXVDCNXU1LD9DxFC5oHvbFu7OZqnGRQY8IzOvnRnXzev07ZJG0IIx387D7Jt6oYQ6tSp0y+//MIG/Pvf/zavx7a1m3PgHAx0HFlZWTt37qytrX306NHWrVut5lo1dTMajQihMWPGfP7553fu3GlpadmyZQsbmZGR8dVXX12+fNlgMLz99ttOHx8iKDBBCAoKUirb6WgLEEJ9+vRhm7SNGDHCtsXg1KlTxWJxdHT0hAkTZs+e/eWXX168eHHo0KGvvfZaUlJSfHz8iy++yEaaW7t16dLl3r177ImZc9pp2+Yp0LaNSzC0bbPCvUnbY+P+c7ArV66sX79erVanpKTk5uaaj4BZJSUlxcXFBoMhLi7ujTfekEqlbk8APLG4NGl7zNxcYBRFFRQUzJkzp0ePHu+//35paWlaWpp57q1bt4qLi1esWCGVSpctW1ZcXDxhwgT3JgCeZFyatD1mbj4HKy8vDwoK6tu3r1QqzcrKOn78uOXc6urqtLQ09owiMTGxpqbGvVsHwNu4eQ9WW1tr/tEgIiLiwYMHlnOTk5OTk5MbGxt//vnnEydOTJw40TyroaFh+fLl7HRqaurQoUMtF8QwTCKRcB8/hiRJ7r2+2ZbUDsX7+PhwPKdic+Z+iYIgCIZhOLbyZRtlymQy7vEEQXD/pGy/7sfcNb2DcXOBNTU1yWQydlomk7V6paGioqKwsJBhGMvf7yiKunv3LjutVqutaokd34B7gTkajBwZ/QnDMKsTSzvYSO4rx3HcdnSV06dPBwcHR0VFtbWIQ4NRODTOlaPxwIqbC0ypVJoP/LRabav/cicmJiYmJhYXF69fv37x4sXsm4GBgZY/XHSwq4iNjY2uXEU8efJkVFRUcHCwVTB7FbGlpUVYVxGfKG4usNDQ0NLSUnb63r17oaGhlnP37NmjUqmeffZZhFBMTMyBAwfcu3UgCE/UMaebL3LExcXdv3+/qqqKpulDhw4NHjyYfb+yslKr1QYFBe3bt+/+/fstLS0HDhzo2bOne7cOgLdx8x6MIIj58+evXr1ar9cnJiYOGTKEfT8/P3/p0qUpKSn37t1btGiRXq/v06fP66+/7t6tA+Bt3P9Dc0xMzOrV1uPA79mzh53Iycl5DCPQAuAl4G56ARg7diyMwSdQUGACABfuhAvupgeAR1BgAPAICgwAHkGBCYBardZqtZ7OAjgDCkwAduzYcfbsWU9nAZwBBQYAj6DAAOARFBgAPIICA4BHcCeHAMTHxwcGBno6C+AMKDABSExM9HQKwElwiAgAj6DAAOARFBgAPIICA4BHUGACsH///kuXLnk6C+AMuIooAHfv3rUaKAQIBezBAOARFBgAPIICA4BHXnoOxg7IYMZ2SLd60w521ALuwY7Gi0QihwZ/cCiebU9v+aZcLpdKpbYZso3vSZLkuHJHPynbhZ97PLDlpQVGktaJ4Thu+2ZbMAxzKLjVLdpfOffvNHJw8AeEkNXK8/Ly2soEOfKXYcfQ4P5JkYN/SWDLS/92Vk/Iy2Qyo9HI/bF5kUjEPZgkSRzHHYrXarXcB3OQSCQ6nY6nIWTlcrnBYOAe79AnlUqlFEVZxSsUCo6LAwTnYADwCgoMAB5BgQHAIygwAbh27Zp5+E8gLFBgAlBWVlZZWenpLIAzoMAA4BEUGAA8ggIDgEdQYADwyEvv5ACWhg0bplQqPZ0FcAYUmAA89dRTnk4BOAkOEQHgERQYADyCAgOAR1BgAPAICkwANm7ceOzYMU9nAZwBBQYAj6DAAOARFBgAPBJGgTEtzdiRgxi3zhMAeA9hFBi6/TN+7rRi8+fkzSfxsajw8HB/f39PZwGcIYwCw2J7U6+9Sfv5y4p2SPd+hbU0ezqjxyozMzM+Pt7TWQBnCKPAEEIoMEgz/g+657LJX39WfPGZ6NIFxK0RGgAe5P6bfa9cubJ+/Xq1Wp2SkpKbm8t20uQ4tx0YZuwdb3oqSnLsW+l3B0RXL+uGj6SDgt38AQBwHzfvwSiKKigoyMvL27Bhw08//VRaWsp9LkeMXKHLHKOZMAXTaBRbNkpKv8cok5vSB8DN3Fxg5eXlQUFBffv2lUqlWVlZx48f5z7XIVREV81L0w0DnhafPyP/xwZRxVWMolxMHgC3c/MhYm1tbUREBDsdERHx4MEDjnPVavXatWvZ6aSkpEGDBlkuiGGYWCxu5XgyczQakIjv2yMt+RrJ5SgqFolIhBCG4z40zTFndrUOxSs5B2MYZsJxJefiZ9vNS35/enns8pVQP9+eEV1s400EIaVpCefTUdyRvwyj8hUNew6e9XSFmwusqalJJpOx0zKZTK1Wc5yr1+vPnTvHTnfp0qfz59AAAAicSURBVKXV0VXYL5+1iEj0+hx0/y59/ixzsxJRFEKIQai10Nax302H4rkHI4RoB+Ntk7l66d9UcFAvo67VldvG2+HYX8bXj4DRVVzj5gJTKpU1NTXstFartfrHz87c4ODgvXv3ml/W1dVZLhgQEKDT6TQaTZsblspRylCUMpR9pVKprGrbDh8fHxzHGxsbucc3NzdzH8xBqVTW19e7MviDjhJpoqLUQ4ZYBeM4HhAQoFarHRosormZ648c/v7+er3eKj4oKIjj4gC5/RwsNDTU3IP23r17oaGh3OcC0PG4ucDi4uLu379fVVVF0/ShQ4cGDx7Mvl9ZWanVatuaC0BH5eZDRIIg5s+fv3r1ar1en5iYOOT/jmry8/OXLl0aGxvb6lxX0AytpqwPHSkj1mTieiBkMiIcx9U28TRGN9msGSGk0DVpDBqOh3wSTCIn5A2GBu7xepOxQf+749u7hgeEThGguWEVjOO4ilS1tLQYjUYuK8dxXEpLrY60dYxBR7d+hBmCBw2Ux3BZM2gLxvE//GNmdQ52g6hOvtD6KI9PBAONcAyRjl4rcVU3WdjVhG1wDuYKYbRti5CG/LlrnowSc/yKhSqD9Do9x5VLpVIcx+1dQbGJ1+n+e0FPjktEWJt/RrFYzF4v5fgPmVgsZhjG/h5JictIjEDsHkzl4B5Mar0HsyPYD2rJVcIosM6SoLnhE7h/M7zuKiLj0lXEtuA4HqAKUCMHryIizlcRFf4cSxe0RTg3+wIgQFBgAPAICkwA6urqmpqaPJ0FcAYUmAAUFRVduHDB01kAZ0CBAcAjKDAAeAQFBgCPoMAA4JGX3ipl5e9//3vfvn0TExP5WPnhw4ebmprGjRvHx8qvXr36/fffv/766yTp/G/6Fy5cCAwM7Natm9X7zc3NmzdvzszM5GmEvm3btnXp0iU1NZWPlT8hhLEH27Fjx6VLl3haeWlp6cGDB3la+Y0bNwoLC00ml7qGJCQk2FYXQkij0RQWFt6+fduVldtRXFxsfgoWOEcYBQaAQEGBAcAjYZyD3b9/X6FQqFQqPlb+8OFDiqKCg3npr6jRaB49ehQWFtZ6QxHXUBRVXV0dEBBg7nTiXjU1NRKJxM/Pj4+VPyGEUWAACBQcIgLAI697HozHztsc1jBv3rzKyt8GcMnMzHz11Ved+AinT58eOHCgbbcz15O3s3IXMz979uy2bdsePnzYvXv3N954w+qA2S2ZP6EYb2IymV5++eXy8nKtVvunP/3p2LFj3Oe6vn6GYV588UW2C5rBYDCZTE58hDt37uTk5LS0tDi6aVdW7mLmNTU1OTk5FRUVWq127dq1S5YscXvmTyzv+qeI787b9tfANgLw8fERiUQikYggCEfX/5e//GXOnDmtPnntevJ2Vu5i5levXu3bt2+PHj2kUumoUaMqKircm/mTzLsOEZ3uvO2W9VdXVyOEZs+eXV9fHxsbO3PmTEeHvcvPz0cItXpTiOvJ21m5i5knJSUlJCSw0zdv3uzevbt7M3+SedcezOnO225Zv16v79mz5+LFi7ds2SKXyzds2ODMZ3Bq0y5yMXO2cQhCqKysbPPmzZMmTbKcy2vmHZ53FZhSqTQ3bGq187adua6vPzo6esGCBQEBAQRBjBw50r03Z7mevB2uZ97U1PThhx/u3r17yZIlMTG/64XIa+YdnncVGN+dt+2vobKy0nwhjiRJ9w56wGvbcBczNxqN7733XlhY2CeffBIZGWk1Fxqeu8K7Cozvztv21//gwYPly5fX1tbSNL1v376kpCS3fChe24a7JfMzZ87IZLLc3Fyr202g4bnrvO5OjuvXr3/++edsb+2XX36Z/U8+ZswYtvN2q3PduP6ioqKDBw8ajcb4+Pjp06fL5XInPsK4cePYcyH2pRuTt7NyVzL/4osviouLzS9VKtU///lPt2f+ZPK6AgOgI/GuQ0QAOhgoMAB4BAUGAI+gwADgERQYADyCAgOAR1Bg9lAUhWGYi52Vzp07x/GHIx8fn++//96VbQFvAwUGAI+gwADgERQYVzdu3Bg9enRoaKhKpUpLSysvL2ffF4lEn332WUREhEKhGDp06N27d+fMmdOpU6eQkJA1a9aYFy8tLU1ISPD19U1NTTUve+PGjfT0dD8/v379+pWUlLS7LSA4UGBcZWdnq9Xq7du37927l2GYvLw886yCgoLt27cfOHCgoqIiKipKpVKdOHFi1KhRc+fObWhoYGNyc3MXLFiwb98+pVKZmppaX1+v0WhSU1MpiiopKVm0aNGsWbPMTyvb2RYQGM92LPBybMvrs2fP0jT98ccfV1VVse9v2bIlKCiInSZJcuvWrez0zJkzY2Ji2Olbt24hhP7zn/+cPXsWIVRcXMy+r9FoQkJCPv7447/97W/+/v6NjY3s++zttkeOHLGzLSA43tUywGthGDZz5sySkpJNmzZdv3796NGjln0vzE/U+/v7m5+nsnpoPy0tjZ2QyWSDBg26du2aj49PYmKiuZvqsGHDuGwLCAscInLS3NycnJy8cuVKX1/fl1566ZNPPmkrkssVeYIgxGKxVdlIJBL2He7bAt4P9mCcHDt27OrVq9XV1ex+adu2bY6u4cSJE9nZ2QghnU536tSp9957TywWf/HFF01NTT4+Pgih06dPUxTllm0B7wF7ME4CAwMNBkNRUdGvv/5aVFS0cOFCjUZTV1fHfQ3sUd+ZM2fGjx+PEJoyZcrEiROlUum4ceNOnz594MCBvLw89ilJ17cFvAcUGCeDBg366KOP3n333fj4+O3btx8+fDgyMjIjI4Pj4mFhYfn5+fPnz09PT9fpdGVlZQqFQi6Xl5aWIoQyMjLmz5+/fPlydhw9F7cFvAo80QwAj2APBgCPoMAA4BEUGAA8ggIDgEdQYADwCAoMAB5BgQHAIygwAHgEBQYAj6DAAODR/wevVl+Q6Oa4/AAAAABJRU5ErkJggg==" /><!-- --></p>
+<p>The regularized factor loadings can be found here,</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true"></a>detail[detail<span class="op">$</span>EBIC <span class="op">==</span><span class="st"> </span><span class="kw">min</span>(detail<span class="op">$</span>EBIC), covariates]</span></code></pre></div>
+<pre><code>##            male       ageym    grade
+## 35 3.551246e-07 -0.02792019 1.060184</code></pre>
+<p>The regularization causes a lot of bias. One way to deal with this is to fix zerod parameters to zero, discard the regularization penalty, and re-fit model.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true"></a>regMIMIC &lt;-<span class="st"> </span><span class="kw">mxPenaltyZap</span>(regMIMIC)</span></code></pre></div>
+<pre><code>## Zapping &#39;male&#39;</code></pre>
+<pre><code>## Fixing &#39;lambda&#39;</code></pre>
+<pre><code>## Tip: Use
+##   model = mxRun(model)
+## to re-estimate the model without any penalty terms.</code></pre>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true"></a>regMIMIC &lt;-<span class="st"> </span><span class="kw">mxRun</span>(regMIMIC)</span></code></pre></div>
+<pre><code>## Running MIMIC with 35 parameters</code></pre>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true"></a><span class="kw">summary</span>(regMIMIC)</span></code></pre></div>
+<pre><code>## Summary of MIMIC 
+##  
+## free parameters:
+##              name matrix      row      col    Estimate   Std.Error A
+## 1   MIMIC.A[1,12]      A   visual        g  2.61817539 0.359734332  
+## 2   MIMIC.A[2,12]      A    cubes        g  0.93495892 0.249140391  
+## 3   MIMIC.A[3,12]      A    paper        g  0.70084647 0.148839958  
+## 4   MIMIC.A[4,12]      A    flags        g  1.57351355 0.485114112  
+## 5   MIMIC.A[5,12]      A paperrev        g  0.99010508 0.241840086  
+## 6   MIMIC.A[6,12]      A flagssub        g  3.33338049 0.638126581  
+## 7   MIMIC.A[7,12]      A  general        g  9.23700633 0.532147467  
+## 8   MIMIC.A[8,12]      A paragrap        g  2.53491888 0.154443963  
+## 9   MIMIC.A[9,12]      A sentence        g  3.96091929 0.218438121  
+## 10 MIMIC.A[10,12]      A    wordc        g  3.80400196 0.254970074  
+## 11 MIMIC.A[11,12]      A    wordm        g  5.73048429 0.332716170  
+## 12          ageym      A        g    ageym -0.02870552 0.005178867  
+## 13          grade      A        g    grade  1.08144998 0.144108407  
+## 14   MIMIC.S[1,1]      S   visual   visual 40.27135796 3.352951308 !
+## 15   MIMIC.S[2,2]      S    cubes    cubes 21.00804335 1.720709660  
+## 16   MIMIC.S[3,3]      S    paper    paper  7.36561698 0.605079121  
+## 17   MIMIC.S[4,4]      S    flags    flags 78.47431024 6.427213845  
+## 18   MIMIC.S[5,5]      S paperrev paperrev  8.35238391 0.994207854 !
+## 19   MIMIC.S[6,6]      S flagssub flagssub 56.56060067 6.793459063  
+## 20   MIMIC.S[7,7]      S  general  general 45.64552429 4.717436705 !
+## 21   MIMIC.S[8,8]      S paragrap paragrap  4.06597962 0.402767938  
+## 22   MIMIC.S[9,9]      S sentence sentence  6.80450465 0.749101684  
+## 23 MIMIC.S[10,10]      S    wordc    wordc 13.88565834 1.285595220 !
+## 24 MIMIC.S[11,11]      S    wordm    wordm 17.27850943 1.798287305  
+## 25   MIMIC.M[1,1]      M        1   visual 21.29314806 2.978783300  
+## 26   MIMIC.M[1,2]      M        1    cubes 21.38053062 1.281420562  
+## 27   MIMIC.M[1,3]      M        1    paper 12.00170261 0.885460579  
+## 28   MIMIC.M[1,4]      M        1    flags 13.00215459 2.293226807  
+## 29   MIMIC.M[1,5]      M        1 paperrev 12.12972056 1.350150836  
+## 30   MIMIC.M[1,6]      M        1 flagssub 24.45758218 4.270239961  
+## 31   MIMIC.M[1,7]      M        1  general 11.26617876 9.736136751  
+## 32   MIMIC.M[1,8]      M        1 paragrap  1.12587264 2.698409922  
+## 33   MIMIC.M[1,9]      M        1 sentence  4.77295161 4.165463544  
+## 34  MIMIC.M[1,10]      M        1    wordc 14.03580671 4.049673917  
+## 35  MIMIC.M[1,11]      M        1    wordm -2.91446624 6.048415610  
+## 
+## Model Statistics: 
+##                |  Parameters  |  Degrees of Freedom  |  Fit (-2lnL units)
+##        Model:             35                   2964              17843.68
+##    Saturated:             77                   2922                    NA
+## Independence:             22                   2977                    NA
+## Number of observations/statistics: 301/2999
+## 
+## Information Criteria: 
+##       |  df Penalty  |  Parameters Penalty  |  Sample-Size Adjusted
+## AIC:     11915.6773               17913.68                 17923.19
+## BIC:       927.8025               18043.43                 17932.43
+## To get additional fit indices, see help(mxRefModels)
+## timestamp: 2022-01-14 12:49:58 
+## Wall clock time: 1.35798 secs 
+## optimizer:  SLSQP 
+## OpenMx version number: 2.20.0 
+## Need help?  See help(mxSummary)</code></pre>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

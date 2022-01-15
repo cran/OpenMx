@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -564,7 +564,7 @@ static double internalToUserBound(double val, double inf)
 
 SEXP omxBackend2(SEXP constraints, SEXP matList,
 		 SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
-		 SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
+                 SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
 		 SEXP defvars, bool silent)
 {
 	/* Sanity Check and Parse Inputs */
@@ -603,7 +603,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 	fc->copyParamToModelClean();
 
 	if (Global->debugProtectStack) mxLog("Protect depth at line %d: %d", __LINE__, protectManager.getDepth());
-	globalState->omxProcessMxAlgebraEntities(algList);
+	globalState->omxProcessMxAlgebraEntities(algList, fc);
 
 	/* Process Matrix and Algebra Population Function */
 	/*
@@ -676,7 +676,7 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 		if (Global->computeLoopContext.size() != 0) mxThrow("computeLoopContext imbalance");
 
 		if (fc->wanted & FF_COMPUTE_FIT) {
-			if (!std::isfinite(fc->fit)) {
+			if (!std::isfinite(fc->getFit())) {
 				std::string diag = fc->getIterationError();
 				if (diag.size()) {
 					omxRaiseErrorf("fit is not finite (%s)", diag.c_str());
@@ -718,21 +718,21 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 		}
 
 		if (fc->wanted & FF_COMPUTE_FIT) {
-			result.add("fit", Rf_ScalarReal(fc->fit));
+			result.add("fit", Rf_ScalarReal(fc->getFit()));
 			if (fc->fitUnits) {
 				SEXP units;
 				Rf_protect(units = Rf_allocVector(STRSXP, 1));
 				SET_STRING_ELT(units, 0, Rf_mkChar(fitUnitsToName(fc->fitUnits)));
 				result.add("fitUnits", units);
 				if(fc->fitUnits == FIT_UNITS_MINUS2LL){
-					result.add("Minus2LogLikelihood", Rf_ScalarReal(fc->fit));
+					result.add("Minus2LogLikelihood", Rf_ScalarReal(fc->getFit()));
 				}
 			}
 			result.add("maxRelativeOrdinalError",
 				   Rf_ScalarReal(fc->getOrdinalRelativeError()));
 		}
 		if (fc->wanted & FF_COMPUTE_BESTFIT) {
-			result.add("minimum", Rf_ScalarReal(fc->fit));
+			result.add("minimum", Rf_ScalarReal(fc->getFit()));
 		}
 
 		FreeVarGroup *varGroup = Global->findVarGroup(FREEVARGROUP_ALL);
@@ -793,13 +793,14 @@ SEXP omxBackend2(SEXP constraints, SEXP matList,
 
 static SEXP omxBackend(SEXP constraints, SEXP matList,
 		SEXP varList, SEXP algList, SEXP expectList, SEXP computeList,
-		SEXP data, SEXP intervalList, SEXP checkpointList, SEXP options,
-		       SEXP defvars, SEXP Rsilent)
+                       SEXP data, SEXP intervalList,
+                       SEXP checkpointList, SEXP options,
+                       SEXP defvars, SEXP Rsilent)
 {
 	try {
 		return omxBackend2(constraints, matList,
 				   varList, algList, expectList, computeList,
-				   data, intervalList, checkpointList, options, defvars,
+                       data, intervalList, checkpointList, options, defvars,
 				   Rf_asLogical(Rsilent));
 	} catch( std::exception& u__ex__ ) {
 		exception_to_Rf_error( u__ex__ );

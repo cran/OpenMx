@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -500,7 +500,7 @@ void omxState::initialRecalc(FitContext *fc)
 		omxMatrix *matrix = algebraList[ax];
 		if (!matrix->fitFunction) continue;
 		omxCompleteFitFunction(matrix);
-		omxFitFunctionCompute(matrix->fitFunction, FF_COMPUTE_INITIAL_FIT, fc);
+    omxRecompute(matrix, fc);
 	}
 
 	setWantStage(FF_COMPUTE_FIT);
@@ -1361,7 +1361,7 @@ void omxCheckpoint::postfit(const char *context, FitContext *fc, bool force)
 				fprintf(file, "\tNA");
 			}
 		}
-		fprintf(file, "\t%.10g\n", fc->fit);
+		fprintf(file, "\t%.10g\n", fc->getFit());
 		fflush(file);
 		lastCheckpoint = now;
 		lastIterations = fc->iterations;

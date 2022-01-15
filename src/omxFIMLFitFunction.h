@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ class omxFIMLFitFunction : public omxFitFunction {
 
 	virtual ~omxFIMLFitFunction();
 	virtual void init();
-	virtual void compute(int ffcompute, FitContext *fc);
+	virtual void compute2(int ffcompute, FitContext *fc) override;
 	virtual void populateAttr(SEXP algebra);
 	virtual void invalidateCache();
 

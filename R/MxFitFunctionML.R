@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -26,25 +26,17 @@ setClass(Class = "MxFitFunctionML",
 	 )
 
 setMethod("initialize", "MxFitFunctionML",
-	  function(.Object, vector, rowDiagnostics, fellner, verbose, profileOut,
-		   rowwiseParallel, jointConditionOn, name = 'fitfunction') {
-		.Object@name <- name
-		.Object@vector <- vector
-		.Object@rowDiagnostics <- rowDiagnostics
-		.Object@fellner <- fellner
-		.Object@verbose <- verbose
-		.Object@profileOut <- profileOut
-		.Object@rowwiseParallel <- rowwiseParallel
-		.Object@jointConditionOn <- jointConditionOn
-		return(.Object)
-	}
-)
-
-setMethod("qualifyNames", signature("MxFitFunctionML"),
-	function(.Object, modelname, namespace) {
-		.Object@name <- imxIdentifier(modelname, .Object@name)
-		return(.Object)
-})
+	  function(.Object, ...) {
+      .Object <- callNextMethod()
+      .Object@vector <- ..1
+      .Object@rowDiagnostics <- ..2
+      .Object@fellner <- ..3
+      .Object@verbose <- ..4
+      .Object@profileOut <- ..5
+      .Object@rowwiseParallel <- ..6
+      .Object@jointConditionOn <- ..7
+      .Object
+	})
 
 setMethod("genericFitConvertEntities", "MxFitFunctionML",
 	function(.Object, flatModel, namespace, labelsData) {
@@ -78,6 +70,7 @@ setMethod("genericFitConvertEntities", "MxFitFunctionML",
 
 setMethod("genericFitFunConvert", "MxFitFunctionML",
 	function(.Object, flatModel, model, labelsData, dependencies) {
+    .Object <- callNextMethod()
 		name <- .Object@name
 		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
 		expectName <- paste(modelname, "expectation", sep=".")

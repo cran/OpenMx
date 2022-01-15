@@ -4,12 +4,16 @@
 \alias{imxRowGradients}
 \title{imxRowGradients}
 \usage{
-imxRowGradients(model, robustSE = FALSE)
+imxRowGradients(model, robustSE = FALSE, dependencyModels = character(0))
 }
 \arguments{
 \item{model}{An OpenMx model object that has been run}
 
 \item{robustSE}{Logical; are the row gradients being requested to calculate robust standard errors?}
+
+\item{dependencyModels}{Vector of character strings naming 
+submodels that do not contain data, but contain objects 
+to which data-containing models make reference.}
 }
 \description{
 This is an internal function exported for those people who know

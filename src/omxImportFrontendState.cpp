@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ void omxState::omxProcessMxMatrixEntities(SEXP matList)
 	}
 }
 
-void omxState::omxProcessMxAlgebraEntities(SEXP algList)
+void omxState::omxProcessMxAlgebraEntities(SEXP algList, FitContext *fc)
 {
 	ProtectedSEXP algListNames(Rf_getAttrib(algList, R_NamesSymbol));
 	AssertProtectStackBalanced apsb(__FUNCTION__);
@@ -103,7 +103,13 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 		ProtectedSEXP nextAlgTuple(VECTOR_ELT(algList, index));
 		if(IS_S4_OBJECT(nextAlgTuple)) {
 			omxMatrix *fm = algebraList[index];
-			omxFillMatrixFromMxFitFunction(fm, index, nextAlgTuple);
+      if (Rf_inherits(nextAlgTuple, "MxPenalty")) {
+        SEXP obj = nextAlgTuple;
+        Global->importPenalty(fm, obj, fc);
+      } else {
+        omxFillMatrixFromMxFitFunction(fm, index, nextAlgTuple);
+      }
+      fm->setMatrixNumber(index);
 			fm->nameStr = CHAR(STRING_ELT(algListNames, index));
 		} else {
 			int tx=0;
@@ -138,16 +144,9 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList)
 
 void omxState::omxCompleteMxFitFunction(SEXP algList, FitContext *fc)
 {
-	SEXP nextAlgTuple;
-
 	for(int index = 0; index < Rf_length(algList); index++) {
-		bool s4;
-		{
-			ScopedProtect p1(nextAlgTuple, VECTOR_ELT(algList, index));
-			s4 = IS_S4_OBJECT(nextAlgTuple);
-		}
-		if(!s4) continue;
 		omxMatrix *fm = algebraList[index];
+    if (!fm->isFitFunction()) continue;
 		omxCompleteFitFunction(fm);
 		ComputeFit("init", fm, FF_COMPUTE_INITIAL_FIT, fc);
 	}

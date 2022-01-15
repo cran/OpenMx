@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 #include "omxDefines.h"
 #include "EnableWarnings.h"
 
-struct omxNormalExpectation : public omxExpectation {
-	typedef omxExpectation super;
+struct omxNormalExpectation : public MVNExpectation {
+	typedef MVNExpectation super;
 
 	omxMatrix *cov, *means; // observed covariance and means
 
@@ -45,41 +45,41 @@ void omxNormalExpectation::compute(FitContext *fc, const char *what, const char 
 	super::compute(fc, what, how);
 }
 
-void omxNormalExpectation::populateAttr(SEXP algebra) {
+void omxNormalExpectation::populateAttr(SEXP algebra)
+{
   if(OMX_DEBUG) { mxLog("Populating Normal Attributes."); }
 
   {
-	omxRecompute(cov, NULL);
-	if(means != NULL) omxRecompute(means, NULL);
+    omxRecompute(cov, NULL);
+    if(means != NULL) omxRecompute(means, NULL);
 
-	{
-		SEXP expCovExt;
-	ScopedProtect p1(expCovExt, Rf_allocMatrix(REALSXP, cov->rows, cov->cols));
-	for(int row = 0; row < cov->rows; row++)
-		for(int col = 0; col < cov->cols; col++)
-			REAL(expCovExt)[col * cov->rows + row] =
-				omxMatrixElement(cov, row, col);
-	Rf_setAttrib(algebra, Rf_install("ExpCov"), expCovExt);
-	}
+    {
+      SEXP expCovExt;
+      ScopedProtect p1(expCovExt, Rf_allocMatrix(REALSXP, cov->rows, cov->cols));
+      for(int row = 0; row < cov->rows; row++)
+        for(int col = 0; col < cov->cols; col++)
+          REAL(expCovExt)[col * cov->rows + row] =
+            omxMatrixElement(cov, row, col);
+      Rf_setAttrib(algebra, Rf_install("ExpCov"), expCovExt);
+    }
 
 
-	if (means != NULL) {
-		SEXP expMeanExt;
-		ScopedProtect p1(expMeanExt, Rf_allocMatrix(REALSXP, means->rows, means->cols));
-		for(int row = 0; row < means->rows; row++)
-			for(int col = 0; col < means->cols; col++)
-				REAL(expMeanExt)[col * means->rows + row] =
-					omxMatrixElement(means, row, col);
-		Rf_setAttrib(algebra, Rf_install("ExpMean"), expMeanExt);
-	} else {
-		SEXP expMeanExt;
-		ScopedProtect p1(expMeanExt, Rf_allocMatrix(REALSXP, 0, 0));
-		Rf_setAttrib(algebra, Rf_install("ExpMean"), expMeanExt);
-	}
-
-	ProtectedSEXP RnumStats(Rf_ScalarReal(omxDataDF(data)));
-	Rf_setAttrib(algebra, Rf_install("numStats"), RnumStats);
+    if (means != NULL) {
+      SEXP expMeanExt;
+      ScopedProtect p1(expMeanExt, Rf_allocMatrix(REALSXP, means->rows, means->cols));
+      for(int row = 0; row < means->rows; row++)
+        for(int col = 0; col < means->cols; col++)
+          REAL(expMeanExt)[col * means->rows + row] =
+            omxMatrixElement(means, row, col);
+      Rf_setAttrib(algebra, Rf_install("ExpMean"), expMeanExt);
+    } else {
+      SEXP expMeanExt;
+      ScopedProtect p1(expMeanExt, Rf_allocMatrix(REALSXP, 0, 0));
+      Rf_setAttrib(algebra, Rf_install("ExpMean"), expMeanExt);
+    }
   }
+
+  super::populateAttr(algebra);
 
 	MxRList out;
   populateNormalAttr(algebra, out);

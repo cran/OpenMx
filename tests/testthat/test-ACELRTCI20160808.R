@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -591,7 +591,7 @@ cmpInterval <- function(model, iname, param, col) {
   adj <- try(mxRun(mxModel(m2, mxCI(param,boundAdj=TRUE)),
                intervals=TRUE,checkpoint=FALSE))
   if (is(adj, "try-error")) return(rep(NA,3))
-  d2 <- unadj$compute$steps[['CI']]$output$detail
+  d2 <- adj$compute$steps[['CI']]$output$detail
   ref <- ACECI(model)
   c(unadj=unadj$output$confidenceIntervals[param, col],
     adj=adj$output$confidenceIntervals[param, col],

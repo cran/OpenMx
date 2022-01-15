@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ autoStartDataHelper <- function(model, subname=model@name, type){
 			mdata$observedStats$means <- meanData
 		}
 	} else if (origDataType == 'raw') {
-		data <- data[,useVars]
+		data <- data[,useVars, drop = FALSE]
 		# This conditional is for cases when the model has only 1 endogenous variable:
 		if(!is.matrix(data) && !is.data.frame(data)){
 			data <- as.matrix(data)

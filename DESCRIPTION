@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2021-09-01
+Date: 2022-01-05
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -54,7 +54,9 @@ Imports: digest, MASS, Matrix, methods, Rcpp, RcppParallel, parallel,
         lifecycle
 Depends: R (>= 3.5.0)
 Suggests: mvtnorm, numDeriv, roxygen2 (>= 6.1), rpf (>= 0.45),
-        snowfall, lme4, covr, testthat, umx, ifaTools
+        snowfall, lme4, covr, testthat, umx, ifaTools, knitr, markdown,
+        rmarkdown, reshape2, ggplot2
+VignetteBuilder: knitr
 LazyLoad: yes
 LazyData: yes
 Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
@@ -89,14 +91,14 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxExpectationStateSpace.R' 'MxExpectationBA81.R'
         'MxFitFunctionGREML.R' 'MxExpectationGREML.R' 'MxMI.R'
         'MxFactorScores.R' 'MxRobustSE.R' 'MxAvailableOptimizers.R'
-        'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R' 'MxMMI.R'
-        'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
+        'MxTryHard.R' 'MxSE.R' 'MxAutoStart.R' 'MxRetro.R'
+        'MxPenalty.R' 'MxMMI.R' 'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
 RdMacros: lifecycle
 Biarch: true
-Version: 2.19.8
+Version: 2.20.0
 RoxygenNote: 7.1.1
 NeedsCompilation: yes
-Packaged: 2021-09-01 15:43:49 UTC; joshua
+Packaged: 2022-01-14 20:50:04 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -136,4 +138,4 @@ Author: Steven M. Boker [aut],
   Jitse Niesen [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2021-09-06 06:40:09 UTC
+Date/Publication: 2022-01-16 00:02:47 UTC

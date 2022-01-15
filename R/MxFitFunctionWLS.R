@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2019 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -35,13 +35,12 @@ setClass(Class = "MxFitFunctionWLS",
 
 # **DONE**
 setMethod("initialize", "MxFitFunctionWLS",
-	function(.Object, type, allContinuousMethod, fullWeight, name = 'fitfunction') {
-		.Object@name <- name
-		.Object@vector <- FALSE
-		.Object@type <- type
-		.Object@continuousType <- allContinuousMethod
-		.Object@fullWeight <- fullWeight
-		return(.Object)
+	function(.Object, ...) {
+    .Object <- callNextMethod()
+		.Object@type <- ..1
+		.Object@continuousType <- ..2
+		.Object@fullWeight <- ..3
+		.Object
 	}
 )
 
@@ -77,6 +76,7 @@ setMethod("genericFitConvertEntities", "MxFitFunctionWLS",
 # **DONE**
 setMethod("genericFitFunConvert", "MxFitFunctionWLS",
 	function(.Object, flatModel, model, labelsData, dependencies) {
+    .Object <- callNextMethod()
 		name <- .Object@name
 		modelname <- imxReverseIdentifier(model, .Object@name)[[1]]
 		expectName <- paste(modelname, "expectation", sep=".")

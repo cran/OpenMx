@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -266,7 +266,8 @@ updateModelMatrices <- function(model, flatModel, values) {
 updateModelAlgebras <- function(model, flatModel, values) {
 	aNames <- names(flatModel@algebras)
 	oNames <- names(flatModel@fitfunctions)
-	aList <- append(aNames, oNames)
+	pNames <- names(flatModel@penalties)
+	aList <- append(aNames, append(oNames, pNames))
 	if(length(aList) != length(values)) {
 		stop(paste("This model has", length(aList),
 			"algebras, but the backend has returned", length(values),
@@ -341,6 +342,8 @@ updateModelEntitiesTargetModel <- function(model, entNames, values, modelNameMap
 						attr$dim <- NULL
 						candidate@info <- attr
 					}
+				} else if (is(candidate,"MxPenalty")) {
+          candidate@result <- as.matrix(value)
 				} else if(is(candidate, "MxMatrix")) {
 					if(candidate@name=="filteredDataRow" && !candidate@.persist){next} #bit of a hack
 					if (any(dim(candidate@values) != dim(value))) {
@@ -410,10 +413,11 @@ imxLocateIndex <- function(model, name, referant) {
 	mNames <- names(model@matrices)
 	aNames <- names(model@algebras)
 	fNames <- names(model@fitfunctions)
+  pNames <- names(model@penalties)
 	eNames <- names(model@expectations)
 	dNames <- names(model@datasets)
 	matrixNumber <- match(name, mNames)
-	algebraNumber <- match(name, append(aNames, fNames))
+	algebraNumber <- match(name, append(aNames, c(fNames, pNames)))
 	dataNumber <- match(name, dNames)
 	expectationNumber <- match(name, eNames)
 	if (all(is.na(matrixNumber)) && all(is.na(algebraNumber)) &&

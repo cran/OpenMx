@@ -34,7 +34,7 @@ approach box constraints but will not leave the feasible region
 (even by some small epsilon>0). Non-finite fit values are
 interpreted as soft feasibility constraints. That is, when a
 non-finite fit is encountered, line search is continued after the
-step size is multiplied by 10%. Comprehensive diagnostics are
+step size is multiplied by 10\%. Comprehensive diagnostics are
 available by increasing the verbose level.
 }
 \references{

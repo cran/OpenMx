@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -762,31 +762,27 @@ generateRelationalData <- function(model, returnModel, .backend, subname, empiri
 		modelE <- mxRun(modelE, silent=TRUE)
 		simData <- modelE$compute$output
 
-		datalist <- modelE@runstate$datalist
-		for (dName in names(datalist)) {
-			if (is.null(simData[[dName]])) {
-				simData[[dName]] <- datalist[[dName]]$observed
-			} else {
-				orig <- datalist[[dName]]$observed
-				toCopy <- setdiff(colnames(orig), colnames(simData[[dName]]))
-				for (col in toCopy) {
-					simData[[dName]][[col]] <- orig[[col]]
-				}
-			}
-		}
-
 		names(simData) <- substr(names(simData), 1, nchar(names(simData))-5) #strip .data
 
+    for (modelName in names(simData)) {
+      if (modelName == model$name) {
+        dat <- model@data@observed
+      } else {
+        dat <- model[[modelName]]@data@observed
+      }
+      newDat <- simData[[modelName]]
+      toCopy <- setdiff(colnames(dat), colnames(newDat))
+      for (col in toCopy) newDat[[col]] <- dat[[col]]
+      simData[[modelName]] <- newDat
+      if (modelName == model$name) {
+        model@data@observed <- newDat
+      } else {
+        model[[modelName]]@data@observed <- newDat
+      }
+    }
 		if (!returnModel) {
 			return(simData)
 		} else {
-			for (modelName in names(simData)) {
-				if (modelName == model$name) {
-					model@data@observed <- simData[[modelName]]
-				} else {
-					model[[modelName]]@data@observed <- simData[[modelName]]
-				}
-			}
 			return(model)
 		}
 	}
@@ -798,12 +794,14 @@ generateRelationalData <- function(model, returnModel, .backend, subname, empiri
 	))
 
 	modelE <- mxModel(model, plan)
+  modelE$expectation$.maxDebugGroups <- 100L
 	modelE$expectation$.rampartCycleLimit <- 0L
 	modelE <- mxRun(modelE, silent=TRUE)
 	dataEnv <- new.env()
-	for (dName in names(modelE@runstate$datalist)) {
+  datasets <- collectDatasets(modelE, imxGenerateNamespace(model))
+	for (dName in names(datasets)) {
 		modelName <- substr(dName, 1, nchar(dName)-5)  # remove .data
-		assign(modelName, modelE@runstate$datalist[[ dName ]]@observed, envir=dataEnv)
+		assign(modelName, datasets[[ dName ]]@observed, envir=dataEnv)
 	}
 	ed <- modelE$expectation$debug
 	layout <- ed$layout
@@ -1244,13 +1242,13 @@ updateExpectationDimnames <- function(flatExpectation, flatModel,
 	}
 
 	if (!is.null(dimnames(means)) && !single.na(dims) &&
-		!identical(dimnames(means), list(NULL, dims))) {
+		!identical(colnames(means), dims)) {
 		modelname <- getModelName(flatExpectation)
 		msg <- paste("The expected means matrix associated",
 			"with the expectation function in model",
-			omxQuotes(modelname), "contains dimnames: ",
-            paste(toString(dimnames(means)), ".", sep = ""),
-			"The expectation function has specified dimnames:",
+			omxQuotes(modelname), "contains colnames: ",
+            paste(toString(colnames(means)), ".", sep = ""),
+			"The expectation function has specified colnames:",
 			paste(toString(dims), ".", sep =""))
 		stop(msg, call.=FALSE)
 	}

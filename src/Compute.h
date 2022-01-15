@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013-2020 by the individuals mentioned in the source code history
+ *  Copyright 2013-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -154,6 +154,8 @@ class FitContext {
   Eigen::ArrayXd curFree;  // length=numFree
   std::unique_ptr<CIobjective> disabledCiobj;
   void toggleCIObjective();
+	double fit;
+	double fitScale;
 
  public:
 	FreeVarGroup *varGroup;
@@ -164,7 +166,11 @@ class FitContext {
   int getNumFree() const { return u_numFree; }
 	std::vector<int> mapToParent;
 	double mac;
-	double fit;
+  double getFit() const { return fit * fitScale; }
+  double getFitScale() const { return fitScale; }
+  double getUnscaledFit() const { return fit; }
+  void setFit(double _fit, double _fitScale=1) { fit=_fit; fitScale=_fitScale; }
+  void setUnscaledFit(double _fit) { fit=_fit; }
 	FitStatisticUnits fitUnits;
 	int skippedRows;
   std::map< const char *, int, cstrCmp > freeToIndexMap;
@@ -184,6 +190,7 @@ class FitContext {
     int pars = getNumFree();
 		gradZ = Eigen::VectorXd::Zero(pars);
 	};
+  bool isGradientTooLarge();
 	int infoDefinite;
 	double infoCondNum;
 	Eigen::MatrixXd hess;

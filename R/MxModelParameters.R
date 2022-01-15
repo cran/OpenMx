@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -201,6 +201,7 @@ omxSetParameters <- function(model, labels=names(coef(model)), free = NULL, valu
 	if (!is.null(name)) {
 		retval <- mxRename(retval, name)
 	}
+  retval@.modifiedSinceRun <- TRUE
 	return(retval)
 }
 
@@ -329,12 +330,11 @@ getAnonymousNames <- function(rows) {
 }
 
 omxAssignFirstParameters <- function(model, indep = FALSE) {
-	params <- omxGetParameters(model, indep)
-	if (!length(params)) return(model)
-	pnames <- names(params)
-	model <- omxSetParameters(model, pnames[!is.na(pnames)],
-		values = params[!is.na(pnames)], indep = indep)
-	return(model)
+	params <- omxGetParameters(model, indep, fetch='all')
+	if (!nrow(params)) return(model)
+	model <- omxSetParameters(model, rownames(params),
+		values = params$value, lbound = params$lbound, ubound = params$ubound, indep = indep)
+  model
 }
 
 getParametersHelper <- function(matName, model, selection, fetch, labels) {

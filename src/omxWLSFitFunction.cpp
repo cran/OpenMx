@@ -1,5 +1,5 @@
  /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ struct omxWLSFitFunction : omxFitFunction {
 		type("WLS"), continuousType("cumulants"), fullWeight(true) {};
 	virtual ~omxWLSFitFunction();
 	virtual void init() override;
-	virtual void compute(int ffcompute, FitContext *fc) override;
+	virtual void compute2(int ffcompute, FitContext *fc) override;
 	virtual void populateAttr(SEXP algebra) override;
 
 	void prepData();
@@ -59,7 +59,7 @@ omxWLSFitFunction::~omxWLSFitFunction()
 	omxFreeMatrix(owo->P);
 }
 
-void omxWLSFitFunction::compute(int want, FitContext *fc)
+void omxWLSFitFunction::compute2(int want, FitContext *fc)
 {
 	auto *oo = this;
 	auto *owo = this;
@@ -103,7 +103,8 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 	omxDAXPY(-1.0, eFlat, B);
 	//if(OMX_DEBUG) {omxPrintMatrix(B, "....WLS Observed - Expected Vector: "); }
 
-	omxMatrix *weights = expectation->data->getSingleObsSummaryStats().useWeight;
+  auto &oss = expectation->data->getSingleObsSummaryStats();
+	omxMatrix *weights = oss.useWeight;
 	if(weights != NULL) {
 		//if(OMX_DEBUG_ALGEBRA) {omxPrintMatrix(weights, "....WLS Weight Matrix: "); }
 
@@ -123,10 +124,10 @@ void omxWLSFitFunction::compute(int want, FitContext *fc)
 
 	sum = omxDDOT(P, B);
 
-	oo->matrix->data[0] = sum;
+	matrix->data[0] = sum;
+  scale = oss.totalWeight;
 
-	if(OMX_DEBUG) { mxLog("WLSFitFunction value comes to: %f.", oo->matrix->data[0]); }
-
+	if(OMX_DEBUG) { mxLog("WLSFitFunction %.5g %f", oo->matrix->data[0], oo->scale); }
 }
 
 void omxWLSFitFunction::populateAttr(SEXP algebra)

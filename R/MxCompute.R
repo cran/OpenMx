@@ -1,5 +1,5 @@
 #
-#   Copyright 2013-2020 by the individuals mentioned in the source code history
+#   Copyright 2013-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -736,9 +736,9 @@ setMethod("initialize", "MxComputeConfidenceInterval",
 ##' @param ...  Not used.  Forces remaining arguments to be specified by name.
 ##' @param freeSet names of matrices containing free variables
 ##' @template args-verbose
-##' @param engine deprecated
+##' @param engine \lifecycle{deprecated}
 ##' @param fitfunction the name of the deviance function
-##' @param tolerance deprecated
+##' @param tolerance \lifecycle{deprecated}
 ##' @param constraintType one of c('ineq', 'none')
 ##' @references
 ##' Neale, M. C. & Miller M. B. (1997). The use of likelihood based
@@ -772,6 +772,132 @@ setMethod("updateFromBackend", signature("MxComputeConfidenceInterval"),
 	})
 
 setMethod("displayCompute", signature(Ob="MxComputeConfidenceInterval", indent="integer"),
+	  function(Ob, indent) {
+		  callNextMethod()
+		  sp <- paste(rep('  ', indent), collapse="")
+		  cat(sp, "$plan :", '\n')
+		  displayCompute(Ob@plan, indent+1L)
+		  for (sl in c("verbose")) {
+			  if (is.na(slot(Ob, sl))) next
+			  slname <- paste("$", sl, sep="")
+			  if (is.character(slot(Ob, sl))) {
+				  cat(sp, slname, ":", omxQuotes(slot(Ob, sl)), '\n')
+			  } else {
+				  cat(sp, slname, ":", slot(Ob, sl), '\n')
+			  }
+		  }
+		  invisible(Ob)
+	  })
+
+#----------------------------------------------------
+
+setClass(Class = "MxComputePenaltySearch",
+	 contains = "BaseCompute",
+	 representation = representation(
+	     plan = "MxCompute",
+       fitfunction = "MxCharOrNumber",
+	     verbose = "integer",
+       approach = "character",
+       ebicGamma = "numeric"))
+
+setMethod("assignId", signature("MxComputePenaltySearch"),
+	function(.Object, id, defaultFreeSet) {
+		.Object <- callNextMethod()
+		defaultFreeSet <- .Object@freeSet
+		id <- .Object@id
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- assignId(slot(.Object, sl), id, defaultFreeSet)
+			id <- slot(.Object, sl)@id + 1L
+		}
+		.Object@id <- id
+		.Object
+	})
+
+setMethod("getFreeVarGroup", signature("MxComputePenaltySearch"),
+	function(.Object) {
+		result <- callNextMethod()
+		for (step in c(.Object@plan)) {
+			got <- getFreeVarGroup(step)
+			if (length(got)) result <- append(result, got)
+		}
+		result
+	})
+
+setMethod("qualifyNames", signature("MxComputePenaltySearch"),
+	function(.Object, modelname, namespace) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- qualifyNames(slot(.Object, sl), modelname, namespace)
+		}
+		for (sl in c('fitfunction')) {
+			slot(.Object, sl) <- imxConvertIdentifier(slot(.Object, sl), modelname, namespace)
+		}
+		.Object
+	})
+
+setMethod("convertForBackend", signature("MxComputePenaltySearch"),
+	function(.Object, flatModel, model) {
+		name <- .Object@name
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- convertForBackend(slot(.Object, sl), flatModel, model)
+		}
+		if (is.character(.Object@fitfunction)) {
+			.Object@fitfunction <- imxLocateIndex(flatModel, .Object@fitfunction, .Object)
+		}
+		.Object
+	})
+
+setMethod("initialize", "MxComputePenaltySearch",
+	  function(.Object, freeSet, plan, verbose, fitfunction, approach, ebicGamma) {
+		  .Object@name <- 'compute'
+		  .Object@.persist <- TRUE
+		  .Object@freeSet <- freeSet
+		  .Object@plan <- plan
+		  .Object@verbose <- verbose
+		  .Object@fitfunction <- fitfunction
+      .Object@approach <- approach
+      .Object@ebicGamma <- ebicGamma
+		  .Object
+	  })
+
+##' Regularize parameter estimates
+##'
+##' Add a penalty to push some subset of the parameter estimates toward zero.
+##'
+##' @param plan compute plan to optimize the model
+##' @param ...  Not used.  Forces remaining arguments to be specified by name.
+##' @param freeSet names of matrices containing free variables
+##' @template args-verbose
+##' @param fitfunction the name of the deviance function
+##' @param approach what fit function to use to compare regularized models? Currently only EBIC is available
+##' @param ebicGamma what Gamma value to use for EBIC? Must be between 0 and 1
+##' @references
+##' Jacobucci, R., Grimm, K. J., & McArdle, J. J. (2016).
+##' Regularized structural equation modeling.
+##' <i>Structural equation modeling: a multidisciplinary journal, 23</i>(4), 555-566.
+##' @aliases
+##' MxComputePenaltySearch-class
+mxComputePenaltySearch <- function(plan, ..., freeSet=NA_character_, verbose=0L,
+                                fitfunction='fitfunction',
+                                approach='EBIC', ebicGamma = 0.5) {
+  prohibitDotdotdot(list(...))
+	verbose <- as.integer(verbose)
+	approach <- match.arg(approach)
+  if (ebicGamma < 0 || ebicGamma > 1) stop("ebicGamma must be between 0 and 1")
+	new("MxComputePenaltySearch", freeSet, plan, verbose, fitfunction, approach,
+      ebicGamma)
+}
+
+setMethod("updateFromBackend", signature("MxComputePenaltySearch"),
+	function(.Object, computes) {
+		.Object <- callNextMethod()
+		for (sl in c('plan')) {
+			slot(.Object, sl) <- updateFromBackend(slot(.Object, sl), computes)
+		}
+		.Object
+	})
+
+setMethod("displayCompute", signature(Ob="MxComputePenaltySearch", indent="integer"),
 	  function(Ob, indent) {
 		  callNextMethod()
 		  sp <- paste(rep('  ', indent), collapse="")
@@ -837,7 +963,7 @@ setMethod("initialize", "MxComputeNewtonRaphson",
 ##' (even by some small epsilon>0). Non-finite fit values are
 ##' interpreted as soft feasibility constraints. That is, when a
 ##' non-finite fit is encountered, line search is continued after the
-##' step size is multiplied by 10%. Comprehensive diagnostics are
+##' step size is multiplied by 10\%. Comprehensive diagnostics are
 ##' available by increasing the verbose level.
 ##'
 ##' @param freeSet names of matrices containing free variables
@@ -1614,8 +1740,9 @@ setClass(Class = "MxComputeNumericDeriv",
 	     iterations = "integer",
 	     verbose="integer",
 	     knownHessian="MxOptionalMatrix",
-	     checkGradient="logical",
-	 hessian="logical"))
+     checkGradient="logical",
+     hessian="logical",
+     analytic="logical"))
 
 setMethod("qualifyNames", signature("MxComputeNumericDeriv"),
 	function(.Object, modelname, namespace) {
@@ -1635,7 +1762,7 @@ setMethod("convertForBackend", signature("MxComputeNumericDeriv"),
 
 setMethod("initialize", "MxComputeNumericDeriv",
 	  function(.Object, freeSet, fit, parallel, stepSize, iterations, verbose, knownHessian,
-		   checkGradient, hessian) {
+		   checkGradient, hessian, analytic) {
 		  .Object@name <- 'compute'
 		  .Object@.persist <- TRUE
 		  .Object@freeSet <- freeSet
@@ -1647,6 +1774,7 @@ setMethod("initialize", "MxComputeNumericDeriv",
 		  .Object@knownHessian <- knownHessian
 		  .Object@checkGradient <- checkGradient
 		  .Object@hessian <- hessian
+		  .Object@analytic <- analytic
 		  .Object
 	  })
 
@@ -1696,6 +1824,7 @@ adjustDefaultNumericDeriv <- function(m, iterations, stepSize) {
 ##' @param knownHessian an optional matrix of known Hessian entries
 ##' @param checkGradient whether to check the first order convergence criterion (gradient is near zero)
 ##' @param hessian whether to estimate the Hessian. If FALSE then only the gradient is estimated.
+##' @param analytic Use the analytic Hessian, if available.
 ##' @aliases
 ##' MxComputeNumericDeriv-class
 ##' @examples
@@ -1720,7 +1849,7 @@ mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfu
 				  parallel=TRUE,
 				  stepSize=imxAutoOptionValue("Gradient step size"),
 				  iterations=4L, verbose=0L,
-				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE)
+				  knownHessian=NULL, checkGradient=TRUE, hessian=TRUE, analytic=TRUE)
 {
   prohibitDotdotdot(list(...))
 	verbose <- as.integer(verbose)
@@ -1737,7 +1866,7 @@ mxComputeNumericDeriv <- function(freeSet=NA_character_, ..., fitfunction='fitfu
 	}
 
 	new("MxComputeNumericDeriv", freeSet, fitfunction, parallel, stepSize, iterations,
-	    verbose, knownHessian, checkGradient, hessian)
+	    verbose, knownHessian, checkGradient, hessian, analytic)
 }
 
 setMethod("displayCompute", signature(Ob="MxComputeNumericDeriv", indent="integer"),
@@ -2687,42 +2816,46 @@ omxHasDefaultComputePlan <- function(model) {
 }
 
 omxDefaultComputePlan <- function(modelName=NULL, intervals=FALSE, useOptimizer=TRUE,
-				  optionList=options()$mxOption) {
+				  optionList=options()$mxOption, penaltySearch=FALSE) {
 	if(length(modelName) && !is.character(modelName[1])){stop("argument 'modelName' must be a character string")}
 	compute <- NULL
 	fitNum <- ifelse(length(modelName), paste(modelName, 'fitfunction', sep="."), "fitfunction")
 	if (!useOptimizer) {
 		compute <- mxComputeSequence(list(CO=mxComputeOnce(from=fitNum, 'fit', .is.bestfit=TRUE),
 																			RE=mxComputeReportExpectation()))
-		} else{
-		steps <- list(GD=mxComputeGradientDescent(
-			fitfunction=fitNum,
-			verbose=0L))
-			if (intervals){
-				ciOpt <- mxComputeGradientDescent(
-					verbose=0L,
-					fitfunction=fitNum,
-					nudgeZeroStarts=FALSE)
-				cType <- ciOpt$defaultCImethod
-				if (cType == 'ineq') {
-					ciOpt <- mxComputeTryHard(plan=ciOpt, scale=0.05)
-				}
-				steps <- c(steps, CI=mxComputeConfidenceInterval(
-					fitfunction=fitNum,
-					constraintType=cType,
-					verbose=0L, plan=ciOpt))
-			}
-			if (optionList[["Calculate Hessian"]] == "Yes") {
-				steps <- c(steps, ND=mxComputeNumericDeriv(
-					fitfunction=fitNum,
-					stepSize=imxAutoOptionValue('Gradient step size',optionList)))
-			}
-			if (optionList[["Standard Errors"]] == "Yes") {
-				steps <- c(steps, SE=mxComputeStandardError(), HQ=mxComputeHessianQuality())
-			}
-			compute <- mxComputeSequence(c(steps,
-																		 RD=mxComputeReportDeriv(),
-																		 RE=mxComputeReportExpectation()))
+  } else{
+    if (penaltySearch) {
+      steps <- list(PS=mxComputePenaltySearch(plan=mxComputeSequence(list(
+        SV=mxComputeSetOriginalStarts(),
+        GD=mxComputeGradientDescent(fitfunction=fitNum)))))
+    } else {
+      steps <- list(GD=mxComputeGradientDescent(fitfunction=fitNum, verbose=0L))
+    }
+    if (intervals){
+      ciOpt <- mxComputeGradientDescent(
+        verbose=0L,
+        fitfunction=fitNum,
+        nudgeZeroStarts=FALSE)
+      cType <- ciOpt$defaultCImethod
+      if (cType == 'ineq') {
+        ciOpt <- mxComputeTryHard(plan=ciOpt, scale=0.05)
+      }
+      steps <- c(steps, CI=mxComputeConfidenceInterval(
+        fitfunction=fitNum,
+        constraintType=cType,
+        verbose=0L, plan=ciOpt))
+    }
+    if (optionList[["Calculate Hessian"]] == "Yes") {
+      steps <- c(steps, ND=mxComputeNumericDeriv(
+        fitfunction=fitNum,
+        stepSize=imxAutoOptionValue('Gradient step size',optionList)))
+    }
+    if (optionList[["Standard Errors"]] == "Yes") {
+      steps <- c(steps, SE=mxComputeStandardError(), HQ=mxComputeHessianQuality())
+    }
+    compute <- mxComputeSequence(c(steps,
+                                   RD=mxComputeReportDeriv(),
+                                   RE=mxComputeReportExpectation()))
 	}
 	compute@.persist <- TRUE
 	return(compute)

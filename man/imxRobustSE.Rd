@@ -4,13 +4,15 @@
 \alias{imxRobustSE}
 \title{imxRobustSE}
 \usage{
-imxRobustSE(model, details = FALSE)
+imxRobustSE(model, details = FALSE, dependencyModels = character(0))
 }
 \arguments{
 \item{model}{An OpenMx model object that has been run.}
 
 \item{details}{Logical. whether to return the full parameter
 covariance matrix.}
+
+\item{dependencyModels}{Passed to \code{imxRowGradients()}.}
 }
 \description{
 This is an internal function exported for those people who know
@@ -40,7 +42,6 @@ of AIC calculated from the "bread," the "meat," and the loglikelihood
 at the maximum-likelihood solution.
 
 This function does not work correctly with multigroup models in which the 
-groups themselves contain subgroups, or in which groups contain references
-to objects in other groups.  This function also does not correctly handle
+groups themselves contain subgroups. This function also does not correctly handle
 multilevel data.
 }

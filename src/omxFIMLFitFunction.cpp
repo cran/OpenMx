@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -835,7 +835,7 @@ void omxFIMLFitFunction::invalidateCache()
 	omxResizeMatrix(rowLikelihoods, data->nrows(), 1);
 }
 
-void omxFIMLFitFunction::compute(int want, FitContext *fc)
+void omxFIMLFitFunction::compute2(int want, FitContext *fc)
 {
 	auto *off = this;
 	omxFIMLFitFunction* ofiml = this;

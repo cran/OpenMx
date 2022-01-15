@@ -1,12 +1,12 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -63,7 +63,7 @@ namespaceSearch <- function(model, name) {
 			return(NULL)
 		} else {
 			submodel <- namespaceGetModel(model, path)
-			return(namespaceLocalSearch(submodel, components[[2]]))			
+			return(namespaceLocalSearch(submodel, components[[2]]))
 		}
 	}
 }
@@ -145,6 +145,9 @@ namespaceLocalSearch <- function(model, name) {
 	if (!is.null(result)) {
 		return(result)
 	}
+
+	result <- model@penalties[[name]]
+	if (!is.null(result)) return(result)
 
 	result <- model@submodels[[name]]
 
@@ -241,7 +244,7 @@ localNamespaceSearchReplace <- function(model, name, value) {
 	}
 	current <- namespaceLocalSearch(model, name)
 	if (is.null(current) && is.null(value)) {
-		if (!is.na(match(name, c("matrices", "algebras", "constraints",
+		if (!is.na(match(name, c("matrices", "algebras", "penalties", "constraints",
 					 "intervals", "submodels")))) {
 			msg <- paste("I'm very sorry, but direct modification of objects inside an mxModel is not",
 				     "supported.  The recommended approach to modifying an mxMatrix, mxAlgebra or",
@@ -252,10 +255,10 @@ localNamespaceSearchReplace <- function(model, name, value) {
 		}
 		return(model)
 	}
-	if(!is.null(current) && !is.null(value) && 
+	if(!is.null(current) && !is.null(value) &&
 			!imxSameType(current, value)) {
-		stop(paste("There already exists an object", 
-				omxQuotes(name), 
+		stop(paste("There already exists an object",
+				omxQuotes(name),
 				"in this model of different type"), call. = FALSE)
 	}
 	if(!is.null(value)) {
@@ -268,8 +271,10 @@ localNamespaceSearchReplace <- function(model, name, value) {
 		model@matrices[[name]] <- value
 	} else if (is(test,"MxAlgebra")) {
 		model@algebras[[name]] <- value
+	} else if (is(test,"MxPenalty")) {
+		model@penalties[[name]] <- value
 	} else if (is(test,"MxModel")) {
-		model@submodels[[name]] <- value	
+		model@submodels[[name]] <- value
 	} else if (is(test,"MxFitFunction")) {
 		model@fitfunction <- value
 	} else if (is(test,"MxExpectation")) {
@@ -278,6 +283,8 @@ localNamespaceSearchReplace <- function(model, name, value) {
 		model@data <- value
 	} else if (is(test,"MxConstraint")) {
 		model@constraints[[name]] <- value
+	} else if (is(test,"MxPenalty")) {
+		model@penalties[[name]] <- value
 	} else if (is(test, "MxCompute")) {
 		model@compute <- value
 	} else {
@@ -286,4 +293,3 @@ localNamespaceSearchReplace <- function(model, name, value) {
 	}
 	return(model)
 }
-

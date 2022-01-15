@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ wlsContinuousOnlyHelper <- function(x, type="WLS"){
 	dimnames(useWeight) <- list(n1,n1)
 	dimnames(fullWeight) <- list(n1,n1)
 
-	return(list(use=useWeight*numRows, full=fullWeight*numRows))
+	return(list(use=useWeight, full=fullWeight*numRows))
 }
 
 
@@ -775,10 +775,10 @@ mxDataWLS <- function(data, type="WLS", useMinusTwo=TRUE, returnInverted=TRUE, f
 		retVal@acov <- uls
 		}
 	if (type=="DLS" || type=="DWLS"){
-		retVal@acov <- dls
+		retVal@acov <- dls / n
 		}
 	if (type=="WLS"){
-		retVal@acov <- wls
+		retVal@acov <- wls / n
 		}
 	if (type=="XLS"){
 		retVal@acov <- xls

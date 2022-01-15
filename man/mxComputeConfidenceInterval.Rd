@@ -25,11 +25,11 @@ mxComputeConfidenceInterval(
 
 \item{verbose}{integer. Level of run-time diagnostic output. Set to zero to disable}
 
-\item{engine}{deprecated}
+\item{engine}{\lifecycle{deprecated}}
 
 \item{fitfunction}{the name of the deviance function}
 
-\item{tolerance}{deprecated}
+\item{tolerance}{\lifecycle{deprecated}}
 
 \item{constraintType}{one of c('ineq', 'none')}
 }

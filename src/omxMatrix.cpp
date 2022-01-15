@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -274,6 +274,8 @@ omxMatrix* omxDuplicateMatrix(omxMatrix* src, omxState* newState) {
 
 	newMat->rownames = src->rownames;
 	newMat->colnames = src->colnames;
+
+  if (src->penalty) newMat->penalty = src->penalty->clone(newMat);
 
     return newMat;
 }
@@ -767,7 +769,7 @@ void omxRecompute(omxMatrix *matrix, FitContext *fc)
 
 	if(matrix->algebra) omxAlgebraRecompute(matrix, want, fc);
 	else if(matrix->fitFunction) {
-		omxFitFunctionCompute(matrix->fitFunction, want, fc);
+    matrix->fitFunction->recompute(want, fc);
 	}
 	if (want & FF_COMPUTE_FIT) {
 		omxMarkClean(matrix);

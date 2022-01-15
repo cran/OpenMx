@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -300,8 +300,10 @@ class omxGlobal {
 	int maxStackDepth;
 
 	std::vector< ConfidenceInterval* > intervalList;
+  std::map< int, NumericVector > penaltyGrid;
 	void unpackConfidenceIntervals(omxState *currentState);
 	void omxProcessConfidenceIntervals(SEXP intervalList, omxState *currentState);
+  void importPenalty(omxMatrix *mat, S4 obj, FitContext *fc);
 
 	FreeVarGroup *findOrCreateVarGroup(int id);
 	FreeVarGroup *findVarGroup(int id);
@@ -385,7 +387,7 @@ class omxState {
 	void initialRecalc(FitContext *fc);
 	void omxProcessMxMatrixEntities(SEXP matList);
 	void omxProcessFreeVarList(SEXP varList);
-	void omxProcessMxAlgebraEntities(SEXP algList);
+	void omxProcessMxAlgebraEntities(SEXP algList, FitContext *fc);
 	void omxCompleteMxFitFunction(SEXP algList, FitContext *fc);
 	void omxProcessConfidenceIntervals(SEXP intervalList);
 	void omxProcessMxExpectationEntities(SEXP expList);
@@ -408,6 +410,11 @@ class omxState {
 	omxMatrix *getMatrixFromIndex(int matnum) const; // matrix (2s complement) or algebra
 	omxMatrix *getMatrixFromIndex(omxMatrix *mat) const { return lookupDuplicate(mat); };
 	const char *matrixToName(int matnum) const { return getMatrixFromIndex(matnum)->name(); };
+  Penalty *indexToPenalty(int index) const {
+    Penalty *got = algebraList[index]->penalty.get();
+    if (!got) mxThrow("algebra[%d] is not a Penalty", index);
+    return got;
+  }
 
 	bool isFakeParamSet() const { return hasFakeParam; }
 

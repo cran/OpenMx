@@ -15,7 +15,8 @@ mxComputeNumericDeriv(
   verbose = 0L,
   knownHessian = NULL,
   checkGradient = TRUE,
-  hessian = TRUE
+  hessian = TRUE,
+  analytic = TRUE
 )
 }
 \arguments{
@@ -38,6 +39,8 @@ mxComputeNumericDeriv(
 \item{checkGradient}{whether to check the first order convergence criterion (gradient is near zero)}
 
 \item{hessian}{whether to estimate the Hessian. If FALSE then only the gradient is estimated.}
+
+\item{analytic}{Use the analytic Hessian, if available.}
 }
 \description{
 For N free parameters, Richardson extrapolation requires

@@ -12,6 +12,6 @@ imxIsMultilevel(model)
 \description{
 This is an internal function exported for those people who know
 what they are doing.  If you don't know what you're doing, but want to,
-here's a brief description of the function.  You give this function an MxModel. It 
+here's a brief description of the function.  You give this function an MxModel. It
 returns TRUE if the model is multilevel and FALSE otherwise.
 }

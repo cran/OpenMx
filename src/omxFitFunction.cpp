@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -115,17 +115,19 @@ static const omxFitFunctionTableEntry omxFitFunctionSymbolTable[] = {
 	{"imxFitFunciontGRMFIML", &GRMFIMLFitInit},
 };
 
-void omxFitFunction::setUnitsFromName(const char *name)
+void omxFitFunction::compute(int want, FitContext *fc)
 {
-	if (strEQ(name, "-2lnL")) {
-		units = FIT_UNITS_MINUS2LL;
-  } else if (strEQ(name, "r'Wr")) {
-    units = FIT_UNITS_SQUARED_RESIDUAL;
-	} else {
-		Rf_warning("Unknown units '%s' passed to fit function '%s'",
-			   name, matrix->name());
-		units = FIT_UNITS_UNKNOWN;
-	}
+  if (fc) {
+    auto &pl = penalties;
+    for (auto &p1 : pl) {
+      p1->compute(want, fc);
+      if (want & FF_COMPUTE_FIT) {
+        //mxLog("%s: fit %f add penalty %f want %d", p1->name(), fc->fit, p1->getValue(), want);
+        fc->setUnscaledFit(fc->getUnscaledFit() + p1->getValue());
+      }
+    }
+  }
+	compute2(want, fc);
 }
 
 bool fitUnitsIsChiSq(FitStatisticUnits units)
@@ -133,7 +135,22 @@ bool fitUnitsIsChiSq(FitStatisticUnits units)
 	return units == FIT_UNITS_MINUS2LL || units == FIT_UNITS_SQUARED_RESIDUAL_CHISQ;
 }
 
-static const char* FitUnitNames[] = { "?", "Pr", "-2lnL", "r'Wr", "r'Wr" };
+static const char* FitUnitNames[] = { "?", "Pr", "-2lnL", "r'wr", "r'Wr", "any" };
+
+void omxFitFunction::setUnitsFromName(const char *name)
+{
+  units = FIT_UNITS_UNKNOWN;
+  for (unsigned ux=1; ux < OMX_STATIC_ARRAY_SIZE(FitUnitNames); ++ux) {
+    if (strEQ(name, FitUnitNames[ux])) {
+      units = FitStatisticUnits(ux + 1);
+      break;
+    }
+  }
+  if (units == FIT_UNITS_UNKNOWN) {
+		Rf_warning("Unknown units '%s' passed to fit function '%s'",
+			   name, matrix->name());
+	}
+}
 
 SEXP makeFitUnitsFactor(SEXP obj)
 {
@@ -149,6 +166,7 @@ const char *fitUnitsToName(FitStatisticUnits units)
 	case FIT_UNITS_MINUS2LL:
 	case FIT_UNITS_SQUARED_RESIDUAL:
 	case FIT_UNITS_SQUARED_RESIDUAL_CHISQ:
+	case FIT_UNITS_ANY:
 		return FitUnitNames[units-1];
 	default: mxThrow("Don't know how to stringify units %d", units);
 	}
@@ -164,36 +182,15 @@ void omxDuplicateFitMatrix(omxMatrix *tgt, const omxMatrix *src, omxState* newSt
 	omxFillMatrixFromMxFitFunction(tgt, src->matrixNumber, ff->rObj);
 }
 
-static void omxFitFunctionComputeAuto(omxFitFunction *ff, int want, FitContext *fc)
+void omxFitFunction::subCompute(int want, FitContext *fc)
 {
-	if (!ff->initialized) return;
+  if (!initialized) return;
 
-	if (!fc->ciobj) {
-		ff->compute(want, fc);
-	} else {
-    if (fitUnitsIsChiSq(ff->units)) {
-      fc->ciobj->evalFit(ff, want, fc);
-    } else {
-      mxThrow("Confidence intervals are not supported for units %s",
-              fitUnitsToName(ff->units));
-    }
-	}
-
-	if (fc) fc->wanted |= want;
+  compute(want, fc);
+  if (fc) fc->wanted |= want;
 }
 
-// Can replace with
-//   fc->withoutCIobjective([&](){ ComputeFit("CI", fitMat, FF_COMPUTE_FIT, fc); });
-// ?
-void omxFitFunctionCompute(omxFitFunction *off, int want, FitContext *fc)
-{
-       if (!off->initialized) return;
-
-       off->compute(want, fc);
-       if (fc) fc->wanted |= want;
-}
-
-double totalLogLikelihood(omxMatrix *fitMat)
+static double totalLogLikelihood(omxMatrix *fitMat)
 {
 	if (fitMat->rows != 1) {
 		omxFitFunction *ff = fitMat->fitFunction;
@@ -226,7 +223,7 @@ static void numericalGradientApprox(omxFitFunction *ff, FitContext *fc, bool hav
 {
   if (isErrorRaised()) return;
 
-  double fitSave = fc->fit;
+  double fitSave = fc->getUnscaledFit();
   const int numFree = fc->getNumFree();
 
   if (!fc->numericalGradTool) {
@@ -243,7 +240,7 @@ static void numericalGradientApprox(omxFitFunction *ff, FitContext *fc, bool hav
   }
 
   Eigen::ArrayXd ref(1);
-  ref[0] = fc->fit;
+  ref[0] = fc->getUnscaledFit();
   Eigen::Map< Eigen::RowVectorXd > gradOut(fc->gradZ.data(), fc->gradZ.size());
 
 	(*fc->numericalGradTool)([&](double *myPars, int thrId, Eigen::Ref<Eigen::ArrayXd> result)->void{
@@ -254,48 +251,51 @@ static void numericalGradientApprox(omxFitFunction *ff, FitContext *fc, bool hav
 			// of them.
 			fc2->setEstFromOptimizer(myPars);
 			ComputeFit("gradient", fc2->lookupDuplicate(ff->matrix), FF_COMPUTE_FIT, fc2);
-			double fit = fc2->fit;
+			double fit = fc2->getUnscaledFit();
 			if (fc2->outsideFeasibleSet()) fit = nan("infeasible");
       result[0] = fit;
       }, ref, [&fc](){ return fc->getCurrentFree(); }, true, gradOut);
 
   robustifyInplace(fc->gradZ);
 
-  fc->fit = fitSave;
+  fc->setUnscaledFit(fitSave);
 }
 
 void ComputeFit(const char *callerName, omxMatrix *fitMat, int want, FitContext *fc)
 {
+	omxFitFunction *ff = fitMat->fitFunction;
+	if (!ff) mxThrow("ComputeFit is only callable on fitfunctions");
+  if (!ff->initialized) mxThrow("Attempt to call ComputeFit on uninitialized fitfunction");
 	fc->incrComputeCount();
 	fc->skippedRows = 0;
-	omxFitFunction *ff = fitMat->fitFunction;
-	if (ff) {
-		if (want & FF_COMPUTE_GRADIENT) fc->initGrad();
-		omxFitFunctionComputeAuto(ff, want, fc);
-	} else {
-		if (want != FF_COMPUTE_FIT) mxThrow("Only fit is available");
-		if (fc->ciobj) mxThrow("CIs cannot be computed for unitless algebra");
-		omxRecompute(fitMat, fc);
-	}
-	if (ff) {
-		if (want & FF_COMPUTE_FIT) {
-			fc->fit = totalLogLikelihood(fitMat);
-			if (std::isfinite(fc->fit)) {
-				fc->resetIterationError();
-			}
-			Global->checkpointPostfit(callerName, fc, false);
-			if (OMX_DEBUG) {
-				mxLog("%s: completed evaluation, fit=%.12g skippedRows=%d",
-				      fitMat->name(), fc->fit, fc->skippedRows);
-			}
-		}
-		if (want & FF_COMPUTE_GRADIENT) {
-      if (!Global->analyticGradients) fc->gradZ.setConstant(NA_REAL);
-      if (Global->NPSOL_HACK==0 && !fc->gradZ.allFinite()) {
-        numericalGradientApprox(ff, fc, want & FF_COMPUTE_FIT);
+  if (want & FF_COMPUTE_FIT) {
+    //mxLog("fit = 0");
+    fc->setFit(0);
+  }
+  if (want & FF_COMPUTE_GRADIENT) fc->initGrad();
+  if (!fc->ciobj) {
+    ff->compute(want, fc);
+    if (want & FF_COMPUTE_FIT) {
+      fc->setFit(fc->getUnscaledFit() + totalLogLikelihood(fitMat), ff->scale);
+      if (std::isfinite(fc->getFit())) {
+        fc->resetIterationError();
+      }
+      Global->checkpointPostfit(callerName, fc, false);
+      if (OMX_DEBUG) {
+        mxLog("%s: completed evaluation, fit=%.12g skippedRows=%d",
+              fitMat->name(), fc->getFit(), fc->skippedRows);
       }
     }
-	}
+  } else {
+    fc->ciobj->evalFit(ff, want, fc);
+  }
+  if (want & FF_COMPUTE_GRADIENT) {
+    if (!Global->analyticGradients) fc->gradZ.setConstant(NA_REAL);
+    if (Global->NPSOL_HACK==0 && !fc->gradZ.allFinite()) {
+      numericalGradientApprox(ff, fc, want & FF_COMPUTE_FIT);
+    }
+  }
+  if (fc) fc->wanted |= want;
 }
 
 static omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitType,
@@ -339,8 +339,7 @@ static omxFitFunction *omxNewInternalFitFunction(omxState* os, const char *fitTy
 
 void omxFillMatrixFromMxFitFunction(omxMatrix* om, int matrixNumber, SEXP rObj)
 {
-	om->hasMatrixNumber = TRUE;
-	om->matrixNumber = matrixNumber;
+  om->setMatrixNumber(matrixNumber);
 
 	ProtectedSEXP fitFunctionClass(STRING_ELT(Rf_getAttrib(rObj, R_ClassSymbol), 0));
 	const char *fitType = CHAR(fitFunctionClass);
@@ -390,6 +389,21 @@ omxFitFunction *omxChangeFitType(omxFitFunction *oo, const char *fitType)
 	mxThrow("Cannot find fit type '%s'", fitType);
 }
 
+void omxFitFunction::connectPenalties()
+{
+  S4 ro = rObj;
+  applyPenalty = ro.hasSlot("applyPenalty") && as<bool>(ro.slot("applyPenalty"));
+  if (!applyPenalty || ro.slot("penalties") == R_NilValue) return;
+
+  omxState *state = matrix->currentState;
+  IntegerVector pl = ro.slot("penalties");
+  for (int px=0; px < pl.size(); ++px) {
+    Penalty *p1 = state->indexToPenalty(pl[px]);
+    penalties.push_back(p1);
+  }
+  //mxLog("%s: connected %d penalties", name(), int(pl.size()));
+}
+
 void omxCompleteFitFunction(omxMatrix *om)
 {
 	omxFitFunction *obj = om->fitFunction;
@@ -405,7 +419,10 @@ void omxCompleteFitFunction(omxMatrix *om)
 
 	if (Global->mpi->getDepth() != depth) mxThrow("%s improperly used the R protect stack", om->name());
 
+  obj->connectPenalties();
+
 	obj->initialized = TRUE;
+  //mxLog("%s: Hessian available %d", obj->name(), obj->hessianAvailable);
 }
 
 /* Helper functions */
@@ -433,7 +450,7 @@ omxMatrix *omxNewMatrixFromSlotOrAnon(SEXP rObj, omxState* currentState, const c
 	return newMatrix;
 }
 
-void omxFitFunction::traverse(std::function<void(omxMatrix*)> &fn)
+void omxFitFunction::traverse(std::function<void(omxMatrix*)> fn)
 {
 	fn(matrix);
 }

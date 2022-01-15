@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@
 #
 # -----------------------------------------------------------------------
 
-require(OpenMx)
+library(OpenMx)
+library(testthat)
 
 DataMZ <- suppressWarnings(try(read.table("models/passing/data/sim1.mz", header=FALSE), silent=TRUE))
 if (is(DataMZ, "try-error")) DataMZ <- read.table("data/sim1.mz", header = F)
@@ -85,3 +86,9 @@ twinACEModel <- mxModel("twinACE",
 twinACEFit <- mxRun(twinACEModel)
 
 omxCheckCloseEnough(twinACEFit$output$fit, 4715.549, 1e-2)
+
+# ---
+
+crazy <- mxModel(twinACEModel, mxPenaltyLASSO(c('a','c','e'),
+                                              lambda = 1, name="lasso"))
+expect_error(mxRun(crazy), "The mind boggles")

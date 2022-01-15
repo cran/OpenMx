@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2018 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -26,8 +26,9 @@ omxCheckError(mxModel(model, A, B, remove=TRUE),
 	"when remove = TRUE. Instead give",
 	"the name of the entity when removing it.",
 	"See http://openmx.ssri.psu.edu/wiki/mxmodel-help#Remove_an_object_from_a_model"))
+count <- length(names(model))
 model <- mxModel(model, 'A', 'B', remove=TRUE)
-omxCheckEquals(length(names(model)), 12)
+omxCheckEquals(length(names(model)), count-2)
 
 genModel <- function() {
   mxModel("remove",

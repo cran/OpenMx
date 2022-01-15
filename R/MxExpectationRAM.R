@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -224,7 +224,7 @@ setMethod("genericExpFunConvert", signature("MxExpectationRAM"),
 			} else {
 				.Object@thresholds <- as.integer(NA)
 				targetNames <- observedDataNames(mxDataObject)
-				if (!identical(translatedNames, targetNames)) {
+				if (!setequal(translatedNames, targetNames)) {
 					varsNotInData <- translatedNames[!(translatedNames %in% targetNames)]
 					msg <- paste("The names of the manifest",
 						     "variables in the F matrix of model",

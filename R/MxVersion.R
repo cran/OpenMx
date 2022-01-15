@@ -13,7 +13,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-gitVersion <- "v2.19.8"
+gitVersion <- "v2.20.0"
 
 mxVersion <- function (model=NULL, verbose=TRUE) {
 	pvers <- pkg_globals$myVersion

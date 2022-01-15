@@ -1,5 +1,5 @@
 #
-#   Copyright 2007-2020 by the individuals mentioned in the source code history
+#   Copyright 2007-2021 by the individuals mentioned in the source code history
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -828,25 +828,23 @@ createMatrixF <- function(model) {
 	len <- length(variables)
 	values <- diag(nrow = length(model@manifestVars), ncol = len)
 	names <- list(model@manifestVars, variables)
-	if (!is.null(model@data) && (model@data@type != 'raw' && model@data@type != 'acov')) {
-		manifestNames <- rownames(model@data@observed)
-		extraData <- setdiff(manifestNames, model@manifestVars)
+	if (!is.null(model@data)) {
+		manifestNames <- observedDataNames(model@data)
 		extraVars <- setdiff(model@manifestVars, manifestNames)
-		if (length(extraData) > 0) {
-			msg <- paste("The observed data contains the variables:",
-				omxQuotes(extraData), "that have not been declared in the",
-				"manifest variables.")
-			stop(msg, call. = FALSE)
-		}
+    # would need to exclude freq, weight, keys, etc TODO
+		## extraData <- setdiff(manifestNames, model@manifestVars)
+		## if (length(extraData) > 0) {
+		## 	msg <- paste("The observed data contains the variables:",
+		## 		omxQuotes(extraData), "that have not been declared in the",
+		## 		"manifest variables.")
+		## 	stop(msg, call. = FALSE)
+		## }
 		if (length(extraVars) > 0) {
 			msg <- paste("The manifest variables include",
 				omxQuotes(extraVars), "that have not been found in the",
 				"observed data.")
 			stop(msg, call. = FALSE)
 		}
-		dimnames(values) <- names
-		values <- values[manifestNames,]
-		names <- list(manifestNames, variables)
 	}
 	free <- matrix(FALSE, length(model@manifestVars), len)
 	labels <- matrix(as.character(NA), length(model@manifestVars), len)

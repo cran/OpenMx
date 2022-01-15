@@ -1,5 +1,5 @@
  /*
- *  Copyright 2016-2020 by the individuals mentioned in the source code history
+ *  Copyright 2016-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ struct ssMLFitState : omxFitFunction {
 
 	virtual ~ssMLFitState();
 	virtual void init() override;
-	virtual void compute(int ffcompute, FitContext *fc) override;
+	virtual void compute2(int ffcompute, FitContext *fc) override;
 	virtual void populateAttr(SEXP algebra) override;
 };
 
@@ -58,7 +58,7 @@ void ssMLFitState::populateAttr(SEXP algebra)
 	}
 }
 
-void ssMLFitState::compute(int want, FitContext *fc)
+void ssMLFitState::compute2(int want, FitContext *fc)
 {
 	if (want & (FF_COMPUTE_INITIAL_FIT | FF_COMPUTE_PREOPTIMIZE)) return;
 

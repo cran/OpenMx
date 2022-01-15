@@ -1,5 +1,5 @@
 /*
- *  Copyright 2013-2020 by the individuals mentioned in the source code history
+ *  Copyright 2013-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1049,7 +1049,7 @@ void FitContext::ensureParamWithinBox(bool nudge)
 	if (OMX_DEBUG) mxLog("FitContext::ensureParamWithinBox(nudge=%d)", nudge);
 	for (size_t px = 0; px < varGroup->vars.size(); ++px) {
 		omxFreeVar *fv = varGroup->vars[px];
-		if (nudge && est[px] == 0.0) {
+		if (nudge && !profiledOutZ[px] && est[px] == 0.0) {
 			est[px] += 0.1;
 		}
 		if (fv->lbound > est[px]) {
@@ -1333,7 +1333,7 @@ void FitContext::toggleCIObjective()
 
 void CIobjective::evalFit(omxFitFunction *ff, int want, FitContext *fc)
 {
-	omxFitFunctionCompute(ff, want, fc);
+  fc->withoutCIobjective([&](){ ComputeFit("CI", ff->matrix, FF_COMPUTE_FIT, fc); });
 }
 
 void CIobjective::checkSolution(FitContext *fc)
@@ -2168,6 +2168,163 @@ public:
 	virtual void collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList *out) override;
 };
 
+class ComputePenaltySearch : public omxCompute {
+	typedef omxCompute super;
+
+	int verbose;
+	std::vector< omxMatrix* > fitfunction;
+	std::unique_ptr< omxCompute > plan;
+  double ebicGamma;
+  DataFrame result;
+
+ public:
+	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
+	virtual void computeImpl(FitContext *fc) override;
+	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *) override;
+};
+
+void ComputePenaltySearch::initFromFrontend(omxState *globalState, SEXP rObj)
+{
+	super::initFromFrontend(globalState, rObj);
+
+  S4 obj(rObj);
+
+	PushLoopIndex pli(name);
+
+  verbose = Rf_asInteger(obj.slot("verbose"));
+  IntegerVector ffv = obj.slot("fitfunction");
+  if (ffv.size() != 1) mxThrow("%s: can add the regularization penalty to "
+                               "exactly one fit function (not %d of them)", ffv.size());
+	for (int wx=0; wx < ffv.size(); ++wx) {
+    omxMatrix *mat = globalState->algebraList[ ffv[wx] ];
+    if (!mat->isFitFunction()) mxThrow("%s: %s is not a fit function", name, mat->name());
+    fitfunction.push_back(mat);
+  }
+  if (fitfunction.size() != 1) mxThrow("%s: a fitfunction is required", name);
+
+  const char *approach = obj.slot("approach");
+  if (!strEQ(approach, "EBIC"))
+    mxThrow("%s: approach '%s' not implemented", name, approach);
+
+  ebicGamma = Rf_asReal(obj.slot("ebicGamma"));
+
+  S4 Rplan = obj.slot("plan");
+	plan = std::unique_ptr< omxCompute >(omxNewCompute(globalState, Rplan.attr("class")));
+	plan->initFromFrontend(globalState, Rplan);
+}
+
+void ComputePenaltySearch::computeImpl(FitContext *fc)
+{
+  auto &fvg = *Global->findVarGroup(FREEVARGROUP_ALL);
+  if (int(fvg.vars.size()) != fc->numParam)
+    mxThrow("%s: FitContext narrowed to %d parameters", name, fc->numParam);
+  auto &pg = Global->penaltyGrid;
+
+  int gridSize = 1;
+  for (auto it = pg.cbegin(); it != pg.cend(); ++it) {
+    NumericVector g1(it->second);
+    gridSize *= g1.size();
+  }
+  if (verbose >= 1) mxLog("%s: grid size %d", name, gridSize);
+
+  CharacterVector rnames;
+  rnames.push_back("EBIC");
+  result.push_back(NumericVector(gridSize));
+  rnames.push_back("EP");
+  result.push_back(IntegerVector(gridSize));
+  rnames.push_back("fit");
+  result.push_back(NumericVector(gridSize));
+  rnames.push_back("objective");
+  result.push_back(NumericVector(gridSize));
+  rnames.push_back("statusCode");
+  result.push_back(allocInformVector(gridSize));
+  int resultParamOffset = result.size();
+  for (int px=0; px < fc->numParam; ++px) {
+    rnames.push_back(fvg.vars[px]->name);
+    result.push_back(NumericVector(gridSize));
+  }
+  result.attr("names") = rnames;
+
+  double bestEBIC = NA_REAL;
+  int bestGridIndex = -1;
+  for (int gx=0; gx < gridSize; ++gx) {
+		PushLoopIndex pli(name, gx, gridSize);
+    int abscissa = gx;
+    for (auto it = pg.cbegin(); it != pg.cend(); ++it) {
+      NumericVector g1(it->second);
+      fc->est[it->first] = g1[abscissa % g1.size()];
+      //mxLog("%s: [%d] %s = %f", name, gx, fvg.vars[it->first]->name, fc->est[it->first]);
+      abscissa /= g1.size();
+    }
+    plan->compute(fc);
+    int zero = 0;
+    for (auto &a1 : fc->state->algebraList) {
+      if (!a1->isPenalty()) continue;
+      zero += a1->penalty->countNumZero(fc);
+    }
+    int EP = fc->getNumFree() - zero; //estimatedParameters
+    int observedStats = 0;
+    fitfunction[0]->fitFunction->traverse([&observedStats](omxMatrix *f1){
+      auto ff = f1->fitFunction;
+      if (ff->expectation) observedStats += ff->expectation->numObservedStats();
+    });
+    int DF = observedStats - EP;
+
+    // how to extend support to multiple groups? TODO
+    auto ex = fitfunction[0]->fitFunction->expectation;
+    if (!ex) mxThrow("%s: fitfunction '%s' does not have an expectation", fitfunction[0]->name());
+    int np = ex->numManifestVars();
+    int nfac = ex->numLatentVars();
+    if (nfac < 1) nfac = 1;
+    double cvDF = ((np*np+1)/2. + np - EP)/DF;
+    if (!ex->data) mxThrow("%s: expectation '%s' has no associated data", ex->name);
+    if (fitfunction[0]->fitFunction->units != FIT_UNITS_MINUS2LL) {
+      mxThrow("%s: fit function '%s' must be -2ll units (not %s)",
+              name, fitfunction[0]->name(), fitUnitsToName(fitfunction[0]->fitFunction->units));
+    }
+    double ll = fitfunction[0]->data[0];
+    double N = omxDataNumObs(ex->data);
+    double EBIC;
+    if (strEQ(ex->data->getType(), "raw")) {
+      EBIC = ll * cvDF + (log(N) * EP + 2*EP * ebicGamma * log(np+nfac));
+    } else {
+      EBIC = ll +         log(N) * EP + 2*EP * ebicGamma * log(np+nfac);
+    }
+    if (bestGridIndex == -1 || EBIC < bestEBIC) {
+      bestGridIndex = gx;
+      bestEBIC = EBIC;
+    }
+    {NumericVector v = result[0]; v[gx] = EBIC;}
+    {IntegerVector v = result[1]; v[gx] = EP;}
+    {NumericVector v = result[2]; v[gx] = ll;}
+    {NumericVector v = result[3]; v[gx] = fc->getFit();}
+    {IntegerVector v = result[4]; v[gx] = fc->wrapInform();}
+    for (int px=0; px < fc->numParam; ++px) {
+      NumericVector vec = result[resultParamOffset+px];
+      vec[gx] = fc->est[px];
+    }
+    std::string detail = std::to_string(gx+1) + "/" + std::to_string(gridSize);
+    Global->reportProgress1(name, detail);
+  }
+
+  if (verbose >= 1) mxLog("-> best[%d] %f", bestGridIndex, bestEBIC);
+
+  for (int px=0; px < fc->numParam; ++px) {
+    NumericVector vec = result[resultParamOffset+px];
+    fc->est[px] = vec[bestGridIndex];
+  }
+  fc->wanted &= ~FF_COMPUTE_FIT;  // discard garbage
+  // auxillary information like per-row likelihoods need a refresh
+  ComputeFit(name, fitfunction[0], FF_COMPUTE_FIT, fc);
+}
+
+void ComputePenaltySearch::reportResults(FitContext *fc, MxRList *slots, MxRList *)
+{
+	MxRList output;
+	output.add("detail", result);
+	slots->add("output", output.asR());
+}
+
 static class omxCompute *newComputeSequence()
 { return new omxComputeSequence(); }
 
@@ -2240,7 +2397,9 @@ static const struct omxComputeTableEntry omxComputeTable[] = {
 	{"MxComputeTryCatch",
 	 []()->omxCompute* { return new ComputeTryCatch; }},
 	{"MxComputeLoadContext",
-	 []()->omxCompute* { return new ComputeLoadContext; }}
+	 []()->omxCompute* { return new ComputeLoadContext; }},
+	{"MxComputePenaltySearch",
+	 []()->omxCompute* { return new ComputePenaltySearch; }}
 };
 
 omxCompute *omxNewCompute(omxState* os, const char *type)
@@ -2425,18 +2584,18 @@ void omxComputeIterate::computeImpl(FitContext *fc)
 			}
 		}
 		if (fc->wanted & FF_COMPUTE_FIT) {
-			if (fc->fit == 0) {
+			if (fc->getFit() == 0) {
 				Rf_warning("Fit estimated at 0; something is wrong");
 				break;
 			}
 			if (prevFit != 0) {
-				double change = (prevFit - fc->fit) / fc->fit;
-				if (verbose) mxLog("ComputeIterate: fit %.9g rel change %.9g", fc->fit, change);
+				double change = (prevFit - fc->getFit()) / fc->getFit();
+				if (verbose) mxLog("ComputeIterate: fit %.9g rel change %.9g", fc->getFit(), change);
 				mac = fabs(change);
 			} else {
-				if (verbose) mxLog("ComputeIterate: initial fit %.9g", fc->fit);
+				if (verbose) mxLog("ComputeIterate: initial fit %.9g", fc->getFit());
 			}
-			prevFit = fc->fit;
+			prevFit = fc->getFit();
 		}
 		if (std::isfinite(tolerance)) {
 			if (!(fc->wanted & (FF_COMPUTE_MAXABSCHANGE | FF_COMPUTE_FIT))) {
@@ -2801,12 +2960,12 @@ void ComputeEM::recordDiff(FitContext *fc, int v1, Eigen::MatrixBase<T> &rijWork
 void ComputeEM::observedFit(FitContext *fc)
 {
 	ComputeFit("EM", fit3, FF_COMPUTE_FIT, fc);
-	if (verbose >= 4) mxLog("ComputeEM[%d]: observed fit = %f", EMcycles, fc->fit);
+	if (verbose >= 4) mxLog("ComputeEM[%d]: observed fit = %f", EMcycles, fc->getFit());
 
 	if (!(fc->wanted & FF_COMPUTE_FIT)) {
 		omxRaiseErrorf("ComputeEM: fit not available");
 	}
-	if (fc->fit == 0) {
+	if (fc->getFit() == 0) {
 		omxRaiseErrorf("Fit estimated at 0; something is wrong");
 	}
 }
@@ -2825,7 +2984,7 @@ void ComputeEM::accelLineSearch(bool major, FitContext *fc, Eigen::MatrixBase<T1
     Eigen::VectorXd pVec((accel->dir * speed + preAccel).cwiseMax(lbound).cwiseMin(ubound));
     fc->setEstFromOptimizer(pVec);
 		observedFit(fc);
-		if (std::isfinite(fc->fit)) return;
+		if (std::isfinite(fc->getFit())) return;
 		speed *= .3;
 		if (verbose >= 3) mxLog("%s: fit NaN; reduce accel speed to %f", name, speed);
 	}
@@ -2898,7 +3057,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 			if (EMcycles > 3 && (EMcycles + 1) % 3 == 0) {
 				accel->recalibrate();
 				accelLineSearch(true, fc, preAccel);
-				while (prevFit < fc->fit) {
+				while (prevFit < fc->getFit()) {
 					if (!accel->retry()) break;
 					accelLineSearch(true, fc, preAccel);
 				}
@@ -2909,7 +3068,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 			observedFit(fc);
 		}
 
-		if (!std::isfinite(fc->fit)) {
+		if (!std::isfinite(fc->getFit())) {
 			omxRaiseErrorf("%s: fit not finite in iteration %d", name, EMcycles);
 		}
 
@@ -2923,21 +3082,21 @@ void ComputeEM::computeImpl(FitContext *fc)
 				}
 			}
 
-			change = (prevFit - fc->fit) / fc->fit;
+			change = (prevFit - fc->getFit()) / fc->getFit();
 			if (verbose >= 2) mxLog("ComputeEM[%d]: msteps %d fit %.9g rel change %.9g",
-						EMcycles, mstepIter, fc->fit, change);
+                              EMcycles, mstepIter, fc->getFit(), change);
 			mac = fabs(change);
 
 			// For Tian, in_middle depends on the absolute (not relative) change in LL!
-			const double absMac = fabs(prevFit - fc->fit);
+			const double absMac = fabs(prevFit - fc->getFit());
 			if (absMac < MIDDLE_START * Scale) in_middle = true;
 			if (absMac < MIDDLE_END * Scale) in_middle = false;
 		} else {
 			if (verbose >= 2) mxLog("ComputeEM: msteps %d initial fit %.9g",
-						mstepIter, fc->fit);
+                              mstepIter, fc->getFit());
 		}
 
-		prevFit = fc->fit;
+		prevFit = fc->getFit();
 		converged = mac < tolerance;
 		++fc->iterations;
 		if (isErrorRaised() || converged) break;
@@ -2952,7 +3111,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 	int wanted = FF_COMPUTE_FIT | FF_COMPUTE_BESTFIT | FF_COMPUTE_ESTIMATE;
 	fc->wanted = wanted;
 	fc->setInform(converged? mstepInform : INFORM_ITERATION_LIMIT);
-	bestFit = fc->fit;
+	bestFit = fc->getFit();
 	if (verbose >= 1) mxLog("ComputeEM: cycles %d/%d total mstep %d fit %f inform %d",
 				EMcycles, maxIter, totalMstepIter, bestFit, fc->getInform());
 
@@ -2969,7 +3128,7 @@ void ComputeEM::computeImpl(FitContext *fc)
 		mxThrow("Unknown information method %d", information);
 	}
 
-	fc->fit = bestFit;
+	fc->setFit(bestFit);
   fc->setEstFromOptimizer(optimum);
 }
 
@@ -2991,14 +3150,14 @@ void ComputeEM::dEstep(FitContext *fc, Eigen::MatrixBase<T1> &x, Eigen::MatrixBa
   fc->setEstFromOptimizer(x);
 
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_PREOPTIMIZE, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_PREOPTIMIZE, fc);
 	}
 
   fc->setEstFromOptimizerClean(optimum);
 
 	fc->gradZ = Eigen::VectorXd::Zero(fc->getNumFree());
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_GRADIENT, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_GRADIENT, fc);
 	}
 	result = fc->gradZ;
 	reportProgress(fc);
@@ -3016,8 +3175,8 @@ void ComputeEM::Oakes(FitContext *fc)
 
 	fc->initGrad();
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_PREOPTIMIZE, fc);
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_GRADIENT, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_PREOPTIMIZE, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_GRADIENT, fc);
 	}
 
 	Eigen::VectorXd optimumCopy = optimum;  // will be modified
@@ -3032,7 +3191,7 @@ void ComputeEM::Oakes(FitContext *fc)
 	fc->infoMethod = infoMethod;
 	fc->preInfo();
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
 
@@ -3182,7 +3341,7 @@ void ComputeEM::MengRubinFamily(FitContext *fc)
 	fc->infoMethod = infoMethod;
 	fc->preInfo();
 	for (size_t fx=0; fx < infoFitFunction.size(); ++fx) {
-		omxFitFunctionCompute(infoFitFunction[fx]->fitFunction, FF_COMPUTE_INFO, fc);
+    ComputeFit("EM", infoFitFunction[fx], FF_COMPUTE_INFO, fc);
 	}
 	fc->postInfo();
 
@@ -3436,7 +3595,7 @@ void omxComputeOnce::computeImpl(FitContext *fc)
 		if (fit) {
 			want |= FF_COMPUTE_FIT;
 			if (isBestFit) want |= FF_COMPUTE_BESTFIT;
-			fc->fit = 0;
+			fc->setFit(0);
 		}
 		if (gradient) {
 			want |= FF_COMPUTE_GRADIENT;
@@ -3562,6 +3721,7 @@ void FitContext::resetToOriginalStarts()
 	auto &startingValues = Global->startingValues;
 	auto &vars = varGroup->vars;
 	for (int vx=0; vx < int(vars.size()); ++vx) {
+    if (profiledOutZ[vx]) continue;
 		auto *fv = vars[vx];
 		est[vx] = startingValues[fv->id];
 	}
@@ -3689,7 +3849,7 @@ void ComputeStandardError::computeImpl(FitContext *fc)
   fc->createChildren(fitMat, false);
   AutoTune<JacobianGadget> jg(name);
   jg.setWork(std::unique_ptr<JacobianGadget>(new JacobianGadget(numFree)));
-  jg.work().setAlgoOptions(GradientAlgorithm_Forward, 2, 1e-4);
+  jg.work().setAlgoOptions(GradientAlgorithm_Central, 4, 1e-4);
   jg(sense, sense.ref, [&fc](){ return fc->getCurrentFree(); }, false, sense.result);
   fc->destroyChildren();
 
@@ -3722,10 +3882,10 @@ void ComputeStandardError::computeImpl(FitContext *fc)
 	Eigen::MatrixXd UW2 = UW * UW; // unclear if this should be UW^2 i.e. elementwise power
 	double trUW = UW.diagonal().array().sum();
 	madj = trUW / df;
-	x2m = fc->fit / madj;
+	x2m = fc->getFit() / madj;
 	dstar = (trUW * trUW) / UW2.diagonal().array().sum();
 	mvadj = (trUW*trUW) / dstar;
-	x2mv = fc->fit / mvadj;
+	x2mv = fc->getFit() / mvadj;
 	// N.B. x2mv is off by a factor of N where N is the total number of rows in all data sets for the ULS case.
 	if (isULS(Vmat)) x2mv /= totalWeight;
 	wlsStats = true;
@@ -3786,6 +3946,22 @@ void ComputeHessianQuality::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	ScopedProtect p1(slotValue, R_do_slot(rObj, Rf_install("verbose")));
 	verbose = Rf_asInteger(slotValue);
+}
+
+bool FitContext::isGradientTooLarge()
+{
+		double gradNorm = 0.0;
+		double feasibilityTolerance = Global->feasibilityTolerance;
+    int numFree = getNumFree();
+		for (int gx=0; gx < numFree; ++gx) {
+      omxFreeVar &fv = *varGroup->vars[ freeToParamMap[gx] ];
+			if ((gradZ[gx] > 0 && fabs(est[gx] - fv.lbound) < feasibilityTolerance) ||
+			    (gradZ[gx] < 0 && fabs(est[gx] - fv.ubound) < feasibilityTolerance)) continue;
+			double g1 = gradZ[gx];
+			gradNorm += g1 * g1;
+		}
+		gradNorm = sqrt(gradNorm);
+    return gradNorm > Global->getGradientThreshold(fit);
 }
 
 bool FitContext::isEffectivelyUnconstrained()
@@ -4143,7 +4319,7 @@ void ComputeBootstrap::computeImpl(FitContext *fc)
 		if (only == NA_INTEGER) {
 			fc->wanted &= ~FF_COMPUTE_DERIV;  // discard garbage
 		}
-		REAL(VECTOR_ELT(rawOutput, 1))[repl] = fc->fit;
+		REAL(VECTOR_ELT(rawOutput, 1))[repl] = fc->getFit();
 		for (int px=0; px < int(fc->numParam); ++px) {
 			REAL(VECTOR_ELT(rawOutput, 2 + px))[repl] = fc->est[px];
 		}
@@ -4219,6 +4395,7 @@ class LoadDataCSVProvider : public LoadDataProvider<LoadDataCSVProvider> {
 	virtual void init(SEXP rObj) override {
 		ProtectedSEXP Rbyrow(R_do_slot(rObj, Rf_install("byrow")));
 		byrow = Rf_asLogical(Rbyrow);
+    if (verbose) mxLog("%s: byrow=%d", name, byrow);
 		ProtectedSEXP Rcs(R_do_slot(rObj, Rf_install("cacheSize")));
 
 		if (!byrow) stripeSize = std::max(Rf_asInteger(Rcs), 1);
@@ -4228,7 +4405,7 @@ class LoadDataCSVProvider : public LoadDataProvider<LoadDataCSVProvider> {
 	{
 		if (rowNames == 0 || !byrow) return;
 		cpIndex = cp.size();
-		auto rc = *rawCols;
+		auto &rc = *rawCols;
 		for (int cx=0; cx < int(columns.size()); ++cx) {
 			std::string c1 = fileName + ":" + rc[ columns[cx] ].name;
 			cp.push_back(c1);
@@ -4273,6 +4450,7 @@ void LoadDataCSVProvider::mxScanInt(mini::csv::ifstream &st, ColumnData &rc, int
 
 void LoadDataCSVProvider::loadByCol(int index)
 {
+  //if (verbose >= 2) mxLog("%s::loadByCol(%d)", name, index);
 	if (stripeStart == -1 ||
 	    index < stripeStart || index >= stripeEnd) {
 		bool backward = index < stripeStart;
@@ -4301,7 +4479,7 @@ void LoadDataCSVProvider::loadByCol(int index)
 				st >> rn;
 			}
 			for (int sx=0,dx=0; sx < stripeAvail; ++sx) {
-				auto rc = *rawCols;
+				auto &rc = *rawCols;
 				try {
 					for (int cx=0; cx < int(columns.size()); ++cx) {
 						if (colTypes[cx] == COLUMNDATA_NUMERIC) {
@@ -4341,6 +4519,7 @@ void LoadDataCSVProvider::loadByRow(int index)
 {
 	auto &rc = *rawCols;
 	if (!icsv || index < curRecord) {
+    if (verbose >= 2) mxLog("%s: reconnecting to %s", name, filePath.c_str());
 		icsv = std::unique_ptr< mini::csv::ifstream >(new mini::csv::ifstream(filePath));
 		icsv->set_delimiter(' ', "##");
 		for (int rx=0; rx < skipRows; ++rx) {
@@ -4373,12 +4552,16 @@ void LoadDataCSVProvider::loadByRow(int index)
 		if (colTypes[cx] == COLUMNDATA_NUMERIC) {
 			for (int rx=0, dr=0; rx < srcRows; ++rx) {
 				const std::string& str = icsv->get_delimited_str();
+        if (!str.size()) mxThrow("%s: cannot find column %d (row %d in file)", name, dr, rx);
 				if (skipRow(rx)) continue;
 				if (isNA(str)) {
 					stripeData[cx].realData[dr] = NA_REAL;
 				} else {
 					std::istringstream is(str);
 					is >> stripeData[cx].realData[dr];
+          if (verbose >= 3 && dr < 20) {
+            mxLog("%s >> %d %f", str.c_str(), dr, stripeData[cx].realData[dr]);
+          }
 				}
 				dr += 1;
 			}
@@ -4396,6 +4579,21 @@ void LoadDataCSVProvider::loadByRow(int index)
 	}
 	curRecord += 1;
 	for (int cx=0; cx < int(columns.size()); ++cx) {
+    if (verbose >= 2) {
+      std::string buf;
+      if (colTypes[cx] == COLUMNDATA_NUMERIC) {
+        for (int rx=0; rx < std::min(12, srcRows); ++rx) {
+          auto val = stripeData[cx].realData[rx];
+          if (std::isfinite(val)) {
+            buf += string_snprintf("%f ", stripeData[cx].realData[rx]);
+          } else { buf += "NA "; }
+        }
+      } else {
+        for (int rx=0; rx < std::min(12, srcRows); ++rx)
+          buf += string_snprintf("%d ", stripeData[cx].intData[rx]);
+      }
+      mxLog("%s: replace column %d with %s", name, columns[cx], buf.c_str());
+    }
 		rc[ columns[cx] ].setBorrow(stripeData[cx]);
 	}
 }
@@ -5223,7 +5421,7 @@ void ComputeCheckpoint::computeImpl(FitContext *fc)
 	if (inclPar) {
 		s1.est = fc->est;
 	}
-	s1.fit = fc->fit;
+	s1.fit = fc->getFit();
 	s1.fitUnits = fc->fitUnits;
 	s1.inform = fc->wrapInform();
 	if (inclSEs) {

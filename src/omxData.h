@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007-2020 by the individuals mentioned in the source code history
+ *  Copyright 2007-2021 by the individuals mentioned in the source code history
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -224,6 +224,8 @@ class omxData {
 	double minVariance;
 	bool warnNPDuseWeight;
 	std::vector<int> algebra;
+  double fitTolerance;
+  double gradientTolerance;
 
 	void estimateObservedStats();
 	void u_prepObsStats(omxState *state, const std::vector<const char *> &dc,
@@ -323,6 +325,7 @@ class omxData {
 	}
 	int numRawRows();
 	double rowMultiplier(int rx);
+  double countObs(int col);
 	bool containsNAs(int col);
 	void prohibitFactor(int col);
 	void prohibitNAdefVar(int col);
@@ -350,6 +353,8 @@ class omxData {
 	// When TRUE, PolychoricCor uses summary data (if possible).
 	// Both should obtain the same result when no exogenous covariates.
 	bool getNoExoOptimize() const { return noExoOptimize; };
+  double getFitTolerance() const { return fitTolerance; }
+  double getGradientTolerance() const { return gradientTolerance; }
 };
 
 omxData* omxNewDataFromMxData(SEXP dataObject, const char *name);
@@ -415,8 +420,6 @@ int omxDataNumNumeric(omxData *od);                   // Number of numeric colum
 int omxDataNumFactor(omxData *od);                    // Number of factor columns in the data set
 
 /* Function wrappers that switch based on inclusion of algebras */
-
-double omxDataDF(omxData *od);
 
 inline bool omxDataColumnIsFactor(omxData *od, int col) { return od->columnIsFactor(col); }
 

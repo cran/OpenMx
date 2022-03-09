@@ -1753,8 +1753,8 @@ class omxComputeOnce : public omxCompute {
 
 class ComputeEM : public omxCompute {
 	typedef omxCompute super;
-	omxCompute *estep;
-	omxCompute *mstep;
+  std::unique_ptr<omxCompute> estep;
+  std::unique_ptr<omxCompute> mstep;
 	omxMatrix *fit3;   // rename to observedFit
 	int EMcycles;
 	int maxIter;
@@ -2036,12 +2036,11 @@ class ComputeBootstrap : public omxCompute {
 
 	struct context {
 		omxData *data;
-		int *origRowFreq;
 		std::vector<int> origCumSum;
 		std::vector<int> resample;
 	};
 	std::vector< context > contexts;
-	omxCompute *plan;
+  std::unique_ptr<omxCompute> plan;
 	int verbose;
 	int numReplications;
 	int seed;
@@ -2055,8 +2054,6 @@ class ComputeBootstrap : public omxCompute {
 	MxRList onlyWeight;
 
  public:
-	ComputeBootstrap() : plan(0) {};
-	virtual ~ComputeBootstrap();
 	virtual bool accumulateInform() override { return false; };
 	virtual void initFromFrontend(omxState *, SEXP rObj) override;
 	virtual void computeImpl(FitContext *fc) override;
@@ -2078,7 +2075,7 @@ class ComputeGenerateData : public omxCompute {
 class ComputeLoadData : public omxCompute {
 	typedef omxCompute super;
 
-	static std::vector<LoadDataProviderBase2*> Providers;
+	static std::vector< std::unique_ptr<LoadDataProviderBase2> > Providers;
 	std::unique_ptr<LoadDataProviderBase2> provider;
 
 	omxData *data;
@@ -2096,13 +2093,14 @@ class ComputeLoadData : public omxCompute {
 
  public:
 	static void loadedHook();
-	static void addProvider(LoadDataProviderBase2 *ldp) { Providers.push_back(ldp); }
+	static void addProvider(std::unique_ptr<LoadDataProviderBase2> ldp)
+  { Providers.emplace_back(std::move(ldp)); }
 	virtual void initFromFrontend(omxState *globalState, SEXP rObj) override;
 	virtual void computeImpl(FitContext *fc) override;
 	virtual void reportResults(FitContext *fc, MxRList *slots, MxRList *) override;
 };
 
-std::vector<LoadDataProviderBase2*> ComputeLoadData::Providers;
+std::vector<std::unique_ptr<LoadDataProviderBase2> > ComputeLoadData::Providers;
 
 void ComputeLoadDataLoadedHook()
 { ComputeLoadData::loadedHook(); }
@@ -2440,9 +2438,9 @@ void omxComputeSequence::initFromFrontend(omxState *globalState, SEXP rObj)
 			s4name = CHAR(s4class);
 		}
 		omxCompute *compute = omxNewCompute(globalState, s4name);
+		clist.push_back(compute);
 		compute->initFromFrontend(globalState, step);
 		if (isErrorRaised()) break;
-		clist.push_back(compute);
 	}
 
 	if (independent) {
@@ -2550,9 +2548,9 @@ void omxComputeIterate::initFromFrontend(omxState *globalState, SEXP rObj)
 			s4name = CHAR(s4class);
 		}
 		omxCompute *compute = omxNewCompute(globalState, s4name);
-		compute->initFromFrontend(globalState, step);
 		if (isErrorRaised()) break;
 		clist.push_back(compute);
+		compute->initFromFrontend(globalState, step);
 	}
 
 	{
@@ -2657,9 +2655,9 @@ void ComputeLoop::initFromFrontend(omxState *globalState, SEXP rObj)
 			s4name = CHAR(s4class);
 		}
 		omxCompute *compute = omxNewCompute(globalState, s4name);
-		compute->initFromFrontend(globalState, step);
 		if (isErrorRaised()) break;
 		clist.push_back(compute);
+		compute->initFromFrontend(globalState, step);
 	}
 
 	iterations = 0;
@@ -2735,12 +2733,12 @@ void ComputeEM::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("estep")));
 	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
-	estep = omxNewCompute(globalState, CHAR(s4class));
+	estep = std::unique_ptr<omxCompute>(omxNewCompute(globalState, CHAR(s4class)));
 	estep->initFromFrontend(globalState, slotValue);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("mstep")));
 	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
-	mstep = omxNewCompute(globalState, CHAR(s4class));
+	mstep = std::unique_ptr<omxCompute>(omxNewCompute(globalState, CHAR(s4class)));
 	mstep->initFromFrontend(globalState, slotValue);
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("observedFit")));
@@ -3396,7 +3394,7 @@ void ComputeEM::collectResults(FitContext *fc, LocalComputeResult *lcr, MxRList 
 	super::collectResults(fc, lcr, out);
 
 	std::vector< omxCompute* > clist(1);
-	clist[0] = mstep;
+	clist[0] = mstep.get();
 
 	collectResultsHelper(fc, clist, lcr, out);
 }
@@ -3448,9 +3446,6 @@ void ComputeEM::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 
 ComputeEM::~ComputeEM()
 {
-	delete estep;
-	delete mstep;
-
 	for (size_t hx=0; hx < estHistory.size(); ++hx) {
 		delete [] estHistory[hx];
 	}
@@ -4140,11 +4135,6 @@ void ComputeReportExpectation::reportResults(FitContext *fc, MxRList *, MxRList 
 	result->add("expectations", expectations);
 }
 
-ComputeBootstrap::~ComputeBootstrap()
-{
-	if (plan) delete plan;
-}
-
 void ComputeBootstrap::initFromFrontend(omxState *globalState, SEXP rObj)
 {
 	super::initFromFrontend(globalState, rObj);
@@ -4154,7 +4144,7 @@ void ComputeBootstrap::initFromFrontend(omxState *globalState, SEXP rObj)
 
 	Rf_protect(slotValue = R_do_slot(rObj, Rf_install("plan")));
 	Rf_protect(s4class = STRING_ELT(Rf_getAttrib(slotValue, R_ClassSymbol), 0));
-	plan = omxNewCompute(globalState, CHAR(s4class));
+	plan = std::unique_ptr<omxCompute>(omxNewCompute(globalState, CHAR(s4class)));
 	plan->initFromFrontend(globalState, slotValue);
 
 	ProtectedSEXP Rdata(R_do_slot(rObj, Rf_install("data")));
@@ -4168,11 +4158,11 @@ void ComputeBootstrap::initFromFrontend(omxState *globalState, SEXP rObj)
 			mxThrow("%s: data '%s' of type '%s' cannot have row weights",
 				 name, ctx.data->name, ctx.data->getType());
 		}
-		ctx.origRowFreq = ctx.data->getFreqColumn();
+		int *origRowFreq = ctx.data->getFreqColumn();
 		ctx.origCumSum.resize(numRows);
 		ctx.resample.resize(ctx.origCumSum.size());
-		if (ctx.origRowFreq) {
-			std::partial_sum(ctx.origRowFreq, ctx.origRowFreq + ctx.origCumSum.size(),
+		if (origRowFreq) {
+			std::partial_sum(origRowFreq, origRowFreq + ctx.origCumSum.size(),
 					 ctx.origCumSum.begin());
 		} else {
 			for (int rx=0; rx < numRows; ++rx) ctx.origCumSum[rx] = 1+rx;
@@ -4340,7 +4330,7 @@ void ComputeBootstrap::collectResults(FitContext *fc, LocalComputeResult *lcr, M
 {
 	super::collectResults(fc, lcr, out);
 	std::vector< omxCompute* > clist(1);
-	clist[0] = plan;
+	clist[0] = plan.get();
 	collectResultsHelper(fc, clist, lcr, out);
 }
 
@@ -4787,7 +4777,7 @@ void ComputeLoadData::initFromFrontend(omxState *globalState, SEXP rObj)
     data = globalState->dataList[objNum];
   }
 
-	for (auto pr : Providers) {
+	for (auto &pr : Providers) {
 		if (strEQ(methodName, pr->getName())) {
 			provider = pr->clone();
       if (data) {
@@ -4807,7 +4797,7 @@ void ComputeLoadData::initFromFrontend(omxState *globalState, SEXP rObj)
 	}
 	if (!provider) {
 		std::string avail;
-		for (auto pr : Providers) {
+		for (auto &pr : Providers) {
 			avail += " ";
 			avail += pr->getName();
 		}
@@ -4863,8 +4853,8 @@ void ComputeLoadData::reportResults(FitContext *fc, MxRList *slots, MxRList *)
 void ComputeLoadData::loadedHook()
 {
 	Providers.clear();
-	Providers.push_back(new LoadDataCSVProvider());
-	Providers.push_back(new LoadDataDFProvider());
+	Providers.push_back(std::make_unique<LoadDataCSVProvider>());
+	Providers.push_back(std::make_unique<LoadDataDFProvider>());
 }
 
 unsigned int DJBHash(const char *str, std::size_t len)
@@ -4879,7 +4869,7 @@ unsigned int DJBHash(const char *str, std::size_t len)
 }
 
 void AddLoadDataProvider(double version, unsigned int otherHash,
-                         LoadDataProviderBase2 *ldp)
+                         std::unique_ptr<LoadDataProviderBase2> ldp)
 {
   std::size_t sz2[] = {
                sizeof(dataPtr),
@@ -4896,7 +4886,7 @@ void AddLoadDataProvider(double version, unsigned int otherHash,
 	} else {
 		mxThrow("Cannot add mxComputeLoadData provider, version mismatch");
 	}
-	ComputeLoadData::addProvider(ldp);
+	ComputeLoadData::addProvider(std::move(ldp));
 }
 
 void ComputeLoadContext::reopen()

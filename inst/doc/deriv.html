@@ -12,7 +12,7 @@
 
 <meta name="author" content="Joshua Pritikin" />
 
-<meta name="date" content="2022-01-27" />
+<meta name="date" content="2022-02-21" />
 
 <title>Testing Derivatives</title>
 
@@ -348,7 +348,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Testing Derivatives</h1>
 <h4 class="author">Joshua Pritikin</h4>
-<h4 class="date">2022-01-27</h4>
+<h4 class="date">2022-02-21</h4>
 
 
 
@@ -373,8 +373,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true"></a>an &lt;-<span class="st"> </span><span class="kw">mxRun</span>(<span class="kw">mxModel</span>(mv1, aPlan), <span class="dt">silent =</span> <span class="ot">TRUE</span>)</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true"></a></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true"></a><span class="kw">cbind</span>(<span class="dt">numerical=</span>nu<span class="op">$</span>output<span class="op">$</span>gradient, <span class="dt">analytic=</span>an<span class="op">$</span>output<span class="op">$</span>gradient)</span></code></pre></div>
-<pre><code>##    numerical analytic
-## m1 0.1789865 2.357973</code></pre>
+<pre><code>##     numerical analytic
+## m1 0.03140319 2.062806</code></pre>
 <p>The optimizer is not run so we get the results immediately, even for large complex models. The function also does not need to be (approximately) convex. Any function will do.</p>
 <p>The numerical approximation can be pretty different from the analytic even when there are no errors. We can try another point in the parameter space.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true"></a>p1 &lt;-<span class="st"> </span><span class="kw">runif</span>(<span class="dv">2</span>, <span class="dv">-10</span>,<span class="dv">10</span>)</span>
@@ -384,8 +384,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true"></a>an &lt;-<span class="st"> </span><span class="kw">mxRun</span>(<span class="kw">mxModel</span>(mv1, aPlan), <span class="dt">silent =</span> <span class="ot">TRUE</span>)</span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true"></a></span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true"></a><span class="kw">cbind</span>(<span class="dt">numerical=</span>nu<span class="op">$</span>output<span class="op">$</span>gradient, <span class="dt">analytic=</span>an<span class="op">$</span>output<span class="op">$</span>gradient)</span></code></pre></div>
-<pre><code>##    numerical analytic
-## m1  2.918088 7.836176</code></pre>
+<pre><code>##    numerical  analytic
+## m1 -2.000628 -2.001257</code></pre>
 <p>The results do not correspond very closely so we look for math errors. Indeed, there are errors in the gradient function. We replace it with the correct gradient,</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true"></a>grad &lt;-<span class="st"> </span><span class="kw">mxAlgebra</span>(<span class="op">-</span>(mat1[<span class="dv">1</span>,<span class="dv">1</span>])<span class="op">/</span><span class="dv">2</span>, <span class="dt">name =</span> <span class="st">&quot;grad&quot;</span>, <span class="dt">dimnames=</span><span class="kw">list</span>(<span class="st">&quot;m1&quot;</span>, <span class="ot">NULL</span>))</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true"></a>mv2 &lt;-<span class="st"> </span><span class="kw">mxModel</span>(mv1, grad)</span></code></pre></div>
@@ -394,8 +394,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true"></a>an &lt;-<span class="st"> </span><span class="kw">mxRun</span>(<span class="kw">mxModel</span>(mv2, aPlan), <span class="dt">silent =</span> <span class="ot">TRUE</span>)</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true"></a></span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true"></a><span class="kw">cbind</span>(<span class="dt">numerical=</span>nu<span class="op">$</span>output<span class="op">$</span>gradient, <span class="dt">analytic=</span>an<span class="op">$</span>output<span class="op">$</span>gradient)</span></code></pre></div>
-<pre><code>##    numerical analytic
-## m1  2.918088 2.918088</code></pre>
+<pre><code>##    numerical  analytic
+## m1 -2.000628 -2.000628</code></pre>
 <p>Wow, looks much better! Still, it is prudent to check at a few more points.</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true"></a>mv2 &lt;-<span class="st"> </span><span class="kw">omxSetParameters</span>(mv2, <span class="dt">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="dt">values=</span><span class="kw">rnorm</span>(<span class="dv">1</span>))</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true"></a></span>
@@ -404,7 +404,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true"></a></span>
 <span id="cb10-6"><a href="#cb10-6" aria-hidden="true"></a><span class="kw">cbind</span>(<span class="dt">numerical=</span>nu<span class="op">$</span>output<span class="op">$</span>gradient, <span class="dt">analytic=</span>an<span class="op">$</span>output<span class="op">$</span>gradient)</span></code></pre></div>
 <pre><code>##    numerical  analytic
-## m1 -1.160938 -1.160938</code></pre>
+## m1 -1.032069 -1.032069</code></pre>
 
 
 

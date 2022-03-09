@@ -153,5 +153,16 @@ serr <- mxModel(smod,
 omxCheckError(mxRun(serr), "The u matrix is not the correct size in the state space expectation of model 'State Space Error Check'.  It is 2 by 2 and should be 2 by 1.")
 
 
+#--------------------------------------------------------------------
+# Bootstrap error check
+
+
+# Check that error is thrown for bootstrapping state space model
+omxCheckError(mxBootstrap(smod, 10), "Found multilevel or state space model, implying dependent rows of data.\n'mxBootstrap' assumes that rows of data are independent.\nSet unsafe=TRUE in 'mxBootstrap' to override this error.")
+
+# Check that warning is thrown for bootstrapping state space model with unsafe=TRUE
+omxCheckWarning(mxBootstrap(smod, 3, unsafe=TRUE), "Found multilevel or state space model, implying dependent rows of data.\n'mxBootstrap' assumes that rows of data are independent.\nProceed with caution.")
+
+
 # Done
 

@@ -15,7 +15,3 @@ Get the non-CRAN version of OpenMx from the OpenMx website.
 \details{
 This function
 }
-\examples{
-\donttest{omxGetNPSOL()}
-
-}

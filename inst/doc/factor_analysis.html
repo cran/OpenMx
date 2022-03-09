@@ -204,7 +204,7 @@ hr {
 </head>
 
 <body>
-<p>This vignette will demonstrate latent variable modeling and confirmatory analysis via the common factor model. Factor analysis is a rudimentary application of OpenMx, and hopefully will serve as an easily understandable introduction to the data structures and workflow patterns necessary to define and fit a model using OpenMx. </p>
+<p>This vignette will demonstrate latent variable modeling and confirmatory analysis via the common factor model. Factor analysis is a rudimentary application of OpenMx, and hopefully will serve as an easily understandable introduction to the data structures and workflow patterns necessary to define and fit a model using OpenMx.</p>
 
 <p>OpenMX handles model definition through the <code>MxModel</code> class, instantiated via the <code>mxModel()</code> function. Model definition requires input data for analysis and the model specification itself. Input data can be either in the form of a set of variable observations or by having a covariance matrix and associated variable means. The model specification can either be produced via specifying a path diagram or, for advanced users, the matrices to define the desired RAM or LISREL model.</p>
 
@@ -238,7 +238,7 @@ hr {
 
 <h2>Input Data</h2>
 
-<p>Our first step to running this model is to include the data to be analyzed. The <code>MxData</code> class instantiated through <code>mxData()</code> is used for representing data within the <code>MxModel</code>. </p>
+<p>Our first step to running this model is to include the data to be analyzed. The <code>MxData</code> class instantiated through <code>mxData()</code> is used for representing data within the <code>MxModel</code>.</p>
 
 <p>As mentioned, a raw set of observations on variables can be provided as data. The data for this example is available from the <code>myFADataRaw</code> dataset, which contains 500 observations on nine observed variables. In accordance with the path diagram above, we specify the first six variables for analysis in the model.</p>
 
@@ -352,7 +352,7 @@ means        &lt;- mxPath( from=&quot;one&quot;, to=c(&quot;x1&quot;,&quot;x2&qu
 
 <h3>Path Specification for Multiple Factors</h3>
 
-<p>We will focus on the changes this model makes to the <code>mxPath</code> functions and their relevant inputs. To start, the last three variables of our <code>manifestVars</code> argument have changed from \(x_4, x_5, x_6\) to \(y_1, y_2, y_3\), and <code>latentVars</code> now includes a second variable, <code>F_2</code>. The <code>mxPath</code> functions which detail residual variances and intercepts accommodate the changes in manifest and latent variables but carry out identical functions to the common factor model. </p>
+<p>We will focus on the changes this model makes to the <code>mxPath</code> functions and their relevant inputs. To start, the last three variables of our <code>manifestVars</code> argument have changed from \(x_4, x_5, x_6\) to \(y_1, y_2, y_3\), and <code>latentVars</code> now includes a second variable, <code>F_2</code>. The <code>mxPath</code> functions which detail residual variances and intercepts accommodate the changes in manifest and latent variables but carry out identical functions to the common factor model.</p>
 
 <pre><code class="r">manifestVars &lt;- c(&quot;x1&quot;,&quot;x2&quot;,&quot;x3&quot;,&quot;y1&quot;,&quot;y2&quot;,&quot;y3&quot;)
 latentVars &lt;- c(&quot;F1&quot;,&quot;F2&quot;)
@@ -397,7 +397,7 @@ facLoadsY    &lt;- mxPath( from=&quot;F2&quot;, to=c(&quot;y1&quot;,&quot;y2&quo
                         free=c(F,T,T), values=c(1,1,1), labels=c(&quot;l4&quot;,&quot;l5&quot;,&quot;l6&quot;) )
 </code></pre>
 
-<p>Finally, we instantiate the <code>mxModel</code> object. 
+<p>Finally, we instantiate the <code>mxModel</code> object.
 Specifying the two factor model is virtually identical to the single factor case, with the only change being our manifest and latent variable labels.</p>
 
 <pre><code class="r">twoFactorPathModel &lt;- mxModel(&quot;Two Factor Model Path Specification&quot;, type=&quot;RAM&quot;,
@@ -662,10 +662,10 @@ twoFactorMatrixModel &lt;- mxModel(&quot;Two Factor Model Matrix Specification&q
 ## AIC:       1586.105               7586.105                 7587.688
 ## BIC:     -10977.642               7666.182                 7605.875
 ## To get additional fit indices, see help(mxRefModels)
-## timestamp: 2022-01-27 13:50:47 
-## Wall clock time: 0.06417322 secs 
+## timestamp: 2022-02-21 08:50:03 
+## Wall clock time: 0.1143224 secs 
 ## optimizer:  SLSQP 
-## OpenMx version number: 2.20.3 
+## OpenMx version number: 2.20.6 
 ## Need help?  See help(mxSummary)
 </code></pre>
 

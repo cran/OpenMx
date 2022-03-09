@@ -355,7 +355,12 @@ computeOptimizationStatistics <- function(model, flatModel, numStats, saturatedD
 		}
 		# number of variables
 		if(datalist[[1]]@type != 'raw'){
-			nvar <- dim(datalist[[1]]@observed)[2]
+			if(datalist[[1]]@type == 'none'){
+				nvar <- nrow(datalist[[1]]@observedStats$cov)
+			}
+			else{
+				nvar <- dim(datalist[[1]]@observed)[2]
+			}
 		} else if( length(expectations) == 1 ) {
 			nvar <- length(expectations[[1]]@dims)
 		} else {
@@ -1149,7 +1154,7 @@ logLik.MxModel <- function(object, ...) {
   	for(i in 1:length(M_need_pos)){
   		Mpos[1,M_need_pos[i]] <- out$name[j] <- paste(
   			model@name,".M[1,",M_need_pos[i],"]",sep="")
-  		if(!all.na(model_M$labels)){
+  		if(!is.null(model_M$labels) && !all.na(model_M$labels)){
   			out$label[j] <- model_M$labels[1,M_need_pos[i]]
   		}
   		out$matrix[j] <- "M"

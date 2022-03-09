@@ -1,3 +1,12 @@
+## ---- include = FALSE---------------------------------------------------------
+is_CRAN <- !identical(Sys.getenv("NOT_CRAN"), "true")
+if (!is_CRAN) {
+   options(mc.cores = parallel::detectCores())
+} else {
+  knitr::opts_chunk$set(eval = FALSE)
+  knitr::knit_hooks$set(evaluate.inline = function(x, envir) x)
+}
+
 ## -----------------------------------------------------------------------------
 library(OpenMx)
 
@@ -32,7 +41,7 @@ summary(fit)$parameters[1:8,]
 regFit <- mxPenaltySearch(mxModel(
   fit, mxPenaltyLASSO(paste0('c',1:8),"lasso",lambda.step=1.2),
   mxMatrix('Full',1,1,free=TRUE,values=0, labels="lambda")))
-                                               
+
 
 ## -----------------------------------------------------------------------------
 round(regFit$output$gradient, 2)

@@ -92,7 +92,7 @@ void omxData::connectDynamicData(omxState *currentState)
 	SEXP dataLoc;
 	Rf_protect(dataLoc = R_do_slot(dataObject, Rf_install("expectation")));
 	if (Rf_length(dataLoc) == 0) {
-		omxRaiseError("mxDataDynamic is not connected to a data source");
+		omxRaiseErrorf("mxDataDynamic is not connected to a data source");
 		return;
 	}
 
@@ -1754,9 +1754,13 @@ void OLSRegression::setResponse(ColumnData &cd, WLSVarData &pv,
 	ycol.resize(pred.rows());
 	subsetVector(ycolFull, index, ycol);
 	auto notMissingF = [&](int rx){ return std::isfinite(ycol[rx]); };
+  double indicatorWeight = totalWeight;
 	naCount = 0;
 	for (int rx=0; rx < int(ycol.size()); ++rx) {
-		if (!notMissingF(rx)) naCount += 1;
+		if (!notMissingF(rx)) {
+      naCount += 1;
+      indicatorWeight -= rowMult[rx];
+    }
 	}
 	Eigen::VectorXd ycolF(ycol.size() - naCount);
 	subsetVector(ycol, notMissingF, ycolF);
@@ -1778,16 +1782,16 @@ void OLSRegression::setResponse(ColumnData &cd, WLSVarData &pv,
 		resid = ycol - pred * beta;
 	} else {
     predCov.resize(1, 1);
-    predCov(0,0) = 1 / totalWeight;
+    predCov(0,0) = 1 / indicatorWeight;
 		beta.resize(1);
-		beta[0] = (ycolF.array() * rowMultF).sum() / totalWeight;
+		beta[0] = (ycolF.array() * rowMultF).sum() / indicatorWeight;
 		resid = ycol.array() - beta[0];
 	}
 	subsetVectorStore(resid, [&](int rx){ return !std::isfinite(ycol[rx]); }, 0.);
   double residSqSum = (resid.square() * rowMult).sum();
-  double sigma2 = residSqSum / (totalWeight - beta.size());
+  double sigma2 = residSqSum / (indicatorWeight - beta.size());
   vcov = sigma2 * predCov.selfadjointView<Eigen::Lower>();
-	var = residSqSum / totalWeight;
+	var = residSqSum / indicatorWeight;
 }
 
 void OLSRegression::calcScores()
@@ -2142,7 +2146,7 @@ struct PolyserialCor : NewtonRaphsonObjective {
 		double den = 0;
 		for (int tx=0; tx < numThr; ++tx) den += Rf_dnorm4(ov.theta[tx], 0., 1., 0);
 		double rho = (zeeF * ycolF.cast<double>().array() * rowMultF).sum() /
-			(totalWeight * sqrt(var) * den);
+			((totalWeight - naCount) * sqrt(var) * den);
 		if (!std::isfinite(rho)) mxThrow("PolyserialCor starting value not finite");
 		if (fabs(rho) >= 1.0) rho = 0;
 		if (data.verbose >= 3) mxLog("starting ps rho = %f", rho);
@@ -2287,10 +2291,12 @@ struct PolychoricCor : NewtonRaphsonObjective {
 		y2.resize(index.size());
 		subsetVector(y2Full, index, y2);
 
+    double pairwiseWeight = totalWeight;
 		int naCount = 0;
 		for (int rx=0; rx < rowMult.rows(); ++rx) {
 			if (y1[rx] != NA_INTEGER && y2[rx] != NA_INTEGER) continue;
 			naCount += 1;
+      pairwiseWeight -= rowMult[rx];
 		}
 		auto notMissingF = [&](int rx){ return y1[rx] != NA_INTEGER && y2[rx] != NA_INTEGER; };
 		Eigen::ArrayXi y1F(rowMult.rows() - naCount);
@@ -2299,8 +2305,8 @@ struct PolychoricCor : NewtonRaphsonObjective {
 		subsetVector(y1, notMissingF, y1F);
 		subsetVector(y2, notMissingF, y2F);
 		subsetVector(rowMult, notMissingF, rowMultF);
-		Eigen::ArrayXd y1c = y1F.cast<double>() - (y1F.cast<double>() * rowMultF).sum() / totalWeight;
-		Eigen::ArrayXd y2c = y2F.cast<double>() - (y2F.cast<double>() * rowMultF).sum() / totalWeight;
+		Eigen::ArrayXd y1c = y1F.cast<double>() - (y1F.cast<double>() * rowMultF).sum() / pairwiseWeight;
+		Eigen::ArrayXd y2c = y2F.cast<double>() - (y2F.cast<double>() * rowMultF).sum() / pairwiseWeight;
 		double rho = (y1c * y2c * rowMultF).sum() /
 			(sqrt((y1c*y1c*rowMultF).sum() * (y2c*y2c*rowMultF).sum()));
 		if (fabs(rho) >= 1.0) rho = 0;
@@ -2476,14 +2482,15 @@ struct PearsonCor {
 	{
 		int rows = pv1.resid.size();
 
-		rho = 2.*(pv1.resid * pv2.resid * rowMult).sum() /
-			((pv1.resid.square() * rowMult).sum()+(pv2.resid.square() * rowMult).sum());
-		double R = (1 - rho*rho);
-		double i2r = 1./(2.*R);
 		double var_y1 = pv1.theta[pv1.theta.size()-1];
 		double sd_y1 = sqrt(var_y1);
 		double var_y2 = pv2.theta[pv2.theta.size()-1];
 		double sd_y2 = sqrt(var_y2);
+		double joint_N = ((pv1.resid != 0.).cast<double>() * (pv2.resid != 0.).cast<double>() * rowMult).sum();
+		// rho is the correlation, computed as the standardized covariance
+		rho = ((pv1.resid * pv2.resid * rowMult).sum() / joint_N) / (sd_y1 * sd_y2);
+		double R = (1 - rho*rho);
+		double i2r = 1./(2.*R);
 
 		int numPred = pred1.size() + pred2.size();
 		scores.resize(rows, 4 + numPred + 1);

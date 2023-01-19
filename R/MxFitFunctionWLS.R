@@ -348,9 +348,9 @@ approveWLSIntervals <- function(flatModel, modelName) {
 #'
 mxDescribeDataWLS <- function(data, allContinuousMethod = c("cumulants", "marginals"), verbose=FALSE){
 	allContinuousMethod = match.arg(allContinuousMethod)
-	if (inherits(data, "data.frame")) {
+	if(inherits(data, "data.frame")){
 		# all good
-	} else if (inherits(data, "MxDataStatic") && data$type == "raw"){
+	} else if(inherits(data, "MxDataStatic") && data$type == "raw"){
 		data = data$observed
 	}else{
 		message("mxDescribeDataWLS currently only knows how to process dataframes and mxData of type = 'raw'.\n",

@@ -21,7 +21,7 @@ Automatically set starting values for an MxModel
 This function automatically picks very good starting values for many models (RAM, LISREL, Normal), including multiple group versions of these.
 It works for models with algebras. Models of continuous, ordinal, and joint ordinal-continuous variables are also acceptable.
 It works for models with covariance or raw data.
-However, it does not currently work for models with definition variables, state space models, and item factor analysis models.
+However, it does not currently work for models with definition variables, state space models, item factor analysis models, or multilevel models.
 
 The method used to obtain new starting values is quite simple. The user's model is changed to an unweighted least squares (ULS) model. The ULS model is estimated and its final point estimates are returned as the new starting values. Optionally, diagonally weighted least squares (DWLS) can be used instead with the \code{type} argument.
 

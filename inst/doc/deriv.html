@@ -12,7 +12,7 @@
 
 <meta name="author" content="Joshua Pritikin" />
 
-<meta name="date" content="2023-01-19" />
+<meta name="date" content="2023-04-05" />
 
 <title>Testing Derivatives</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Testing Derivatives</h1>
 <h4 class="author">Joshua Pritikin</h4>
-<h4 class="date">2023-01-19</h4>
+<h4 class="date">2023-04-05</h4>
 
 
 
@@ -374,8 +374,8 @@ contains some errors.</p>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
-<pre><code>##     numerical analytic
-## m1 -0.3537551  1.29249</code></pre>
+<pre><code>##    numerical analytic
+## m1 0.0826322 2.165264</code></pre>
 <p>The optimizer is not run so we get the results immediately, even for
 large complex models. The function also does not need to be
 (approximately) convex. Any function will do.</p>
@@ -389,8 +389,8 @@ space.</p>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
-<pre><code>##    numerical analytic
-## m1 0.1304358 2.260872</code></pre>
+<pre><code>##    numerical   analytic
+## m1 -1.066184 -0.1323689</code></pre>
 <p>The results do not correspond very closely so we look for math
 errors. Indeed, there are errors in the gradient function. We replace it
 with the correct gradient,</p>
@@ -402,7 +402,7 @@ with the correct gradient,</p>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
 <pre><code>##    numerical  analytic
-## m1 0.1304358 0.1304358</code></pre>
+## m1 -1.066184 -1.066184</code></pre>
 <p>Wow, looks much better! Still, it is prudent to check at a few more
 points.</p>
 <div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mv2 <span class="ot">&lt;-</span> <span class="fu">omxSetParameters</span>(mv2, <span class="at">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="at">values=</span><span class="fu">rnorm</span>(<span class="dv">1</span>))</span>
@@ -412,7 +412,7 @@ points.</p>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
 <pre><code>##     numerical   analytic
-## m1 -0.6549812 -0.6549812</code></pre>
+## m1 -0.5334338 -0.5334338</code></pre>
 
 
 

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Joshua Pritikin and Ross Jacobucci and Timothy R. Brick" />
 
-<meta name="date" content="2023-01-19" />
+<meta name="date" content="2023-04-05" />
 
 <title>Regularized MIMIC</title>
 
@@ -342,7 +342,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">Regularized MIMIC</h1>
 <h4 class="author">Joshua Pritikin and Ross Jacobucci and Timothy R.
 Brick</h4>
-<h4 class="date">2023-01-19</h4>
+<h4 class="date">2023-04-05</h4>
 
 
 
@@ -405,10 +405,10 @@ results is not very exciting. We learn that sex is not a good predictor
 of this factor.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>regMIMIC <span class="ot">&lt;-</span> <span class="fu">mxPenaltySearch</span>(mimicModel)</span></code></pre></div>
 <pre><code>## Running MIMIC with 37 parameters</code></pre>
-<pre><code>## Warning: In model &#39;MIMIC&#39; Optimizer returned a non-zero status code 6. The model
-## does not satisfy the first-order optimality conditions to the required accuracy,
-## and no improved point for the merit function could be found during the final
-## linesearch (Mx status RED)</code></pre>
+<pre><code>## Warning: In model &#39;MIMIC&#39; Optimizer returned a non-zero status code 6. The
+## model does not satisfy the first-order optimality conditions to the required
+## accuracy, and no improved point for the merit function could be found during
+## the final linesearch (Mx status RED)</code></pre>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>detail <span class="ot">&lt;-</span> regMIMIC<span class="sc">$</span>compute<span class="sc">$</span>steps<span class="sc">$</span>PS<span class="sc">$</span>output<span class="sc">$</span>detail</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reshape2)</span>
@@ -488,10 +488,10 @@ re-fit model.</p>
 ## AIC:     11915.6773               17913.68                 17923.19
 ## BIC:       927.8025               18043.43                 17932.43
 ## To get additional fit indices, see help(mxRefModels)
-## timestamp: 2023-01-19 10:57:19 
-## Wall clock time: 5.118841 secs 
+## timestamp: 2023-04-05 10:41:41 
+## Wall clock time: 3.853766 secs 
 ## optimizer:  SLSQP 
-## OpenMx version number: 2.21.1 
+## OpenMx version number: 2.21.8 
 ## Need help?  See help(mxSummary)</code></pre>
 </div>
 

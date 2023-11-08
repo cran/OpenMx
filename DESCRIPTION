@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2023-04-05
+Date: 2023-11-07
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -48,8 +48,8 @@ SystemRequirements: GNU make, C++17
 ByteCompile: yes
 Language: en-US
 License: Apache License (== 2.0)
-LinkingTo: Rcpp, RcppEigen, RcppParallel, StanHeaders (>= 2.10.0.2), BH
-        (>= 1.69.0-1), rpf (>= 0.45)
+LinkingTo: Rcpp, RcppEigen (>= 0.3.3.9.4), RcppParallel, StanHeaders
+        (>= 2.10.0.2), BH (>= 1.69.0-1), rpf (>= 0.45), Matrix
 Imports: digest, MASS, Matrix (>= 1.2-16), methods, Rcpp, RcppParallel,
         parallel, lifecycle
 Depends: R (>= 3.5.0)
@@ -95,10 +95,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxPenalty.R' 'MxMMI.R' 'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
 RdMacros: lifecycle
 Biarch: true
-Version: 2.21.8
+Version: 2.21.10
 RoxygenNote: 7.2.3
 NeedsCompilation: yes
-Packaged: 2023-04-05 17:41:48 UTC; joshua
+Packaged: 2023-11-07 20:41:22 UTC; joshua
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -138,4 +138,4 @@ Author: Steven M. Boker [aut],
   Jitse Niesen [cph]
 Maintainer: Joshua N. Pritikin <jpritikin@pobox.com>
 Repository: CRAN
-Date/Publication: 2023-04-05 20:43:20 UTC
+Date/Publication: 2023-11-08 00:00:13 UTC

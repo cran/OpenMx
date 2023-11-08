@@ -1,4 +1,4 @@
-## ---- include = FALSE---------------------------------------------------------
+## ----include = FALSE----------------------------------------------------------
 is_CRAN <- !identical(Sys.getenv("NOT_CRAN"), "true")
 if (!is_CRAN) {
    options(mc.cores = parallel::detectCores())

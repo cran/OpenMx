@@ -1,4 +1,4 @@
-c5b73119b447daf597d81e6a84a3077f *DESCRIPTION
+17797ca7f5e1c068d3f17083689026ef *DESCRIPTION
 781a265b333a1fa759624c49213876fc *NAMESPACE
 952ad50391160812a1e6411ee3d723cb *NEWS.md
 5bcc58db7eec377048ec0a24bbe1b9e4 *R/0ClassUnion.R
@@ -55,7 +55,7 @@ b1fa101594d5977acff332f57cd030a9 *R/MxFitFunctionWLS.R
 85e5cf4170f19cd1613d50a7caf088b6 *R/MxInterval.R
 c026c37b387a7c89c67f2fda193634eb *R/MxLISRELModel.R
 a2c6c0a32312546c5b0a825ffcea0ec5 *R/MxLISRELObjective.R
-c7ae1c56156b0c1ada5b73f7e9b6cb29 *R/MxMI.R
+a5090e700e176bdda0521b2406207ce8 *R/MxMI.R
 a1616379d7babe196bacaf9467bd8f4d *R/MxMLObjective.R
 fd300dbb8babb68aa901e32c7bf100f1 *R/MxMMI.R
 4d96ae2fafab678dfe465bbd063838b2 *R/MxMatrix.R
@@ -95,7 +95,7 @@ ec1e1c97ca6ff8110d146f76c7d96c5f *R/MxSummary.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 9555a65fb70337dbf8126e0838962923 *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-4e358e34984c9538dfb594555c7d714f *R/MxVersion.R
+9a7f5f1baf0213844a29e1f6e3bbda62 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 bd1b62fc130af72e5297aa110bc80fcc *R/OriginalMx.R
 063cb4ee7a2ed6ff16d0bd15016dba82 *R/SdiagMatrix.R
@@ -111,8 +111,8 @@ b3dab8661db016b2ea6f8d78ee52f994 *R/omxReadGRMBin.R
 b4e7af03b2724a94dbe4db17500ab789 *R/sysdata.rda
 be114f887b8a154487d8e64fd07eac91 *R/zzz.R
 08aa7611a7cae152b9ee0bb86b136e0c *README.md
-12a09f30427f7b19aac1c9aaaae909d1 *build/OpenMx.pdf
-9379060c79547647b82b5d4b7f5c62da *build/stage23.rdb
+d79274a773dc6e335c526dd7c671f4f2 *build/OpenMx.pdf
+47c29c2829ebe6df0d997b8795d11e97 *build/stage23.rdb
 5817ef8573be514783c2b6d28c673ad2 *build/vignette.rds
 e8545ff6937032ff553a1f8b3048e415 *cleanup
 ed15ece00e2130e2d34734834fe8a825 *configure
@@ -226,16 +226,16 @@ e7890083246487651f830f84af61d4a4 *demo/mxThreshold.R
 27b586bdb522583d687ac702d6c52b6f *inst/WORDLIST
 4778d83f5711562f1f54967bb2565acd *inst/doc/deriv.R
 be485d84b2dd7e0b1ff8ebf4d8fed1e6 *inst/doc/deriv.Rmd
-d42e6e388d362133607629296125fd36 *inst/doc/deriv.html
+28dd1dfa6e19d666360cb37486ca27d3 *inst/doc/deriv.html
 b876051e15f24f15c7fef794ee2ca144 *inst/doc/factor_analysis.R
 c8d8fb6af1cffe3f78f214f36ff2a79f *inst/doc/factor_analysis.Rmd
-f3977ec7207971641cbd552717ea87d0 *inst/doc/factor_analysis.html
+cf26e6326d7f104adc36238d76bdea1e *inst/doc/factor_analysis.html
 fce9acc816d09f21aa78b48a70ca2d1d *inst/doc/reg_mimic.R
 0c8539e205d8eba803e1393e1bc705d4 *inst/doc/reg_mimic.Rmd
-f7769f1aaff478218c8e2ba218e2986d *inst/doc/reg_mimic.html
+51cb9cc6caf14e1e4883072dd3c3ea45 *inst/doc/reg_mimic.html
 0ffc8bf9e984db7068df40217e9365ea *inst/doc/regularization.R
 9e6b28935ce194b6fbfe7fc21db954f5 *inst/doc/regularization.Rmd
-cab74805f9d861b3e071392757c78006 *inst/doc/regularization.html
+2697428070dcde698556639e046a7764 *inst/doc/regularization.html
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R
@@ -925,7 +925,7 @@ bab6c52da0f7ccd152529790688a9dab *man/mxGenerateData.Rd
 b54fbde4ba28b589f65226cc33c83e97 *man/mxJiggle.Rd
 23b506100f990be235cb25b73e10aeb4 *man/mxKalmanScores.Rd
 f126834fa9824f5719e1cd0d318cf51a *man/mxLISRELObjective.Rd
-6c970ad567a9cd3f9962bade9547b70b *man/mxMI.Rd
+921a37de629c25e2bdc1ec9d8ecfc591 *man/mxMI.Rd
 edf33cd563a792a8bd2abb8bc5cc9e38 *man/mxMLObjective.Rd
 d179a02c47955c78c4503206249215e7 *man/mxMakeNames.Rd
 e721133df0a9d77fcd6fb721c36a8829 *man/mxMarginalNegativeBinomial.Rd
@@ -1085,7 +1085,7 @@ c9e5a8e531fce64ac23bd9e089dfc817 *src/npsolswitch.h
 8c3d0da833b0ae4c04c8f74cb0fce0cd *src/nr.h
 ec63b21ae6b7aa89abeb0f2e15f5d4dc *src/omxAlgebra.cpp
 d8e80c03f3e1bd066e23d3a23490344e *src/omxAlgebra.h
-241dcadf6eb151278f0d05f9cfd36b14 *src/omxAlgebraFitFunction.cpp
+ac1f8c3797420bdcb8e6285935c4013e *src/omxAlgebraFitFunction.cpp
 f159aba1be8d468be5299b1205218e34 *src/omxBVN.h
 337ff12d11d4e89131c2aaf75b4ee021 *src/omxCsolnp.h
 53eb8641e19fde901aed010a50bc521a *src/omxData.cpp

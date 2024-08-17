@@ -140,12 +140,10 @@ section.footnotes::before {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
 </head>
 <body>
-<div class="include-before">
-</div>
 <div class="frontmatter">
 <div class="title"><h1>Model Specification for Confirmatory Factor Analysis</h1></div>
 <div class="author"><h2></h2></div>
-<div class="date"><h3>2023-11-27</h3></div>
+<div class="date"><h3>2024-08-16</h3></div>
 </div>
 <div class="body">
 <p>This vignette will demonstrate latent variable modeling and confirmatory analysis via the common factor model. Factor analysis is a rudimentary application of OpenMx, and hopefully will serve as an easily understandable introduction to the data structures and workflow patterns necessary to define and fit a model using OpenMx.</p>
@@ -484,25 +482,25 @@ twoFactorMatrixModel &lt;- mxModel(&quot;Two Factor Model Matrix Specification&q
 ##  
 ## free parameters:
 ##      name matrix row col  Estimate  Std.Error A
-## 1      l2      A   2   7 0.9723169 0.05914081  
-## 2      l3      A   3   7 0.9313485 0.05777022  
-## 3      l5      A   5   8 1.0489157 0.09346097  
-## 4      l6      A   6   8 1.0530553 0.09542648  
-## 5      e1      S   1   1 0.3348589 0.03634049  
-## 6      e2      S   2   2 0.3984917 0.03755572  
-## 7      e3      S   3   3 0.4091477 0.03661980  
-## 8      e4      S   4   4 0.5404280 0.04824857  
-## 9      e5      S   5   5 0.4808798 0.04721738  
-## 10     e6      S   6   6 0.5570633 0.05106953  
-## 11  varF1      S   7   7 0.6604139 0.06622390  
-## 12    cov      S   7   8 0.2951547 0.03933735  
-## 13  varF2      S   8   8 0.4505102 0.06260275  
-## 14 meanx1      M   1  x1 2.9879512 0.04461557  
-## 15 meanx2      M   1  x2 3.0113433 0.04522939  
-## 16 meanx3      M   1  x3 2.9861141 0.04431702  
-## 17 meanx4      M   1  y1 2.9554046 0.04451830  
-## 18 meanx5      M   1  y2 2.9561472 0.04419374  
-## 19 meanx6      M   1  y3 2.9673326 0.04597058  
+## 1      l2      A   2   7 0.9723169 0.05914723  
+## 2      l3      A   3   7 0.9313485 0.05777635  
+## 3      l5      A   5   8 1.0489157 0.09347683  
+## 4      l6      A   6   8 1.0530553 0.09543891  
+## 5      e1      S   1   1 0.3348589 0.03634223  
+## 6      e2      S   2   2 0.3984917 0.03755704  
+## 7      e3      S   3   3 0.4091477 0.03662053  
+## 8      e4      S   4   4 0.5404280 0.04825078  
+## 9      e5      S   5   5 0.4808798 0.04721894  
+## 10     e6      S   6   6 0.5570633 0.05107181  
+## 11  varF1      S   7   7 0.6604139 0.06623301  
+## 12    cov      S   7   8 0.2951547 0.03934093  
+## 13  varF2      S   8   8 0.4505102 0.06261288  
+## 14 meanx1      M   1  x1 2.9879512 0.04461544  
+## 15 meanx2      M   1  x2 3.0113433 0.04522927  
+## 16 meanx3      M   1  x3 2.9861141 0.04431690  
+## 17 meanx4      M   1  y1 2.9554046 0.04451819  
+## 18 meanx5      M   1  y2 2.9561472 0.04419364  
+## 19 meanx6      M   1  y3 2.9673326 0.04597048  
 ## 
 ## Model Statistics: 
 ##                |  Parameters  |  Degrees of Freedom  |  Fit (-2lnL units)
@@ -516,17 +514,15 @@ twoFactorMatrixModel &lt;- mxModel(&quot;Two Factor Model Matrix Specification&q
 ## AIC:       1586.105               7586.105                 7587.688
 ## BIC:     -10977.642               7666.182                 7605.875
 ## To get additional fit indices, see help(mxRefModels)
-## timestamp: 2023-11-27 13:51:24 
-## Wall clock time: 0.02398992 secs 
+## timestamp: 2024-08-16 20:56:57 
+## Wall clock time: 0.09083128 secs 
 ## optimizer:  SLSQP 
-## OpenMx version number: 2.21.11 
+## OpenMx version number: 2.21.12 
 ## Need help?  See help(mxSummary)
 </code></pre>
 <p>If more detailed output is desired, accessing the <code>$output</code> field on an <code>MxModel</code> object will provide more detailed information including the fit matricies in raw form, the derived Hessian matrix, and data about execution environment and timing.</p>
 <pre><code class="language-r">output(twoFactorMatrixFit)
 </code></pre>
-</div>
-<div class="include-after">
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>

@@ -93,3 +93,60 @@ summary(m1)
 \references{
 The OpenMx User's guide can be found at \url{https://openmx.ssri.psu.edu/documentation}
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{http://openmx.ssri.psu.edu}
+  \item \url{https://github.com/OpenMx/OpenMx}
+  \item Report bugs at \url{http://openmx.ssri.psu.edu/forums}
+}
+
+}
+\author{
+\strong{Maintainer}: Joshua N. Pritikin \email{jpritikin@pobox.com}
+
+Authors:
+\itemize{
+  \item Steven M. Boker
+  \item Michael C. Neale
+  \item Hermine H. Maes
+  \item Michael Spiegel
+  \item Timothy R. Brick
+  \item Ryne Estabrook
+  \item Timothy C. Bates
+  \item Ross J. Gore
+  \item Michael D. Hunter
+  \item Mahsa Zahery
+  \item Robert M. Kirkpatrick
+}
+
+Other contributors:
+\itemize{
+  \item Michael J. Wilde [contributor]
+  \item Paras Mehta [contributor]
+  \item Timo von Oertzen [contributor]
+  \item Daniel C. Hackett [contributor]
+  \item Julian Karch [contributor]
+  \item Andreas M. Brandmaier [contributor]
+  \item Yang Wang [contributor]
+  \item Ben Goodrich \email{goodrich.ben@gmail.com} [contributor]
+  \item Charles Driver \email{driver@mpib-berlin.mpg.de} [contributor]
+  \item Massachusetts Institute of Technology [copyright holder]
+  \item S. G. Johnson [copyright holder]
+  \item Association for Computing Machinery [copyright holder]
+  \item Dieter Kraft [copyright holder]
+  \item Stefan Wilhelm [copyright holder]
+  \item Sarah Medland [copyright holder]
+  \item Carl F. Falk [copyright holder]
+  \item Matt Keller [copyright holder]
+  \item Manjunath B G [copyright holder]
+  \item The Regents of the University of California [copyright holder]
+  \item Lester Ingber [copyright holder]
+  \item Wong Shao Voon [copyright holder]
+  \item Juan Palacios [copyright holder]
+  \item Jiang Yang [copyright holder]
+  \item Gael Guennebaud [copyright holder]
+  \item Jitse Niesen [copyright holder]
+}
+
+}

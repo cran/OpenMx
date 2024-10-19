@@ -103,7 +103,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Joshua N. Pritikin \email{jpritikin@pobox.com}
+\strong{Maintainer}: Robert M. Kirkpatrick \email{robert.kirkpatrick@vcuhealth.org}
 
 Authors:
 \itemize{
@@ -116,8 +116,8 @@ Authors:
   \item Timothy C. Bates
   \item Ross J. Gore
   \item Michael D. Hunter
+  \item Joshua N. Pritikin
   \item Mahsa Zahery
-  \item Robert M. Kirkpatrick
 }
 
 Other contributors:

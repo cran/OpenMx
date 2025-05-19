@@ -64,6 +64,10 @@ if (any(args == 'lisrel')) {
 	files <- grep("LISREL", files, value=TRUE, ignore.case=TRUE)
 }
 
+if(any(args=="RAMd")){
+	files <- read.table(file="inst/tools/RAMd_files.txt")$V1
+}
+
 if(any(args=="GREML")){
 	files <- read.table(file="inst/tools/GREML_files.txt")$V1
 }

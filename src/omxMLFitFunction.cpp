@@ -29,6 +29,7 @@
 #include "matrix.h"
 #include "Compute.h"
 #include "EnableWarnings.h"
+#include "omxMatrix.h"
 
 static const double MIN_VARIANCE = 1e-6;
 
@@ -38,6 +39,15 @@ struct MLFitState : omxFitFunction {
 	omxMatrix* observedMeans;
 	omxMatrix* expectedCov;
 	omxMatrix* expectedMeans;
+	
+	std::vector< Eigen::MatrixXd > dSigma_dtheta;
+	std::vector< Eigen::MatrixXd > dNu_dtheta; //<--column vectors
+	std::vector< std::vector< Eigen::MatrixXd >> d2Sigma_dtheta1dtheta2;
+	std::vector< std::vector< Eigen::MatrixXd >> d2Mu_dtheta1dtheta2;
+	std::vector<bool> alwaysZeroCovDeriv;
+	std::vector<bool> alwaysZeroMeanDeriv;
+	
+	void sufficientDerivs2Grad_NormalContinuous(Eigen::Ref<Eigen::VectorXd> ig, FitContext *fc);
 
 	double n;
 	double logDetObserved;
@@ -67,8 +77,10 @@ static void calcExtraLikelihoods(omxFitFunction *oo, double *saturated_out, doub
 	double det = 0.0;
 	omxMatrix* cov = state->observedCov;
 	int ncols = state->observedCov->cols;
+	double crrctn = (double(state->n)-1.0)/double(state->n);
 
 	*saturated_out = (state->logDetObserved * state->n) + ncols * (state->n - 1);
+	//*saturated_out = (state->logDetObserved + ncols*log(crrctn))*state->n + ncols*(state->n - 1);
 
 	// Independence model assumes all-zero manifest covariances.
 	// (det(expected) + tr(observed * expected^-1)) * (n - 1);
@@ -182,13 +194,14 @@ void MLFitState::compute2(int want, FitContext *fc)
 		}
     //mxLog("%s: %d/%d analytic derivs", name(), numSimpleParam, numFree);
 
-		if (numSimpleParam == 0) {
-			// if numSimpleParam == 0 then hessian() doesn't compute the fit
-    if (want & FF_COMPUTE_GRADIENT) fc->gradZ.setConstant(NA_REAL);
-			want &= ~(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO);
-			if (want) compute(want, fc);
-			return;
-		}
+    if( !((Global->analyticGradients && omo->expectation->canProvideSufficientDerivs) || (numSimpleParam)) ){
+    //if (!Global->analyticGradients || (!omo->expectation->canProvideSufficientDerivs && numSimpleParam == 0)) {
+    	// if numSimpleParam == 0 then hessian() doesn't compute the fit
+    	if (want & FF_COMPUTE_GRADIENT) fc->gradZ.setConstant(NA_REAL);
+    	want &= ~(FF_COMPUTE_GRADIENT | FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO);
+    	if (want) compute(want, fc);
+    	return;
+    }
 
 		double init_log_prob = 0.0;
 		Eigen::VectorXd init_grad = Eigen::VectorXd::Zero(numSimpleParam);
@@ -218,12 +231,38 @@ void MLFitState::compute2(int want, FitContext *fc)
 		if (want & FF_COMPUTE_FIT) {
 			oo->matrix->data[0] = Scale * init_log_prob;
 		}
-		if (want & FF_COMPUTE_GRADIENT) {
-			int px=0;
-			for (int fx=0; fx < int(numFree); ++fx) {
-				if (!fvMask[fx]) { fc->gradZ[fx] = NA_REAL; continue; }
-				fc->gradZ[fx] += Scale * init_grad[px];
-				++px;
+		//Control should not have gotten here if analytic derivatives mxOption is switched off:
+		if (want & FF_COMPUTE_GRADIENT) { 
+			//As of this writing, availability of sufficient derivs and of "simple" derivs should be mutually exclusive:
+			if(omo->expectation->canProvideSufficientDerivs){
+				if(dSigma_dtheta.size() != size_t(numFree)){ 
+					dSigma_dtheta.resize(numFree);
+				}
+				if (omo->expectedMeans) {
+					if(dNu_dtheta.size() != size_t(numFree)){
+						//^^^Likewise here.
+						dNu_dtheta.resize(numFree);
+					}
+				}
+				oo->sufficientDerivs2Grad_NormalContinuous(init_grad, fc);
+				//Seriously consider combining this for loop and the next one.
+				if(OMX_DEBUG_ALGEBRA){ mxLog("Scale: %f",Scale); }
+				for (int px=0; px < int(numFree); ++px) {
+					if(OMX_DEBUG_ALGEBRA){
+						mxLog("gradZ[px]: %f", fc->gradZ[px]);
+						mxLog("init_grad[px]: %f", init_grad[px]);
+					}
+					fc->gradZ[px] += Scale * init_grad[px];
+					if(OMX_DEBUG_ALGEBRA){ mxLog("gradZ[px] post-assignment: %f", fc->gradZ[px]); }
+				}
+			}
+			else{
+				int px=0;
+				for (int fx=0; fx < int(numFree); ++fx) {
+					if (!fvMask[fx]) { fc->gradZ[fx] = NA_REAL; continue; }
+					fc->gradZ[fx] += Scale * init_grad[px];
+					++px;
+				}
 			}
 		}
 		if (want & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO)) {
@@ -234,12 +273,37 @@ void MLFitState::compute2(int want, FitContext *fc)
 			delete hb;
 		}
 	} else if ((want & (FF_COMPUTE_FIT | FF_COMPUTE_GRADIENT)) &&
-	    !(want & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO))) {
+		!(want & (FF_COMPUTE_HESSIAN | FF_COMPUTE_IHESSIAN | FF_COMPUTE_INFO))) {
 		// works for any multivariate normal expectation (e.g. vanilla, RAM, LISREL, etc)
-
-    if (want & FF_COMPUTE_GRADIENT) fc->gradZ.setConstant(NA_REAL);
-    if (!(want & FF_COMPUTE_FIT)) return;
-
+		if (want & FF_COMPUTE_GRADIENT){
+			if(Global->analyticGradients && oo->expectation->canProvideSufficientDerivs){
+				int numFree = fc->getNumFree();
+				Eigen::VectorXd init_grad = Eigen::VectorXd::Zero(numFree);
+				if(dSigma_dtheta.size() != size_t(numFree)){ 
+					dSigma_dtheta.resize(numFree);
+				}
+				if (oo->expectedMeans) {
+					if(dNu_dtheta.size() != size_t(numFree)){
+						dNu_dtheta.resize(numFree);
+					}
+				}
+				oo->sufficientDerivs2Grad_NormalContinuous(init_grad, fc);
+				if(OMX_DEBUG_ALGEBRA){ mxLog("Scale: %f",Scale); }
+				for (int px=0; px < int(numFree); ++px) {
+					if(OMX_DEBUG_ALGEBRA){
+						mxLog("gradZ[px]: %f", fc->gradZ[px]);
+						mxLog("init_grad[px]: %f", init_grad[px]);
+					}
+					fc->gradZ[px] += Scale * init_grad[px];
+					if(OMX_DEBUG_ALGEBRA){ mxLog("gradZ[px] post-assignment: %f", fc->gradZ[px]); }
+				}
+			}
+			else{
+				fc->gradZ.setConstant(NA_REAL);
+			}
+		}
+		if (!(want & FF_COMPUTE_FIT)) return;
+		
 		MLFitState *omo = (MLFitState*) oo;
 		EigenMatrixAdaptor obCovAdapter(omo->observedCov);
 		Eigen::MatrixXd obCov = obCovAdapter;
@@ -247,10 +311,10 @@ void MLFitState::compute2(int want, FitContext *fc)
 		Eigen::MatrixXd exCov = exCovAdapter;
 		double fit;
 		try {
-      // If we want to drop dependency on stan::math,
-      // it looks like analytic expressions for derivs are available in
-      // https://www.academia.edu/23179079/Finite_Normal_Mixture_Sem_Analysis_by_Fitting_Multiple_Conventional_Sem_Models
-      // Appendix B
+			// If we want to drop dependency on stan::math,
+			// it looks like analytic expressions for derivs are available in
+			// https://www.academia.edu/23179079/Finite_Normal_Mixture_Sem_Analysis_by_Fitting_Multiple_Conventional_Sem_Models
+			// Appendix B
 			if (omo->observedMeans) {
 				EigenVectorAdaptor obMeansAdapter(omo->observedMeans);
 				Eigen::VectorXd obMeans = obMeansAdapter;
@@ -273,7 +337,7 @@ void MLFitState::compute2(int want, FitContext *fc)
 		}
 		oo->matrix->data[0] = Scale * fit;
 	} else {
-		mxThrow("Not implemented");
+		mxThrow("Not implemented src/omxMLFitFunction.cpp");
 	}
 }
 
@@ -471,4 +535,71 @@ void MLFitState::init()
 #endif
 	newObj->logDetObserved = log_determinant_ldlt(ldlt_obCov);
 	if(OMX_DEBUG) { mxLog("Log Determinant of Observed Cov: %f", newObj->logDetObserved); }
+}
+
+/*TODO: It is wasteful to Cholesky-factor (and subsequently invert) the model-expected covariance
+when computing the gradient (here) as well as when computing the fit:*/
+void MLFitState::sufficientDerivs2Grad_NormalContinuous(Eigen::Ref<Eigen::VectorXd> ig, FitContext *fc){
+	auto *oo = this;
+	MLFitState *omo = (MLFitState*) oo;
+	int numFree = fc->getNumFree();
+	EigenMatrixAdaptor obCov(omo->observedCov);
+	EigenMatrixAdaptor exCov(omo->expectedCov);
+	Eigen::LLT< Eigen::MatrixXd > cholC(exCov.rows());
+	cholC.compute(exCov);
+	if(cholC.info() != Eigen::Success){
+		ig.setConstant(NA_REAL);
+		if (fc) fc->recordIterationError("expected covariance matrix is non-positive-definite");
+		return;
+	}
+	Eigen::MatrixXd Cinv(exCov.rows(), exCov.cols());
+	Cinv = cholC.solve(Eigen::MatrixXd::Identity(exCov.rows(), exCov.cols()));
+	if(OMX_DEBUG_ALGEBRA){ mxPrintMat("Cinv:",Cinv); }
+	Eigen::MatrixXd Nu, CinvNu;
+	if(oo->expectedMeans){
+		EigenVectorAdaptor obMeans(omo->observedMeans);
+		EigenVectorAdaptor exMeans(omo->expectedMeans);
+		Nu = (obMeans - exMeans); //<--Column vector
+		if(OMX_DEBUG_ALGEBRA){ mxPrintMat("Nu:",Nu); }
+		CinvNu = Cinv * Nu;
+		if(OMX_DEBUG_ALGEBRA){ mxPrintMat("CinvNu:",CinvNu); }
+	}
+	oo->expectation->provideSufficientDerivs(
+			fc, dSigma_dtheta, dNu_dtheta, alwaysZeroCovDeriv, alwaysZeroMeanDeriv, false, d2Sigma_dtheta1dtheta2, d2Mu_dtheta1dtheta2);
+	Eigen::MatrixXd CinvObCov = Cinv.selfadjointView<Eigen::Lower>() * ((n-1)/n*obCov);
+	if(OMX_DEBUG_ALGEBRA){ mxPrintMat("CinvObCov:",CinvObCov); }
+	for(int i=0; i < numFree; i++){ 
+		if(OMX_DEBUG_ALGEBRA){ mxPrintMat("Der:",dSigma_dtheta[i]); }
+		Eigen::MatrixXd CinvDer = Cinv.selfadjointView<Eigen::Lower>() * dSigma_dtheta[i];
+		if(OMX_DEBUG_ALGEBRA){ mxPrintMat("CinvDer:",CinvDer); }
+		//double secondTerm = (CinvObCov * CinvDer).trace();
+		double secondTerm = (CinvObCov.array() * CinvDer.transpose().array()).sum();
+		if(OMX_DEBUG_ALGEBRA){ mxLog("secondTerm: %f", secondTerm); }
+		double CinvDer_trace = CinvDer.trace();
+		if(OMX_DEBUG_ALGEBRA){ mxLog("CinvDer_trace: %f", CinvDer_trace); }
+		//Remember that the elements of ig will be multiplied by Global->llscale before being copied to the FitContext's gradient.
+		ig[i] = (n)*-0.5*(CinvDer_trace - secondTerm);
+		/*
+		 * ^^^The right-hand side "should" be multiplied by (n-1).  However, multiplying by (n-1) results in a gradient element that is
+		 * smaller than the corresponding numerical gradient by a factor of (n-1)/n.  Thus, we multiply by a correction factor of n/(n-1),
+		 * and the (n-1)s cancel from division.  Yes, this is a kludge.
+		 * Ideally, in the future, we will identify where in the math & code the "n vs. n-1" discrepancy actually exists.
+		 */
+		if(OMX_DEBUG_ALGEBRA){ mxLog("i: %d", i); }
+		if(OMX_DEBUG_ALGEBRA){ mxLog("covariancePart i: %f", ig[i]); }
+		if(oo->expectedMeans){
+			Eigen::MatrixXd dNu_dtheta_i_CinvNu = dNu_dtheta[i]*CinvNu;
+			if(OMX_DEBUG_ALGEBRA){ mxLog("i: %d", i); }
+			if(OMX_DEBUG_ALGEBRA){ mxPrintMat("dNu_dtheta[i]*CinvNu:",dNu_dtheta_i_CinvNu); }
+			double meansCorrectionPart1 = -0.5*n*(dNu_dtheta_i_CinvNu)(0,0);
+			//^^^The compiler doesn't know that dNu_dtheta[i]*CinvNu will always evaluate to a scalar.
+			if(OMX_DEBUG_ALGEBRA){ mxLog("means correction part 1: %f", meansCorrectionPart1); }
+			double meansCorrectionPart2 = 0.5*n*(Nu.transpose()*CinvDer*CinvNu)(0,0);
+			if(OMX_DEBUG_ALGEBRA){ mxLog("means correction part 2: %f", meansCorrectionPart2); }
+			double meansCorrectionPart3 = -0.5*n*(Nu.transpose()*Cinv.selfadjointView<Eigen::Lower>()*dNu_dtheta[i].transpose())(0,0);
+			if(OMX_DEBUG_ALGEBRA){ mxLog("means correction part 3: %f", meansCorrectionPart3); }
+			ig[i] += meansCorrectionPart1 + meansCorrectionPart2 + meansCorrectionPart3;
+			if(OMX_DEBUG_ALGEBRA){ mxLog("ig[i], with means correction: %f", ig[i]); }
+		}
+	}
 }

@@ -171,11 +171,13 @@ void PathCalc::evaluate(FitContext *fc, bool doFilter)
 
 	aio->recompute(fc);
 	const unsigned fver = 0xb01dface;
-	if (!ignoreVersion && versionIA == aio->getVersion(fc) + doFilter*fver) {
+	if (!ignoreVersion && !doAlwaysComputeUnfilteredIAUponEval && versionIA == aio->getVersion(fc) + doFilter*fver) {
 		//mxLog("PathCalc<avft>::evaluate() in cache");
 		return;
 	}
-	versionIA = aio->getVersion(fc) + doFilter*fver;
+	if( !(!ignoreVersion && versionIA == aio->getVersion(fc) + doFilter*fver) ){
+		versionIA = aio->getVersion(fc) + doFilter*fver;
+	}
 
 	if (numIters >= 0) {
 		refreshA(fc, 1.0);
@@ -224,6 +226,15 @@ void PathCalc::evaluate(FitContext *fc, bool doFilter)
 				IA = sparseIA;
 				mxPrintMat("IA", IA);
 			}
+		}
+	}
+	
+	if(doCacheUnfilteredIA){
+		//TODO: In the sparse case, this currently casts a sparse matrix to a dense matrix:
+		if(useSparse){
+			sparseI_A = sparseIA;
+		} else{
+			I_A = IA;
 		}
 	}
 

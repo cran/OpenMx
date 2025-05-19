@@ -69,18 +69,20 @@ protected:
 	bool isTopState() const;
 	int expNum;  // index in omxState's vector
 
-	// omxExpectation should not need to know about free variables.
-	FreeVarGroup *freeVarGroup; // TODO remove
+	//Some expectation classes do need to know about free variables:
+	FreeVarGroup *freeVarGroup;
 
 	bool canDuplicate;
 	bool dynamicDataSource;
+	
+	int canProvideSufficientDerivs;
 
 	omxExpectation(omxState *state, int num) :
 		dataColumnsPtr(0), thresholdsMat(0),
 		discreteSpecPtr(0), u_connectedToData(false), discreteMat(0),
     numDataColumns(0), name(0), data(0), numOrdinal(0),
     isComplete(false), currentState(state),
-		expNum(num), freeVarGroup(0), canDuplicate(false), dynamicDataSource(false) {};
+		expNum(num), freeVarGroup(0), canDuplicate(false), dynamicDataSource(false), canProvideSufficientDerivs(0) {};
 	virtual ~omxExpectation() {};
 	virtual void init() {};
   virtual void connectToData();
@@ -103,6 +105,12 @@ protected:
 		asVector1(fc, row, out.derived());
 	}
   Eigen::MatrixXd buildThresholdMatrix();
+	
+	virtual void provideSufficientDerivs(
+			FitContext *fc, std::vector< Eigen::MatrixXd > &u_dSigma_dtheta, std::vector< Eigen::MatrixXd > &u_dNu_dtheta,
+			std::vector<bool> &u_alwaysZeroCovDeriv, std::vector<bool> &u_alwaysZeroMeanDeriv, bool wantHess, 
+			std::vector< std::vector< Eigen::MatrixXd >> &u_d2Sigma_dtheta1dtheta2, 
+			std::vector< std::vector< Eigen::MatrixXd >> &u_d2Mu_dtheta1dtheta2) {};
 
 	virtual bool usesDataColumnNames() const { return true; }
 	void loadDataColFromR();

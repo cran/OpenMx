@@ -12,7 +12,7 @@
 
 <meta name="author" content="Joshua Pritikin" />
 
-<meta name="date" content="2024-10-18" />
+<meta name="date" content="2025-05-19" />
 
 <title>Testing Derivatives</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Testing Derivatives</h1>
 <h4 class="author">Joshua Pritikin</h4>
-<h4 class="date">2024-10-18</h4>
+<h4 class="date">2025-05-19</h4>
 
 
 
@@ -349,68 +349,70 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 function derivatives. This vignette shows how to do it. The main tool
 that we are going to use are two custom compute plans called
 <code>aPlan</code> and <code>nPlan</code>.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(OpenMx)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>aPlan <span class="ot">&lt;-</span> <span class="fu">mxComputeSequence</span>(<span class="fu">list</span>(  <span class="co">#analytic</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeOnce</span>(<span class="st">&#39;fitfunction&#39;</span>, <span class="fu">c</span>(<span class="st">&#39;gradient&#39;</span>)),</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeReportDeriv</span>()))</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>nPlan <span class="ot">&lt;-</span> <span class="fu">mxComputeSequence</span>(<span class="fu">list</span>(  <span class="co">#numerical</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeNumericDeriv</span>(<span class="at">analytic =</span> <span class="cn">FALSE</span>, <span class="at">hessian=</span><span class="cn">FALSE</span>, <span class="at">checkGradient =</span> <span class="cn">FALSE</span>),</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeReportDeriv</span>()))</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(OpenMx)</span></code></pre></div>
+<pre><code>## To take full advantage of multiple cores, use:
+##   mxOption(key=&#39;Number of Threads&#39;, value=parallel::detectCores()) #now
+##   Sys.setenv(OMP_NUM_THREADS=parallel::detectCores()) #before library(OpenMx)</code></pre>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>aPlan <span class="ot">&lt;-</span> <span class="fu">mxComputeSequence</span>(<span class="fu">list</span>(  <span class="co">#analytic</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeOnce</span>(<span class="st">&#39;fitfunction&#39;</span>, <span class="fu">c</span>(<span class="st">&#39;gradient&#39;</span>)),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeReportDeriv</span>()))</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>nPlan <span class="ot">&lt;-</span> <span class="fu">mxComputeSequence</span>(<span class="fu">list</span>(  <span class="co">#numerical</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeNumericDeriv</span>(<span class="at">analytic =</span> <span class="cn">FALSE</span>, <span class="at">hessian=</span><span class="cn">FALSE</span>, <span class="at">checkGradient =</span> <span class="cn">FALSE</span>),</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mxComputeReportDeriv</span>()))</span></code></pre></div>
 <p>Now that we have the plans ready, we can use them to debug a
 fitfunction. Here’s a fitfunction from the test suite that is somewhat
 contrived, but can serve our pedagogical needs.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mat1 <span class="ot">&lt;-</span> <span class="fu">mxMatrix</span>(<span class="st">&quot;Full&quot;</span>, <span class="fu">rnorm</span>(<span class="dv">1</span>), <span class="at">free=</span><span class="cn">TRUE</span>, <span class="at">nrow=</span><span class="dv">1</span>, <span class="at">ncol=</span><span class="dv">1</span>, <span class="at">labels=</span><span class="st">&quot;m1&quot;</span>, <span class="at">name=</span><span class="st">&quot;mat1&quot;</span>)</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>obj <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>.<span class="dv">5</span> <span class="sc">*</span> (<span class="fu">log</span>(<span class="dv">2</span><span class="sc">*</span>pi) <span class="sc">+</span> <span class="fu">log</span>(<span class="dv">2</span>) <span class="sc">+</span> (mat1[<span class="dv">1</span>,<span class="dv">1</span>])<span class="sc">^</span><span class="dv">2</span><span class="sc">/</span><span class="dv">2</span>), <span class="at">name =</span> <span class="st">&quot;obj&quot;</span>)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>grad <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>(mat1[<span class="dv">1</span>,<span class="dv">1</span>]) <span class="sc">+</span> <span class="dv">2</span>, <span class="at">name =</span> <span class="st">&quot;grad&quot;</span>, <span class="at">dimnames=</span><span class="fu">list</span>(<span class="st">&quot;m1&quot;</span>, <span class="cn">NULL</span>))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>mv1 <span class="ot">&lt;-</span> <span class="fu">mxModel</span>(<span class="st">&quot;mv1&quot;</span>, mat1, obj, grad,</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                  <span class="fu">mxFitFunctionAlgebra</span>(<span class="st">&quot;obj&quot;</span>, <span class="at">gradient=</span><span class="st">&quot;grad&quot;</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>mat1 <span class="ot">&lt;-</span> <span class="fu">mxMatrix</span>(<span class="st">&quot;Full&quot;</span>, <span class="fu">rnorm</span>(<span class="dv">1</span>), <span class="at">free=</span><span class="cn">TRUE</span>, <span class="at">nrow=</span><span class="dv">1</span>, <span class="at">ncol=</span><span class="dv">1</span>, <span class="at">labels=</span><span class="st">&quot;m1&quot;</span>, <span class="at">name=</span><span class="st">&quot;mat1&quot;</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>obj <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>.<span class="dv">5</span> <span class="sc">*</span> (<span class="fu">log</span>(<span class="dv">2</span><span class="sc">*</span>pi) <span class="sc">+</span> <span class="fu">log</span>(<span class="dv">2</span>) <span class="sc">+</span> (mat1[<span class="dv">1</span>,<span class="dv">1</span>])<span class="sc">^</span><span class="dv">2</span><span class="sc">/</span><span class="dv">2</span>), <span class="at">name =</span> <span class="st">&quot;obj&quot;</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>grad <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>(mat1[<span class="dv">1</span>,<span class="dv">1</span>]) <span class="sc">+</span> <span class="dv">2</span>, <span class="at">name =</span> <span class="st">&quot;grad&quot;</span>, <span class="at">dimnames=</span><span class="fu">list</span>(<span class="st">&quot;m1&quot;</span>, <span class="cn">NULL</span>))</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>mv1 <span class="ot">&lt;-</span> <span class="fu">mxModel</span>(<span class="st">&quot;mv1&quot;</span>, mat1, obj, grad,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                  <span class="fu">mxFitFunctionAlgebra</span>(<span class="st">&quot;obj&quot;</span>, <span class="at">gradient=</span><span class="st">&quot;grad&quot;</span>))</span></code></pre></div>
 <p>Since we are not very good at calculus, the gradient function
 contains some errors.</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
-<pre><code>##     numerical analytic
-## m1 -0.3987463 1.202507</code></pre>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
+<pre><code>##    numerical analytic
+## m1 0.8619243 3.723849</code></pre>
 <p>The optimizer is not run so we get the results immediately, even for
 large complex models. The function also does not need to be
 (approximately) convex. Any function will do.</p>
 <p>The numerical approximation can be pretty different from the analytic
 even when there are no errors. We can try another point in the parameter
 space.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">runif</span>(<span class="dv">2</span>, <span class="sc">-</span><span class="dv">10</span>,<span class="dv">10</span>)</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>mv1 <span class="ot">&lt;-</span> <span class="fu">omxSetParameters</span>(mv1, <span class="at">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="at">values=</span>p1)</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">runif</span>(<span class="dv">2</span>, <span class="sc">-</span><span class="dv">10</span>,<span class="dv">10</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>mv1 <span class="ot">&lt;-</span> <span class="fu">omxSetParameters</span>(mv1, <span class="at">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="at">values=</span>p1)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv1, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
 <pre><code>##    numerical analytic
-## m1  1.141662 4.283324</code></pre>
+## m1  2.966133 7.932266</code></pre>
 <p>The results do not correspond very closely so we look for math
 errors. Indeed, there are errors in the gradient function. We replace it
 with the correct gradient,</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>grad <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>(mat1[<span class="dv">1</span>,<span class="dv">1</span>])<span class="sc">/</span><span class="dv">2</span>, <span class="at">name =</span> <span class="st">&quot;grad&quot;</span>, <span class="at">dimnames=</span><span class="fu">list</span>(<span class="st">&quot;m1&quot;</span>, <span class="cn">NULL</span>))</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>mv2 <span class="ot">&lt;-</span> <span class="fu">mxModel</span>(mv1, grad)</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>grad <span class="ot">&lt;-</span> <span class="fu">mxAlgebra</span>(<span class="sc">-</span>(mat1[<span class="dv">1</span>,<span class="dv">1</span>])<span class="sc">/</span><span class="dv">2</span>, <span class="at">name =</span> <span class="st">&quot;grad&quot;</span>, <span class="at">dimnames=</span><span class="fu">list</span>(<span class="st">&quot;m1&quot;</span>, <span class="cn">NULL</span>))</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>mv2 <span class="ot">&lt;-</span> <span class="fu">mxModel</span>(mv1, grad)</span></code></pre></div>
 <p>Let’s check the correspondence now.</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
 <pre><code>##    numerical analytic
-## m1  1.141662 1.141662</code></pre>
+## m1  2.966133 2.966133</code></pre>
 <p>Wow, looks much better! Still, it is prudent to check at a few more
 points.</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>mv2 <span class="ot">&lt;-</span> <span class="fu">omxSetParameters</span>(mv2, <span class="at">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="at">values=</span><span class="fu">rnorm</span>(<span class="dv">1</span>))</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
-<pre><code>##    numerical  analytic
-## m1 0.1449633 0.1449633</code></pre>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mv2 <span class="ot">&lt;-</span> <span class="fu">omxSetParameters</span>(mv2, <span class="at">labels =</span> <span class="st">&#39;m1&#39;</span>, <span class="at">values=</span><span class="fu">rnorm</span>(<span class="dv">1</span>))</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, nPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>an <span class="ot">&lt;-</span> <span class="fu">mxRun</span>(<span class="fu">mxModel</span>(mv2, aPlan), <span class="at">silent =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">numerical=</span>nu<span class="sc">$</span>output<span class="sc">$</span>gradient, <span class="at">analytic=</span>an<span class="sc">$</span>output<span class="sc">$</span>gradient)</span></code></pre></div>
+<pre><code>##     numerical   analytic
+## m1 -0.3069235 -0.3069235</code></pre>
 
 
 

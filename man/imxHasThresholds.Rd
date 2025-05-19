@@ -4,10 +4,12 @@
 \alias{imxHasThresholds}
 \title{imxHasThresholds}
 \usage{
-imxHasThresholds(model)
+imxHasThresholds(model, submodels = TRUE)
 }
 \arguments{
 \item{model}{model}
+
+\item{submodels}{logical; recursion over child models?}
 }
 \description{
 This is an internal function exported for those people who know

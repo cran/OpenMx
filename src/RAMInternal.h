@@ -373,6 +373,19 @@ class omxRAMExpectation : public MVNExpectation {
 	omxMatrix *fullCov, *fullMean;
 	omxMatrix *slope;       // exogenous predictor slopes
 	omxMatrix *A, *S, *F, *M;
+	
+	std::vector< Eigen::SparseMatrix<double> > dS_dtheta;
+	std::vector< Eigen::SparseMatrix<double> > dA_dtheta;
+	std::vector< Eigen::SparseMatrix<double> > dM_dtheta;
+	std::vector<bool> alwaysZeroSDeriv;
+	std::vector<bool> alwaysZeroADeriv;
+	std::vector<bool> alwaysZeroMDeriv;
+	
+	void provideSufficientDerivs(
+			FitContext *fc, std::vector< Eigen::MatrixXd > &u_dSigma_dtheta, std::vector< Eigen::MatrixXd > &u_dNu_dtheta,
+			std::vector<bool> &u_alwaysZeroCovDeriv, std::vector<bool> &u_alwaysZeroMeanDeriv, bool wantHess, 
+			std::vector< std::vector< Eigen::MatrixXd >> &u_d2Sigma_dtheta1dtheta2, 
+			std::vector< std::vector< Eigen::MatrixXd >> &u_d2Mu_dtheta1dtheta2) override;
 
 	int verbose;
 	int rampartCycleLimit;

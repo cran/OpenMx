@@ -244,18 +244,62 @@ getPrecisionPerExpectation <- function(expectation, optionsList){
 ##' submodels) has any thresholds.
 ##'
 ##' @param model model
-imxHasThresholds <- function(model) {
+##' @param submodels logical; recursion over child models?
+imxHasThresholds <- function(model,submodels=TRUE) {
 	if(length(model@expectation) && 
 		 (class(model@expectation) %in% c("MxExpectationNormal","MxExpectationLISREL","MxExpectationRAM")) && 
 		 !single.na(model@expectation@thresholds)  ){
 		return(TRUE)
 	}
 	# Check submodels
-	if(length(model@submodels)){
+	if(submodels && length(model@submodels)){
 		attempt <- sapply(model@submodels, imxHasThresholds)
 		if(any(attempt)){
 			return(TRUE)
 		}
 	}
 	return(FALSE)
+}
+
+eligibleForSufficientDerivs <- function(model){
+	return(
+		AllRAMOrLISREL(model) && AllCovData(model) && AllMLFitFunction(model) && !imxHasAlgebraOnPath(model) && 
+			!imxHasDefinitionVariable(model) && !imxHasThresholds(model) && !imxIsMultilevel(model) && !imxHasPenalty(model)
+	)
+}
+
+markExpectationsEligibleForSufficientDerivs <- function(model){
+	#return(model)
+	wich <- 1
+	isOptSwitchedOff <- FALSE
+	# Conveniently, if the option is not set for `model`, this reads from the global mxOptions:
+	optval <- mxOption(model,"Analytic RAM derivatives")[1]
+	if(identical(optval,TRUE)){ optval <- "Yes" }
+	if(identical(optval,FALSE)){ optval <- "No" }
+	isOptSwitchedOff <- as.logical(length(grep("No",optval,ignore.case=T))) #|| identical(optval,FALSE)
+	if(!isOptSwitchedOff){
+		if( !(as.logical(length(grep("Yes",optval,ignore.case=T)))) ){
+			stop("mxOption 'Analytic RAM derivatives' must be either 'Yes' or 'No'")
+		}
+	}
+	#Defvars and multilevel are global disqualifiers:
+	if(imxHasDefinitionVariable(model) || imxIsMultilevel(model) || isOptSwitchedOff){
+		wich <- 2
+	}
+	allModNames <- getAllModelNames(model)
+	# TODO: if wich==2, just set the slot to FALSE in each expectation:
+	for(m in allModNames){
+		if(length(model[[m]]$expectation)){
+			model[[m]]$expectation@.canProvideSufficientDerivs <- 
+				c(is(model[[m]]$expectation,"MxExpectationRAM") && 
+						(identical(model[[m]]$data$type,"cov") || identical(model[[m]]$data$type,"raw")) && 
+						is.na(model[[m]]$expectation$selectionVector) && !length(model[[m]]$expectation@discreteSpec) &&
+						!any(model[[m]]$expectation$isProductNode) &&
+						is(model[[m]]$fitfunction,"MxFitFunctionML") && !identical(model[[m]]$fitfunction$fellner,FALSE) && 
+						!imxHasAlgebraOnPath(model[[m]],submodels=F) && 
+						!imxHasThresholds(model[[m]],submodels=F) && !length(model[[m]]@penalties),
+					FALSE)[wich]
+		}
+	}
+	return(model)
 }

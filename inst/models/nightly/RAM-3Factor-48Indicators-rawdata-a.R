@@ -126,3 +126,21 @@ threeFactorOrthogonal <- mxModel("threeFactorOrthogonal",
 threeFactorOrthogonalOut <- mxRun(threeFactorOrthogonal)
 summary(threeFactorOrthogonalOut)
 omxCheckCloseEnough(threeFactorOrthogonalOut$output$fit, 143158.2, .5)
+
+# Compare with vs. without analytic gradients ####
+mxOption(NULL,"Analytic gradients","Yes"); mxOption(NULL,"Analytic RAM derivatives","Yes")
+foo <- mxRun(threeFactorOrthogonal)
+omxCheckCloseEnough(foo$output$fit, 143158.2, .5)
+mxOption(NULL,"Analytic gradients","No"); mxOption(NULL,"Analytic RAM derivatives","No")
+bar <- mxRun(threeFactorOrthogonal)
+omxCheckCloseEnough(bar$output$fit, 143158.2, .5)
+if(0){
+	omxCheckTrue(summary(foo,verbose=T)$wallTime < summary(bar,verbose=T)$wallTime)
+	omxCheckTrue(foo$output$iterations <= bar$output$iterations)
+}
+summary(foo,verbose=T)$wallTime; summary(bar,verbose=T)$wallTime
+foo$output$iterations; bar$output$iterations
+omxCheckTrue(foo$output$evaluations < bar$output$evaluations)
+foo$output$evaluations; bar$output$evaluations
+
+mxOption(reset=TRUE)

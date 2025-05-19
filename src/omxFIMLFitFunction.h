@@ -120,6 +120,13 @@ class omxFIMLFitFunction : public omxFitFunction {
 	virtual void compute2(int ffcompute, FitContext *fc) override;
 	virtual void populateAttr(SEXP algebra) override;
 	virtual void invalidateCache() override;
+	
+	std::vector< Eigen::MatrixXd > dSigma_dtheta;
+	std::vector< Eigen::MatrixXd > dNu_dtheta;
+	std::vector< std::vector< Eigen::MatrixXd >> d2Sigma_dtheta1dtheta2;
+	std::vector< std::vector< Eigen::MatrixXd >> d2Mu_dtheta1dtheta2;
+	std::vector<bool> alwaysZeroCovDeriv;
+	std::vector<bool> alwaysZeroMeanDeriv;
 
 	// --- old stuff below
 
@@ -177,6 +184,7 @@ class mvnByRow {
 	int sortedRow;  // it's really the unsorted row (row in the original data); rename TODO
 	bool useSufficientSets;
 	Eigen::ArrayXd &rowMult;
+	int want;
 
 	int rowOrdinal;
 	int rowContinuous;
@@ -193,12 +201,12 @@ class mvnByRow {
 		bool wantOrdinal;
 	subsetOp(std::vector<bool> &u_isOrdinal,
 		 std::vector<bool> &u_isMissing) : isOrdinal(u_isOrdinal), isMissing(u_isMissing) {};
-		// true to include
+		// true to include(?)
 		bool operator()(int gx) { return !((wantOrdinal ^ isOrdinal[gx]) || isMissing[gx]); };
-	} op;
+	} op; //<--This is what decides which rows and columns of the mean vector and covariance matrix to keep, in condOrdByRow::eval()
 
 	mvnByRow(FitContext *u_fc, omxFitFunction *u_localobj,
-		 omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml)
+		 omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml, int &u_want)
 	:
 	ofo((omxFIMLFitFunction*) u_localobj),
 		shared_ofo(ofo->parent? ofo->parent : ofo),
@@ -211,6 +219,7 @@ class mvnByRow {
 		dataColumns(expectation->getDataColumns()),
 		isOrdinal(u_ofiml->isOrdinal),
 		rowMult(shared_ofo->rowMult),
+		want(u_want),
 		op(isOrdinal, isMissing)
 	{
 		data = ofo->data;
@@ -438,30 +447,41 @@ class mvnByRow {
 							 loc, data->name, 1+sortedRow, buf.c_str());
 		}
 	}
+	
+	bool getHessianAvailable()
+	{
+		return(localobj->hessianAvailable);
+	}
+	
+	void setHessianAvailable(bool input)
+	{
+		localobj->hessianAvailable = input;
+	}
 };
 
 struct condContByRow : mvnByRow {
 	typedef mvnByRow super;
 	condContByRow(FitContext *u_fc, omxFitFunction *u_localobj,
-		      omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml)
-		: super(u_fc, u_localobj, u_parent, u_ofiml) {};
+		      omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml, int &u_want)
+		: super(u_fc, u_localobj, u_parent, u_ofiml, u_want) {};
 	bool eval();
 };
 
 struct oldByRow : mvnByRow {
 	typedef mvnByRow super;
 	oldByRow(FitContext *u_fc, omxFitFunction *u_localobj,
-		 omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml)
-		: super(u_fc, u_localobj, u_parent, u_ofiml) {};
+		 omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml, int &u_want)
+		: super(u_fc, u_localobj, u_parent, u_ofiml, u_want) {};
 	bool eval();
 };
 
 struct condOrdByRow : mvnByRow {
 	typedef mvnByRow super;
 	condOrdByRow(FitContext *u_fc, omxFitFunction *u_localobj,
-		     omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml)
-		: super(u_fc, u_localobj, u_parent, u_ofiml) {};
+		     omxFIMLFitFunction *u_parent, omxFIMLFitFunction *u_ofiml, int &u_want)
+		: super(u_fc, u_localobj, u_parent, u_ofiml, u_want) {};
 	bool eval();
+	
 };
 
 #endif /* u_OMXFIMLFITFUNCTION_H_ */

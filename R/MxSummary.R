@@ -158,9 +158,9 @@ computeFitStatistics <- function(likelihood, DoF, chi, chiDoF, numObs,
 			      "or you may be using the wrong independence model, see ?mxRefModels"))
 	}
 	CFI <- (independence - indDoF - likelihood + DoF)/(independence - indDoF - saturated + satDoF)
-	TLI <- 1
+	TLI <- NA
 	rmseaSquared <- 0
-	RMSEA <- 0
+	RMSEA <- NA
 	RMSEACI <- c(lower=NA, upper=NA)
 	RMSEANull <- 0.05
 	RMSEAClose <- NA
@@ -399,9 +399,10 @@ computeOptimizationStatistics <- function(model, flatModel, numStats, saturatedD
 	# constraints, parameters, model degrees of freedom
 	retval[['constraints']] <- calculateConstraints(model, flatModel)
 	retval[['estimatedParameters']] <- nrow(retval$parameters)
-  if(any(sapply(obj,function(x){"MxExpectationGREML" %in% class(x)}))){
+  if(any(sapply(obj,function(x){is(x,"MxExpectationGREML")}))){
     retval[['estimatedParameters']] <- retval[['estimatedParameters']] +
-      sum(sapply(obj,imxExtractSlot,name="numFixEff"))
+      # When REML=FALSE and length(yhat)>0, numFixEff will be zero:
+    	sum(sapply(obj,imxExtractSlot,name="numFixEff"))
   }
 	if (is.null(numStats)) {
 		retval[['observedStatistics']] <- observedStatistics(model, flatModel, sum(retval$constraints))
@@ -416,12 +417,12 @@ computeOptimizationStatistics <- function(model, flatModel, numStats, saturatedD
 		retval[['saturatedDoF']] <- saturatedDoF
 	}
 	#The "saturated model" has no sensible definiton with GREML expectation:
-	if(any(sapply(obj,function(x){"MxExpectationGREML" %in% class(x)}))){
+	if(any(sapply(obj,function(x){is(x,"MxExpectationGREML")}))){
 		retval[['saturatedDoF']] <- NA
 	}
 	# calculate or populate independence degrees of freedom
 	if(is.null(independenceDoF)) {
-		if(!any(sapply(obj,function(x){"MxExpectationGREML" %in% class(x)}))){
+		if(!any(sapply(obj,function(x){is(x,"MxExpectationGREML")}))){
 			# indDoF = 1 df per continuous variable variance + 1 df per continuous mean + 1 df per threshold
 			retval[['independenceDoF']] <- retval$observedStatistics - (continuous*(1+useMeans) + thresh)
 		} else{
@@ -1191,23 +1192,36 @@ logLik.MxModel <- function(object, ...) {
   out$Std.SE <- SEs
   #Pull in raw SEs if requested:
   if(SE){
-    for(i in 1:numelem){
-      if( (out$name[i] %in% paramnames) |
-            (out$label[i] %in% paramnames) ){
-        tdiags <- covParam[ifelse(is.na(out$label[i]),out$name[i],out$label[i]),
-                                       ifelse(is.na(out$label[i]),out$name[i],out$label[i])]
-	if (length(tdiags) == 1) {
-		# For diag, R will return a square identity matrix of size given by the scalar
-		if(tdiags < 0 || is.na(tdiags)) {
-			warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
-		}
-	} else {
-		if(any(diag(tdiags) < 0) || any(is.na(tdiags))){
-			warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
-		}
-	}
-        out$Raw.SE[i] <- suppressWarnings(sqrt(tdiags))
-  }}}
+  	for(i in 1:numelem){
+  		if( (out$name[i] %in% paramnames) |
+  				(out$label[i] %in% paramnames) ){
+  			tdiags <- covParam[ifelse(is.na(out$label[i]),out$name[i],out$label[i]),
+  												 ifelse(is.na(out$label[i]),out$name[i],out$label[i])]
+  			if (length(tdiags) == 1) {
+  				# For diag, R will return a square identity matrix of size given by the scalar
+  				if(tdiags < 0 || is.na(tdiags)) {
+  					warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
+  				}
+  			} else {
+  				if(any(diag(tdiags) < 0) || any(is.na(tdiags))){
+  					warning("Some diagonal elements of the repeated-sampling covariance matrix of the point estimates are less than zero or NA.\nThat's weird.  Raise an eyebrow at these standard errors.")
+  				}
+  			}
+  			out$Raw.SE[i] <- suppressWarnings(sqrt(tdiags))
+  		}
+  		else{
+  			# # The elements of `out$name` should all reference scalars:
+  			# tmp <- try(mxSE(x=out$name[i],model=model,forceName=TRUE,silent=TRUE))
+  			# if(inherits(tmp,"try-error")){
+  			# 	# Paths with the same label will have the same raw value and raw-value SE:
+  			# 	tmp <- try(mxSE(x=out$label[i],model=model,forceName=TRUE,silent=TRUE))
+  			# }
+  			# if( !inherits(tmp,"try-error") && is.numeric(tmp) ){
+  			# 	out$Raw.SE[i] <- tmp
+  			# }
+  		}
+  	}
+  }
   else{out$Raw.SE <- "not_requested"}
   return(out)
 }

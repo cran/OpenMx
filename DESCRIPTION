@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2024-10-18
+Date: 2025-05-19
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -17,6 +17,7 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Yang"), "Wang", role="ctb"),
 		person("Ben", "Goodrich", email="goodrich.ben@gmail.com", role="ctb"),
     person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"),
+    person(c("Jannik", "H."), "Orzek", email="jannik.orzek@mailbox.org", role="ctb"),
     person("Massachusetts Institute of Technology", role="cph"),
     person("S. G.", "Johnson", role="cph"),
     person("Association for Computing Machinery", role="cph"),
@@ -33,15 +34,15 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Jiang", "Yang", role="cph"),
 		person("Gael", "Guennebaud", role="cph"),
 		person("Jitse", "Niesen", role="cph"))
-URL: http://openmx.ssri.psu.edu, https://github.com/OpenMx/OpenMx
-BugReports: http://openmx.ssri.psu.edu/forums
+URL: https://openmx.ssri.psu.edu/, https://github.com/OpenMx/OpenMx
+BugReports: https://openmx.ssri.psu.edu/forums/
 Description: Create structural equation models that can be manipulated programmatically.
     Models may be specified with matrices or paths (LISREL or RAM)
     Example models include confirmatory factor, multiple group, mixture
     distribution, categorical threshold, modern test theory, differential
     Fit functions include full information maximum likelihood, maximum likelihood, and weighted least squares.
     equations, state space, and many others.
-	Support and advanced package binaries available at <http://openmx.ssri.psu.edu>.
+	Support and advanced package binaries available at <https://openmx.ssri.psu.edu>.
     The software is described in Neale, Hunter, Pritikin, Zahery, Brick,
     Kirkpatrick, Estabrook, Bates, Maes, & Boker (2016) <doi:10.1007/s11336-014-9435-8>.
 SystemRequirements: GNU make, C++17
@@ -95,10 +96,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxPenalty.R' 'MxMMI.R' 'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
 RdMacros: lifecycle
 Biarch: true
-Version: 2.21.13
+Version: 2.22.6
 RoxygenNote: 7.3.2
 NeedsCompilation: yes
-Packaged: 2024-10-18 18:30:30 UTC; rmk
+Packaged: 2025-05-19 15:51:28 UTC; rmk
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -120,6 +121,7 @@ Author: Steven M. Boker [aut],
   Yang Wang [ctb],
   Ben Goodrich [ctb],
   Charles Driver [ctb],
+  Jannik H. Orzek [ctb],
   Massachusetts Institute of Technology [cph],
   S. G. Johnson [cph],
   Association for Computing Machinery [cph],
@@ -138,4 +140,4 @@ Author: Steven M. Boker [aut],
   Jitse Niesen [cph]
 Maintainer: Robert M. Kirkpatrick <robert.kirkpatrick@vcuhealth.org>
 Repository: CRAN
-Date/Publication: 2024-10-19 08:40:03 UTC
+Date/Publication: 2025-05-19 19:10:02 UTC

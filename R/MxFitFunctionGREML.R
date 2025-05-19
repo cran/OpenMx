@@ -23,7 +23,11 @@ setClass(Class = "MxFitFunctionGREML",
            augGrad = "MxCharOrNumber",
            augHess = "MxCharOrNumber",
            autoDerivType = "character",
-           infoMatType = "character"),
+           infoMatType = "character",
+           dyhat = "MxCharOrNumber",
+           dyhatnames = "character",
+           dNames = "character",
+           .parallelDerivScheme = "integer"),
          contains = "MxBaseFitFunction")
 
 
@@ -32,7 +36,7 @@ setMethod("initialize", "MxFitFunctionGREML",
             .Object <- callNextMethod()
             .Object@dV <- ..1
             .Object@dVnames <- as.character(names(..1))
-            .Object@MLfit <- 0
+            .Object@MLfit <- numeric(0)
             .Object@vector <- FALSE
             .Object@numObsAdjust <- 0L
             .Object@aug <- ..2
@@ -40,6 +44,9 @@ setMethod("initialize", "MxFitFunctionGREML",
             .Object@augHess <- ..4
             .Object@autoDerivType <- ..5
             .Object@infoMatType <- ..6
+            .Object@dyhat <- ..7
+            .Object@dyhatnames <- as.character(names(..7))
+            .Object@.parallelDerivScheme <- 0L
             .Object
           })
 
@@ -49,6 +56,16 @@ setMethod("qualifyNames", signature("MxFitFunctionGREML"),
             if(length(.Object@dV)){
               .Object@dV <- sapply(.Object@dV, imxConvertIdentifier, modelname, namespace)
               .Object@dVnames <- names(.Object@dV)
+              if(length(.Object@dVnames) != length(unique(.Object@dVnames))){
+              	stop("duplicated element names in argument 'dV'")
+              }
+            }
+            if(length(.Object@dyhat)){
+            	.Object@dyhat <- sapply(.Object@dyhat, imxConvertIdentifier, modelname, namespace)
+            	.Object@dyhatnames <- names(.Object@dyhat)
+            	if(length(.Object@dyhatnames) != length(unique(.Object@dyhatnames))){
+            		stop("duplicated element names in argument 'dyhat'")
+            	}
             }
             if(length(.Object@aug)){.Object@aug <- imxConvertIdentifier(.Object@aug[1],modelname,namespace)}
             if(length(.Object@augGrad)){
@@ -56,6 +73,29 @@ setMethod("qualifyNames", signature("MxFitFunctionGREML"),
             }
             if(length(.Object@augHess)){
             	.Object@augHess <- imxConvertIdentifier(.Object@augHess[1],modelname,namespace)
+            }
+            if(length(.Object@dV) || length(.Object@dyhat)){
+            	.Object@dNames <- unique(c(.Object@dVnames,.Object@dyhatnames))
+            	dV_tmp <- .Object@dV
+            	dyhat_tmp <- .Object@dyhat
+            	#.Object@dV <- rep(NA_character_,length(.Object@dNames))
+            	#.Object@dyhat <- rep(NA_character_,length(.Object@dNames))
+            	newdV <- rep(NA_character_,length(.Object@dNames))
+            	newdyhat <- rep(NA_character_,length(.Object@dNames))
+            	for(i in 1:length(.Object@dNames)){
+            		if(.Object@dNames[i] %in% .Object@dVnames){
+            			newdV[i] <- dV_tmp[which(.Object@dVnames==.Object@dNames[i])]
+            		}
+            		if(.Object@dNames[i] %in% .Object@dyhatnames){
+            			newdyhat[i] <- dyhat_tmp[which(.Object@dyhatnames==.Object@dNames[i])]
+            		}
+            	}
+            	if(length(.Object@dV)){
+            		.Object@dV <- newdV
+            	}
+            	if(length(.Object@dyhat)){
+            		.Object@dyhat <- newdyhat
+            	}
             }
             return(.Object)
           })
@@ -71,6 +111,9 @@ setMethod("genericFitRename", signature("MxFitFunctionGREML"),
           	}
           	if(length(.Object@augHess)){
           		.Object@augHess <- renameReference(.Object@augHess[1], oldname, newname)
+          	}
+          	if(length(.Object@dyhat)){
+          		.Object@dyhat <- sapply(.Object@dyhat, renameReference, oldname, newname)
           	}
             return(.Object)
           })
@@ -111,6 +154,9 @@ setMethod("genericFitFunConvert", "MxFitFunctionGREML",
             if(length(.Object@augHess)){
             	.Object@augHess <- imxLocateIndex(.Object@augHess[1], model=flatModel, referant=name)
             }
+            if(length(.Object@dyhat)){
+            	.Object@dyhat <- sapply(.Object@dyhat, imxLocateIndex, model=flatModel, referant=name)
+            }
             return(.Object)
           })
 
@@ -126,8 +172,8 @@ setMethod("generateReferenceModels", "MxFitFunctionGREML",
 
 mxFitFunctionGREML <- function(
 	dV=character(0), aug=character(0), augGrad=character(0), augHess=character(0), autoDerivType=c("semiAnalyt","numeric"),
-	infoMatType=c("average","expected")){
+	infoMatType=c("average","expected"), dyhat=character(0)){
 	autoDerivType = as.character(match.barg(autoDerivType,c("semiAnalyt","numeric")))
 	infoMatType = as.character(match.barg(infoMatType,c("average","expected")))
-  return(new("MxFitFunctionGREML",dV=dV,aug=aug,augGrad=augGrad,augHess=augHess,autoDerivType=autoDerivType,infoMatType=infoMatType))
+  return(new("MxFitFunctionGREML",dV=dV,aug=aug,augGrad=augGrad,augHess=augHess,autoDerivType=autoDerivType,infoMatType=infoMatType,dyhat=dyhat))
 }

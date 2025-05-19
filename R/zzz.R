@@ -31,6 +31,12 @@ mxSetDefaultOptions <- function() {
 ##' what they are doing.
 imxHasOpenMP <- function() .Call(hasOpenMP_wrapper)
 
+##' imxStanMathMajor
+##'
+##' This is an internal function exported for those people who know
+##' what they are doing.
+imxStanMathMajor <- function() .Call(stanMathMajor_wrapper)
+
 # Don't use .onAttach except for packageStartupMessage,
 # see https://github.com/OpenMx/OpenMx/issues/98
 .onLoad <- function(libname, pkgname) {
@@ -128,7 +134,7 @@ imxLog <- function(str) .Call(Log_wrapper, str)
 #' Estabrook, Timothy C. Bates, Paras Mehta, Timo von Oertzen, Ross J. Gore, Michael D. Hunter, Daniel C.
 #' Hackett, Julian Karch, Andreas M. Brandmaier, Joshua N. Pritikin, Mahsa Zahery, Robert M. Kirkpatrick, 
 #' Yang Wang, and Charles Driver. (2016) OpenMx 2 User Guide. 
-#' http://openmx.ssri.psu.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
+#' https://openmx.ssri.psu.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
 #'
 #' @references The OpenMx User's guide can be found at \url{https://openmx.ssri.psu.edu/documentation}
 #'
@@ -159,7 +165,6 @@ imxLog <- function(str) .Call(Log_wrapper, str)
 #' m1 = mxRun(m1)
 #' summary(m1)
 #'
-#' @docType package
 #' @name OpenMx
 #' @aliases OpenMx-package
-NULL
+"_PACKAGE"

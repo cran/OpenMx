@@ -60,7 +60,7 @@ Steven M. Boker, Michael C. Neale, Hermine H. Maes, Michael J. Wilde, Michael Sp
 Estabrook, Timothy C. Bates, Paras Mehta, Timo von Oertzen, Ross J. Gore, Michael D. Hunter, Daniel C.
 Hackett, Julian Karch, Andreas M. Brandmaier, Joshua N. Pritikin, Mahsa Zahery, Robert M. Kirkpatrick, 
 Yang Wang, and Charles Driver. (2016) OpenMx 2 User Guide. 
-http://openmx.ssri.psu.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
+https://openmx.ssri.psu.edu/docs/OpenMx/latest/OpenMxUserGuide.pdf
 }
 \examples{
 library(OpenMx)
@@ -96,9 +96,9 @@ The OpenMx User's guide can be found at \url{https://openmx.ssri.psu.edu/documen
 \seealso{
 Useful links:
 \itemize{
-  \item \url{http://openmx.ssri.psu.edu}
+  \item \url{https://openmx.ssri.psu.edu/}
   \item \url{https://github.com/OpenMx/OpenMx}
-  \item Report bugs at \url{http://openmx.ssri.psu.edu/forums}
+  \item Report bugs at \url{https://openmx.ssri.psu.edu/forums/}
 }
 
 }
@@ -131,6 +131,7 @@ Other contributors:
   \item Yang Wang [contributor]
   \item Ben Goodrich \email{goodrich.ben@gmail.com} [contributor]
   \item Charles Driver \email{driver@mpib-berlin.mpg.de} [contributor]
+  \item Jannik H. Orzek \email{jannik.orzek@mailbox.org} [contributor]
   \item Massachusetts Institute of Technology [copyright holder]
   \item S. G. Johnson [copyright holder]
   \item Association for Computing Machinery [copyright holder]

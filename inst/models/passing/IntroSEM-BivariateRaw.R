@@ -35,6 +35,10 @@
 # Read libraries and set options.
 
 library(OpenMx)
+#NPSOL counts major iterations differently when it is provided with analytic gradients:
+if(mxOption(NULL,"Default optimizer")=="NPSOL"){
+	mxOption(NULL,"Analytic gradients","No")
+}
 
 suppressWarnings(RNGversion("3.5"))
 
@@ -139,3 +143,5 @@ biRegModelRaw3 <- mxRun(biRegModelRaw3)
 
 omxCheckCloseEnough(coef(biRegModelRaw3),
                     unlist(repl3[,names(coef(biRegModelRaw3))]), 1e-5)
+
+mxOption(reset=TRUE)

@@ -101,7 +101,7 @@ void omxState::omxProcessMxAlgebraEntities(SEXP algList, FitContext *fc)
 
 	for(int index = 0; index < Rf_length(algList); index++) {
 		ProtectedSEXP nextAlgTuple(VECTOR_ELT(algList, index));
-		if(IS_S4_OBJECT(nextAlgTuple)) {
+		if(Rf_isS4(nextAlgTuple)) {
 			omxMatrix *fm = algebraList[index];
       if (Rf_inherits(nextAlgTuple, "MxPenalty")) {
         SEXP obj = nextAlgTuple;
@@ -353,7 +353,7 @@ void omxState::omxProcessFreeVarList(SEXP varList)
 			int* theVarList = INTEGER(nextLoc);
 
 			omxFreeVarLocation loc;
-			//This is not the matrixNumber; it appears to be the matrix's serial position in globalState->matrixList :
+			//This is not the matrixNumber; it appears to be the matrix's serial position in Global->globalState->matrixList :
 			loc.matrix = theVarList[0]; 
 			loc.row = theVarList[1];
 			loc.col = theVarList[2];

@@ -570,19 +570,36 @@ collectStatistics1 <- function(otherStats, ref, other, bootPair) {
 	if(length(rfu) && length(ofu) && rfu!=ofu){
 		stop(paste("MxModel '",ref$name,"' has '",rfu,"' fit units, but MxModel '",other$name,"' has '",ofu,"' fit units",sep=""))
 	}
-	#Even though the fit units match, the restricted ML and ordinary ML fit values can't be validly compared:
-	if( is(ref$fitfunction,"MxFitFunctionGREML")!=is(other$fitfunction,"MxFitFunctionGREML") ){
-		stop(paste("MxModel '",ref$name,"' has a fitfunction of class '",class(ref$fitfunction),"', but MxModel '",other$name,"' has a fitfunction of class '",class(other$fitfunction),"'",sep=""))
-	}
-	rgfe <- refSummary$GREMLfixeff #<--NULL unless model uses a GREML expectation and has been run
-	if(length(rgfe)){rgfe <- paste(rgfe$name,collapse=",")}
-	ogfe <- otherSummary$GREMLfixeff #<--NULL unless model uses a GREML expectation and has been run
-	if(length(ogfe)){ogfe <- paste(ogfe$name,collapse=",")}
-	if( length(rgfe)!=length(ogfe) || (length(rgfe) && length(ogfe) && rgfe!=ogfe) ){
-		#This is a warning, not an error, because it's possible that the user is indeed using the same covariates in both models, but with
-		#different column names.  (If one of the models hasn't been run yet, GREMLFixEffList() will return NULL, but the fit value will
-		#be NA, so the output for the comparison won't even look valid):
-		warning(paste("the names of the fixed effects in MxModels '",ref$name,"' and '",other$name,"' do not match; comparison of REML fit values is only valid for models that use the same covariates",sep=""))
+	#Even though the fit units match, restricted ML and ordinary ML fit values can't be validly compared:
+	#if( is(ref$fitfunction,"MxFitFunctionGREML")!=is(other$fitfunction,"MxFitFunctionGREML") ){
+	if((is(ref$fitfunction,"MxFitFunctionGREML") && is(ref$expectation,"MxExpectationGREML") && ref$expectation$REML) ||
+		 (is(other$fitfunction,"MxFitFunctionGREML") && is(other$expectation,"MxExpectationGREML") && other$expectation$REML))
+	{ #^^^We only need to check if at least one of the two models has a GREML fitfunction with `REML` set to TRUE.
+		if(is(ref$fitfunction,"MxFitFunctionGREML") && !is(other$fitfunction,"MxFitFunctionGREML") && is(ref$expectation,"MxExpectationGREML") && ref$expectation$REML){
+			stop(paste("MxModel '",ref$name,"' has a fitfunction of class '",class(ref$fitfunction),"' and `REML` is TRUE, but MxModel '",other$name,"' has a fitfunction of class '",class(other$fitfunction),"'",sep=""))	
+		}
+		if(is(other$fitfunction,"MxFitFunctionGREML") && !is(ref$fitfunction,"MxFitFunctionGREML") && is(other$expectation,"MxExpectationGREML") && other$expectation$REML){
+			stop(paste("MxModel '",ref$name,"' has a fitfunction of class '",class(ref$fitfunction),"', but MxModel '",other$name,"' has a fitfunction of class '",class(other$fitfunction),"' and `REML` is TRUE",sep=""))
+		}
+		if(is(ref$fitfunction,"MxFitFunctionGREML") && is(other$fitfunction,"MxFitFunctionGREML") && !identical(ref$expectation$REML,other$expectation$REML)){
+			if(is(ref$expectation,"MxExpectationGREML") && ref$expectation$REML){
+				stop(paste("Invalid comparison: MxModel '",ref$name,"' uses restricted maximum-likelihood (REML), but MxModel '",other$name,"' does not",sep=""))
+			}
+			if(is(other$expectation,"MxExpectationGREML") && other$expectation$REML){
+				stop(paste("Invalid comparison: MxModel '",other$name,"' uses restricted maximum-likelihood (REML), but MxModel '",ref$name,"' does not",sep=""))
+			}
+		}
+		rgfe <- refSummary$GREMLfixeff #<--NULL unless model uses a GREML expectation with an implicit means model, and has been run.
+		if(length(rgfe)){rgfe <- paste(rgfe$name,collapse=",")}
+		ogfe <- otherSummary$GREMLfixeff #<--NULL unless model uses a GREML expectation with an implicit means model, and has been run.
+		if(length(ogfe)){ogfe <- paste(ogfe$name,collapse=",")}
+		# Possible TODO: if the two models have a different number of fixed effects, should that be a fatal error??
+		if( length(rgfe)!=length(ogfe) || (length(rgfe) && length(ogfe) && rgfe!=ogfe) ){
+			#This is a warning, not an error, because it's possible that the user is indeed using the same covariates in both models, but with
+			#different column names.  (If one of the models hasn't been run yet, GREMLFixEffList() will return NULL, but the fit value will
+			#be NA, so the output for the comparison won't even look valid):
+			warning(paste("the names of the fixed effects in MxModels '",ref$name,"' and '",other$name,"' do not match; comparison of REML fit values is only valid for models that use the same covariates",sep=""))
+		}
 	}
 	#End validity checks
 
@@ -619,7 +636,7 @@ collectStatistics1 <- function(otherStats, ref, other, bootPair) {
 			# the alternative model. We exclude these replications.
 			mask <- (baseData[,'statusCode'] %in% mxOption(other, "Status OK") &
 				 cmpData[,'statusCode'] %in% mxOption(ref, "Status OK") &
-				 baseData[,'fit'] - cmpData[,'fit'] > 0)
+				 baseData[,'fit'] - cmpData[,'fit'] > -1e-7)
 			if (sum(mask) < .95*length(mask)) {
 				pct <- round(100*sum(mask) / length(mask))
 				warning(paste0("Only ",pct,"% of the bootstrap replications ",

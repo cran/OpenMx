@@ -16,18 +16,20 @@
 
 struct omxGREMLExpectation : public omxExpectation {
 	typedef omxExpectation super;
-  omxMatrix *cov, *invcov, *means, *X, *logdetV_om, *cholV_fail_om, *origVdim_om;
+  omxMatrix *cov, *invcov, *means, *X, *logdetV_om, *yhatFromUser;
   omxData *y, *data2;
-  int alwaysComputeMeans, numcases2drop, cholquadX_fail;
-  std::vector< int > dropcase;
+  int origVdim, numcases2drop; 
+  bool cholquadX_fail, cholV_fail, doREML;
+  bool didUserProvideYhat; //<--Means REML is FALSE *and* the user provided a non-empty, valid name for 'yhat'.
+  std::vector< bool > dropcase;
   Eigen::VectorXd cholV_vectorD;
   Eigen::VectorXd cholquadX_vectorD;
-  Eigen::MatrixXd XtVinv, quadXinv, EigV_filtered;
+  Eigen::MatrixXd XtVinv, quadXinv, EigV_filtered, EigyhatFromUser_filtered, residual;
   std::vector< const char* > yXcolnames;
 
 	omxGREMLExpectation(omxState *st, int num) :
-    super(st, num), cov(0), invcov(0), means(0), X(0), logdetV_om(0), cholV_fail_om(0),
-    origVdim_om(0), y(0), data2(0) {}
+    super(st, num), cov(0), invcov(0), means(0), X(0), logdetV_om(0), yhatFromUser(0),
+    y(0), data2(0) {}
   virtual ~omxGREMLExpectation();
   virtual void init() override;
   virtual void connectToData() override;
@@ -38,18 +40,18 @@ struct omxGREMLExpectation : public omxExpectation {
 	virtual int numObservedStats() override { return 1; }
 };
 
-double omxAliasedMatrixElement(omxMatrix *om, int row, int col, int origDim);
+double omxAliasedMatrixElement(omxMatrix *om, int row, int col, int origRows, int origCols);
 
 template <typename T1>
-void dropCasesAndEigenize(
-		/*An omxMatrix, from which rows and columns corresponding to missing observations must be dropped,
+void dropCasesAndEigenizeSquareMatrix(
+		/*A square omxMatrix, from which rows and columns corresponding to missing observations must be dropped,
 		  and which must be made usable with the Eigen API:*/
 		omxMatrix* om,
 		//An Eigen object of appropriate type.  If `om` comes from a frontend MxMatrix, its elements will be copied into `em`:
 		Eigen::MatrixBase<T1> &em,
 		double* &ptrToMatrix, //<--Pointer to data array, for use with Eigen Map subsequent to this function call.
 		int num2drop, //<--How many rows and columns to drop.
-		std::vector< int > &todrop, //<--Should row and column i be dropped?
+		std::vector< bool > &todrop, //<--Should row and column i be dropped?
 		bool symmetric, //<--Is the matrix symmetric?
 		int origDim, //<--Original pre-filtering dimensions of the matrix.
 		bool copyAlg //<--Should the elements of `om` be copied to `em`, even if `om` came from an algebra?
@@ -73,7 +75,7 @@ void dropCasesAndEigenize(
 			nextRow = (symmetric ? nextCol : 0);
 			for(int k = (symmetric ? j : 0); k < om->rows; k++) {
 				if(todrop[k]) continue;
-				em(nextRow,nextCol) = omxAliasedMatrixElement(om, k, j, origDim);
+				em(nextRow,nextCol) = omxAliasedMatrixElement(om, k, j, origDim, origDim);
 				nextRow++;
 			}
 			nextCol++;
@@ -87,7 +89,6 @@ void dropCasesAndEigenize(
  if(om->rows != origDim || om->cols != origDim){
  	//Not sure if there are cases where this should be allowed
  	mxThrow("More than one attempt made to downsize algebra %s", om->name());
- 	//return;
  }
 
  int nextCol = 0;
@@ -101,7 +102,7 @@ void dropCasesAndEigenize(
  	nextRow = (symmetric ? nextCol : 0);
  	for(int k = (symmetric ? j : 0); k < origDim; k++){ //<--k indexes rows
  		if(todrop[k]) continue;
- 		omxSetMatrixElement(om, nextRow, nextCol, omxAliasedMatrixElement(om, k, j, origDim));
+ 		omxSetMatrixElement(om, nextRow, nextCol, omxAliasedMatrixElement(om, k, j, origDim, origDim));
  		nextRow++;
  	}
  	nextCol++;
@@ -118,4 +119,74 @@ void dropCasesAndEigenize(
 	if(OMX_DEBUG) { mxLog("Finished trimming out cases with missing data..."); }
 }
 
-void dropCasesFromAlgdV(omxMatrix* om, int num2drop, std::vector< int > &todrop, int symmetric, int origDim);
+
+template <typename T1>
+void dropCasesAndEigenizeColumnVector(
+		/*A whatev x 1 omxMatrix, from which rows corresponding to missing observations must be dropped,
+		 and which must be made usable with the Eigen API:*/
+		omxMatrix* om,
+		//An Eigen object of appropriate type.  If `om` comes from a frontend MxMatrix, its elements will be copied into `em`:
+		Eigen::MatrixBase<T1> &em,
+		double* &ptrToMatrix, //<--Pointer to data array, for use with Eigen Map subsequent to this function call.
+		int num2drop, //<--How many rows and columns to drop.
+		std::vector< bool > &todrop, //<--Should row i be dropped?
+		bool symmetric, //<--Ignored.
+		int origRows, //<--Original pre-filtering row count of the matrix.
+		bool copyAlg //<--Should the elements of `om` be copied to `em`, even if `om` came from an algebra?
+){
+	
+	if(OMX_DEBUG) { mxLog("Trimming out cases with missing data..."); }
+	
+	if(num2drop < 1){ return; }
+	
+	omxEnsureColumnMajor(om);
+	
+	if(om->cols > 1){
+		mxThrow("omxMatrix %s is not a has more than 1 column (i.e., is not a column vector)", om->name());
+	}
+	
+	if(om->algebra == NULL){ //i.e., if omxMatrix is from a frontend MxMatrix
+		
+		em.derived().setZero(om->rows - num2drop, 1);
+		
+		int nextRow = 0;
+		
+		for(int k = 0; k < om->rows; k++){
+			if(todrop[k]) continue;
+			em(nextRow,0) = omxAliasedMatrixElement(om, k, 0, origRows, 1);
+			nextRow++;
+		}
+		ptrToMatrix = em.derived().data();
+	}
+	else{ /*If the omxMatrix is from an algebra, then copying is not necessary; it can be resized directly
+		 and Eigen-mapped, since the algebra will be recalculated back to its original dimensions anyhow.*/
+		if(origRows==0){mxThrow("Memory not allocated for algebra %s at downsize time",
+     om->name());}
+		if(om->rows != origRows){
+			//Not sure if there are cases where this should be allowed
+			mxThrow("More than one attempt made to downsize algebra %s", om->name());
+		}
+		
+		int nextRow = 0;
+		
+		om->rows = origRows - num2drop;
+		
+		for(int k = 0; k < origRows; k++){
+			if(todrop[k]) continue;
+			omxSetMatrixElement(om, nextRow, 0, omxAliasedMatrixElement(om, k, 0, origRows, 1));
+			nextRow++;
+		}
+		if(copyAlg){
+			//Note that this line serves to copy `om`'s data to `em`.  It does not change the type of `em`:
+			em = Eigen::Map< Eigen::MatrixXd >(om->data, om->rows, om->cols);
+		}
+		ptrToMatrix = omxMatrixDataColumnMajor(om);
+		omxMarkDirty(om); //<--Need to mark it dirty so that it eventually gets recalculated back to original dimensions.
+		//^^^Algebras that do not depend upon free parameters, and upon which V does not depend, will not be
+		//recalculated back to full size until optimization is complete (the GREML fitfunction is smart about that).
+	}
+	if(OMX_DEBUG) { mxLog("Finished trimming out cases with missing data..."); }
+}
+
+
+void dropCasesFromAlgdV(omxMatrix* om, int num2drop, std::vector< bool > &todrop, int symmetric, int origDim);

@@ -303,5 +303,5 @@ twoFactorMatrixFit <- mxRun(twoFactorMatrixModel)
 summary(twoFactorMatrixFit)
 
 ## ----eval=FALSE---------------------------------------------------------------
-#  output(twoFactorMatrixFit)
+# output(twoFactorMatrixFit)
 

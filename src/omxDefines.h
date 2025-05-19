@@ -82,6 +82,12 @@ static inline bool strEQ(const char *s1, const char *s2) { return strcmp(s1,s2)=
 #define OMX_DEBUG_ALGEBRA 0
 #endif /* DEBUGMX_ALGEBRA */
 
+#ifdef DEBUGMX_NEWSTUFF
+#define OMX_DEBUG_NEWSTUFF 1
+#else
+#define OMX_DEBUG_NEWSTUFF 0
+#endif /* DEBUGMX_NEWSTUFF */
+
 // Put forward type declarations here
 
 #include <vector>
@@ -260,6 +266,8 @@ void subsetNormalDist(const Eigen::MatrixBase<T1> &gmean, const Eigen::MatrixBas
 		cx += 1;
 	}
 }
+//^^^This is what filters out rows and columns of the mean vector and covariance matrix due to missingness, when the
+//sufficient-statistics FIML speedup is in use.
 
 // Refactor as a single split function that pulls out all 3 parts
 // of the covariance matrix in one iteration through the elements?

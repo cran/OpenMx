@@ -25,7 +25,7 @@ mxSE(
 sampling covariance matrix of x.}
 
 \item{cov}{optional matrix of covariances among the free parameters. If 
-missing, the inverse Hessian from the fitted model is used.}
+missing, \code{vcov(model)} is used.}
 
 \item{forceName}{logical; defaults to \code{FALSE}.  Set to \code{TRUE}
 if \code{x} is an R symbol that refers to a character string.}

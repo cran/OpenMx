@@ -1,4 +1,4 @@
-7d0011d58a44959b3c48016eeaec9cfb *DESCRIPTION
+65204e599560e43363bf5a964a8501ba *DESCRIPTION
 781a265b333a1fa759624c49213876fc *NAMESPACE
 952ad50391160812a1e6411ee3d723cb *NEWS.md
 5bcc58db7eec377048ec0a24bbe1b9e4 *R/0ClassUnion.R
@@ -95,7 +95,7 @@ abefb1a2f51ebf5b831458b44fedc434 *R/MxSquareBracket.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 9555a65fb70337dbf8126e0838962923 *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-2432f5e85d3d76a81fd49c11356c0260 *R/MxVersion.R
+67ded56fa0715466d2d31b776ccbb131 *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 bd1b62fc130af72e5297aa110bc80fcc *R/OriginalMx.R
 063cb4ee7a2ed6ff16d0bd15016dba82 *R/SdiagMatrix.R
@@ -111,7 +111,7 @@ dc6cbe17a3381b709d15c72fa38a34e9 *R/omxReadGRMBin.R
 85b22db9a8f7d30587029242b4f7ea2c *R/sysdata.rda
 a83ddb745ecdcc5241bf490733dd5547 *R/zzz.R
 d39eccd795a3dd26144a03ddb3a20708 *README.md
-56057455aa2486cc89cac9b057bcf787 *build/stage23.rdb
+ec8f2dc6c13831a0369073e5f61dfdd9 *build/stage23.rdb
 f5c2b20ab35cac94bf568fd6504a764d *build/vignette.rds
 e8545ff6937032ff553a1f8b3048e415 *cleanup
 ed15ece00e2130e2d34734834fe8a825 *configure
@@ -226,19 +226,19 @@ eb276168efc5c5376df79f26730fb8ad *demo/simple_mixture_model_EM.R
 27b586bdb522583d687ac702d6c52b6f *inst/WORDLIST
 4778d83f5711562f1f54967bb2565acd *inst/doc/deriv.R
 be485d84b2dd7e0b1ff8ebf4d8fed1e6 *inst/doc/deriv.Rmd
-995947f36a9fc9f86a920dfba16217f5 *inst/doc/deriv.html
+77d063bdfe26dda00eff2aa45828a9f8 *inst/doc/deriv.html
 c8c19ef99e44503c9c0debcd98df2ebf *inst/doc/factor_analysis.R
 c8d8fb6af1cffe3f78f214f36ff2a79f *inst/doc/factor_analysis.Rmd
-11bf32ed8818e0491d54d0908d9f5e1d *inst/doc/factor_analysis.html
+8f3c6bda467f7b76602e01b61b7ee45a *inst/doc/factor_analysis.html
 c0932cfcb61c135c36a7a3104c90778a *inst/doc/mr.R
 e4dae7f4f9c66565e65d68e21456636f *inst/doc/mr.Rmd
 b675d25755991c0ac908cdf462e03376 *inst/doc/mr.html
 fce9acc816d09f21aa78b48a70ca2d1d *inst/doc/reg_mimic.R
 0c8539e205d8eba803e1393e1bc705d4 *inst/doc/reg_mimic.Rmd
-da64a1babd9b6418b5c1686e71f9af62 *inst/doc/reg_mimic.html
+8afa02f575a49e6fbd5f2db278e3e8f2 *inst/doc/reg_mimic.html
 0ffc8bf9e984db7068df40217e9365ea *inst/doc/regularization.R
 9e6b28935ce194b6fbfe7fc21db954f5 *inst/doc/regularization.Rmd
-75ee6b6b9a00fb7c46d94ffa921d6379 *inst/doc/regularization.html
+9722d068d33e83ec8df8af2a9972a161 *inst/doc/regularization.html
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R
@@ -1140,7 +1140,7 @@ c556de78e1817d72e81db596191276ba *src/omxImportFrontendState.cpp
 d748fd68b2c5272c26ab383036c5054b *src/omxLISRELExpectation.cpp
 d5c30667aa65cfe10268fd1b9acecb83 *src/omxLISRELExpectation.h
 30c3770968ee1d9f661d99277748774d *src/omxMLFitFunction.cpp
-11a1c74107fddf04947f18833befa938 *src/omxMatrix.cpp
+2a5aa142d4c149afc033f18b8f4924ce *src/omxMatrix.cpp
 f0e9d128633c7ca447f494fb050ffbf9 *src/omxMatrix.h
 bbbb3f45c56f3e3544931ffc3658ee35 *src/omxNLopt.cpp
 9652797e6de30471800dced10443880f *src/omxNLopt.h

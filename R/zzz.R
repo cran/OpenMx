@@ -22,6 +22,7 @@ mxSetDefaultOptions <- function() {
                     "Number of Threads" = imxGetNumThreads()),
     'mxByrow' = FALSE,
     'mxCondenseMatrixSlots' = FALSE,
+    'evalMxObjectAlgebraEnv' = globalenv(),
     'swift.initialexpr' = "library(OpenMx)")
 }
 

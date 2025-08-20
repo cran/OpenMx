@@ -13,6 +13,16 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+# evalMxObjectAlgebraEnv
+
+getMxEvalEnv <- function() {
+	ee <- getOption("evalMxObjectAlgebraEnv")
+	if(!is.environment(ee)){
+		stop("option 'evalMxObjectAlgebraEnv' must be an environment")
+	}
+	return(ee)
+}
+
 mxEval <- function(expression, model, compute = FALSE, show = FALSE, defvar.row = 1L,
 			cache = new.env(parent = emptyenv()), cacheBack = FALSE, .extraBack=0L) {
 	if (missing(expression)) {
@@ -347,14 +357,14 @@ evaluateMxObject <- function(objname, flatModel, labelsData, cache) {
 		# mxFitFunctionRow genericFitAddEntities still needs this
 	}
 	return(eval(substitute(evaluateSymbol(x, objname, flatModel,
-			labelsData, globalenv(), compute = TRUE,
+			labelsData, getMxEvalEnv(), compute = TRUE,
 			show = FALSE, outsideAlgebra = FALSE, defvar.row = 1,
 			cache = cache),
 			list(x = quote(as.symbol(objname))))))
 }
 
 evaluateAlgebraWithContext <- function(algebra, context, flatModel, labelsData, cache) {
-	return(evaluateExpression(algebra@formula, context, flatModel, labelsData, globalenv(),
+	return(evaluateExpression(algebra@formula, context, flatModel, labelsData, getMxEvalEnv(),
 		compute = TRUE, show = FALSE, outsideAlgebra = FALSE, cache = cache))
 }
 

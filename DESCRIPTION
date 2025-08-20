@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2025-05-23
+Date: 2025-08-05
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -13,11 +13,12 @@ Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person("Julian", "Karch", role="ctb"), person(c("Andreas", "M."), "Brandmaier", role="ctb"),
     person(c("Joshua", "N."), "Pritikin", role="aut"), 
     person("Mahsa", "Zahery", role="aut"),
-    person(c("Robert", "M."), "Kirkpatrick", email="robert.kirkpatrick@vcuhealth.org", role=c("aut","cre")),
+    person(c("Robert", "M."), "Kirkpatrick", email="rkirkpatrick2@vcu.edu", role=c("aut","cre")),
     person(c("Yang"), "Wang", role="ctb"),
 		person("Ben", "Goodrich", email="goodrich.ben@gmail.com", role="ctb"),
     person(c("Charles"), "Driver", email="driver@mpib-berlin.mpg.de", role="ctb"),
     person(c("Jannik", "H."), "Orzek", email="jannik.orzek@mailbox.org", role="ctb"),
+    person(c("Don"), "van den Bergh", email="d.vandenbergh@uva.nl", role="ctb"),
     person("Massachusetts Institute of Technology", role="cph"),
     person("S. G.", "Johnson", role="cph"),
     person("Association for Computing Machinery", role="cph"),
@@ -96,10 +97,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxPenalty.R' 'MxMMI.R' 'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
 RdMacros: lifecycle
 Biarch: true
-Version: 2.22.7
+Version: 2.22.9
 RoxygenNote: 7.3.2
 NeedsCompilation: yes
-Packaged: 2025-05-23 15:18:18 UTC; rmk
+Packaged: 2025-08-19 18:57:27 UTC; rmk
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -122,6 +123,7 @@ Author: Steven M. Boker [aut],
   Ben Goodrich [ctb],
   Charles Driver [ctb],
   Jannik H. Orzek [ctb],
+  Don van den Bergh [ctb],
   Massachusetts Institute of Technology [cph],
   S. G. Johnson [cph],
   Association for Computing Machinery [cph],
@@ -138,6 +140,6 @@ Author: Steven M. Boker [aut],
   Jiang Yang [cph],
   Gael Guennebaud [cph],
   Jitse Niesen [cph]
-Maintainer: Robert M. Kirkpatrick <robert.kirkpatrick@vcuhealth.org>
+Maintainer: Robert M. Kirkpatrick <rkirkpatrick2@vcu.edu>
 Repository: CRAN
-Date/Publication: 2025-05-23 20:22:01 UTC
+Date/Publication: 2025-08-20 05:01:53 UTC

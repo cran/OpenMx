@@ -103,7 +103,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Robert M. Kirkpatrick \email{robert.kirkpatrick@vcuhealth.org}
+\strong{Maintainer}: Robert M. Kirkpatrick \email{rkirkpatrick2@vcu.edu}
 
 Authors:
 \itemize{
@@ -132,6 +132,7 @@ Other contributors:
   \item Ben Goodrich \email{goodrich.ben@gmail.com} [contributor]
   \item Charles Driver \email{driver@mpib-berlin.mpg.de} [contributor]
   \item Jannik H. Orzek \email{jannik.orzek@mailbox.org} [contributor]
+  \item Don van den Bergh \email{d.vandenbergh@uva.nl} [contributor]
   \item Massachusetts Institute of Technology [copyright holder]
   \item S. G. Johnson [copyright holder]
   \item Association for Computing Machinery [copyright holder]

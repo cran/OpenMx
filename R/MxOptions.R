@@ -179,7 +179,7 @@ otherOptions <- list(
     "Nudge zero starts" = "Yes",
     "Status OK"= as.statusCode(c("OK", "OK/green")),
     "Max minutes"=0,
-	"Analytic RAM derivatives" = "No"
+    "Analytic RAM derivatives" = "No"
 )
 
 limitMajorIterations <- function(options, numParam, numConstraints) {

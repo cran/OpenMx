@@ -1,4 +1,4 @@
-81799f3ab0b2384ad3e4817eb0e5fd13 *DESCRIPTION
+67f0e78e9e7f698ea82269abc6236416 *DESCRIPTION
 781a265b333a1fa759624c49213876fc *NAMESPACE
 952ad50391160812a1e6411ee3d723cb *NEWS.md
 5bcc58db7eec377048ec0a24bbe1b9e4 *R/0ClassUnion.R
@@ -95,7 +95,7 @@ abefb1a2f51ebf5b831458b44fedc434 *R/MxSquareBracket.R
 7a16895e6ccb5d3660fc3033c7a35ca1 *R/MxTypes.R
 9555a65fb70337dbf8126e0838962923 *R/MxUnitTesting.R
 480fb7c5f9ae204d9e1e4c2a1094651b *R/MxUntitled.R
-b5d185294be411372aa15f9259bba557 *R/MxVersion.R
+cbd02c435837131da7d1f56c6341867c *R/MxVersion.R
 92a41ae1c54c5cf2da2e5aa4802718e8 *R/MxVersion.R.in
 bd1b62fc130af72e5297aa110bc80fcc *R/OriginalMx.R
 063cb4ee7a2ed6ff16d0bd15016dba82 *R/SdiagMatrix.R
@@ -111,7 +111,7 @@ dc6cbe17a3381b709d15c72fa38a34e9 *R/omxReadGRMBin.R
 85b22db9a8f7d30587029242b4f7ea2c *R/sysdata.rda
 b488312b779dc825cf2a4f091c1c1723 *R/zzz.R
 558efa0dcb8e934840796f3858cd558b *README.md
-005436762f079132980571e5eff34e76 *build/stage23.rdb
+8baf81c0c9cd25de41ce46a10340183b *build/stage23.rdb
 f5c2b20ab35cac94bf568fd6504a764d *build/vignette.rds
 e8545ff6937032ff553a1f8b3048e415 *cleanup
 ed15ece00e2130e2d34734834fe8a825 *configure
@@ -226,19 +226,19 @@ eb276168efc5c5376df79f26730fb8ad *demo/simple_mixture_model_EM.R
 27b586bdb522583d687ac702d6c52b6f *inst/WORDLIST
 4778d83f5711562f1f54967bb2565acd *inst/doc/deriv.R
 be485d84b2dd7e0b1ff8ebf4d8fed1e6 *inst/doc/deriv.Rmd
-f08bdd080382cec40cd57e93f5a1f6e0 *inst/doc/deriv.html
+41d85d16e3c9a8f5911ef11283a81748 *inst/doc/deriv.html
 c8c19ef99e44503c9c0debcd98df2ebf *inst/doc/factor_analysis.R
 c8d8fb6af1cffe3f78f214f36ff2a79f *inst/doc/factor_analysis.Rmd
-f7f124f5e9ded6d5febf5a61fa2a952d *inst/doc/factor_analysis.html
+221558a33907a91186d45b2ae4e4e51b *inst/doc/factor_analysis.html
 c0932cfcb61c135c36a7a3104c90778a *inst/doc/mr.R
 e4dae7f4f9c66565e65d68e21456636f *inst/doc/mr.Rmd
 b675d25755991c0ac908cdf462e03376 *inst/doc/mr.html
 fce9acc816d09f21aa78b48a70ca2d1d *inst/doc/reg_mimic.R
 0c8539e205d8eba803e1393e1bc705d4 *inst/doc/reg_mimic.Rmd
-c7b45d5920ea782c5e2db79f02059e72 *inst/doc/reg_mimic.html
+fcfb98fd64ffa72d7aa63d443ab9e5dc *inst/doc/reg_mimic.html
 0ffc8bf9e984db7068df40217e9365ea *inst/doc/regularization.R
 9e6b28935ce194b6fbfe7fc21db954f5 *inst/doc/regularization.Rmd
-571763809961779d2c6813e8081298e9 *inst/doc/regularization.html
+71826a6eb75762dbb8f6762c29597a0b *inst/doc/regularization.html
 d7f21c55683df45c86508ea2c4a4ac1f *inst/models/codeRed/fail_on_re-run_entity_already_exists.R
 c164d37fb6e24c0147335454c42929c0 *inst/models/codeRed/umxACE_codeRed.R
 ee322592519a54f73751f8f6b29e6129 *inst/models/enormous/RAM-3Factor-120Indicators-covdata-a.R

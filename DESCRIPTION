@@ -1,6 +1,6 @@
 Encoding: UTF-8
 Package: OpenMx
-Date: 2025-08-05
+Date: 2025-10-17
 Title: Extended Structural Equation Modelling
 Authors@R: c(person(c("Steven", "M."), "Boker", role="aut"),
     person(c("Michael", "C."), "Neale", role="aut"), person(c("Hermine", "H."),
@@ -54,7 +54,7 @@ LinkingTo: Rcpp, RcppEigen (>= 0.3.3.9.4), RcppParallel, StanHeaders
         (>= 2.10.0.2), BH (>= 1.69.0-1), rpf (>= 0.45), Matrix
 Imports: digest, MASS, Matrix (>= 1.2-16), methods, Rcpp, RcppParallel,
         parallel, lifecycle
-Depends: R (>= 4.5.0)
+Depends: R (>= 3.5.0)
 Suggests: mvtnorm, numDeriv, roxygen2 (>= 6.1), rpf (>= 0.45),
         snowfall, lme4, covr, testthat, umx, ifaTools, knitr, markdown,
         rmarkdown, reshape2, ggplot2
@@ -97,10 +97,10 @@ Collate: '0ClassUnion.R' 'cache.R' 'MxBaseNamed.R' 'MxData.R'
         'MxPenalty.R' 'MxMMI.R' 'omxReadGRMBin.R' 'MxPredict.R' 'zzz.R'
 RdMacros: lifecycle
 Biarch: true
-Version: 2.22.9
+Version: 2.22.10
 RoxygenNote: 7.3.2
 NeedsCompilation: yes
-Packaged: 2025-08-19 18:57:27 UTC; rmk
+Packaged: 2025-10-17 16:27:10 UTC; rmk
 Author: Steven M. Boker [aut],
   Michael C. Neale [aut],
   Hermine H. Maes [aut],
@@ -142,4 +142,4 @@ Author: Steven M. Boker [aut],
   Jitse Niesen [cph]
 Maintainer: Robert M. Kirkpatrick <rkirkpatrick2@vcu.edu>
 Repository: CRAN
-Date/Publication: 2025-08-20 05:01:53 UTC
+Date/Publication: 2025-11-07 16:00:02 UTC
